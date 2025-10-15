@@ -25,15 +25,18 @@
   <script type="importmap">
 {
   "imports": {
+    "react/jsx-runtime": "https://aistudiocdn.com/react@^19.2.0/jsx-runtime",
     "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.24.0"
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.24.0",
+    "react-markdown": "https://esm.sh/react-markdown@9.0.1",
+    "remark-gfm": "https://esm.sh/remark-gfm@4.0.0"
   }
 }
 </script>
 </head>
-  <body class="bg-slate-100 dark:bg-slate-900">
+  <body class="bg-slate-100 dark:bg-slate-900 overflow-hidden">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

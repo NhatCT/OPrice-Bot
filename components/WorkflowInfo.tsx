@@ -23,7 +23,7 @@ export const WorkflowInfo: React.FC = () => {
                     <StepIcon><SelectIcon /></StepIcon>
                     <div>
                         <h4 className="font-semibold text-slate-700 dark:text-slate-200 text-sm">1. Chọn công cụ</h4>
-                        <p className="text-slate-600 dark:text-slate-300 text-sm">Chọn một trong các công cụ tính giá chuyên dụng: Tính giá bán, giá khuyến mãi, hoặc giá đồng giá.</p>
+                        <p className="text-slate-600 dark:text-slate-300 text-sm">Chọn một trong các công cụ chuyên dụng: Phân tích Lợi nhuận, Phân tích Khuyến mãi, hoặc Phân tích Đồng giá.</p>
                     </div>
                 </li>
                 <li className="flex items-start space-x-4">

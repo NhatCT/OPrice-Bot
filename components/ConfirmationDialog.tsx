@@ -31,7 +31,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({ isOpen, 
             onClick={onConfirm} 
             className="px-5 py-2.5 rounded-lg font-semibold bg-red-600 text-white hover:bg-red-500 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800"
           >
-            Xác nhận Xóa
+            Xác nhận
           </button>
         </div>
       </div>

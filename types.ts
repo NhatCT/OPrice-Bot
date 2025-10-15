@@ -21,4 +21,11 @@ export interface ChatMessage {
     uri: string;
     title: string;
   }[];
+  feedback?: 'positive' | 'negative';
+}
+
+export interface Conversation {
+  id: string;
+  title: string;
+  messages: ChatMessage[];
 }
