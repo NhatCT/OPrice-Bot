@@ -2,82 +2,144 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 import { getChatResponse } from './services/geminiService';
-import type { ChatMessage } from './types';
+import type { ChatMessage, UserProfile, Theme, Font } from './types';
 import { ConfirmationDialog } from './components/ConfirmationDialog';
 import type { Task } from './components/GuidedInputForm';
 import { SettingsPopover } from './components/SettingsPopover';
+import { WorkflowInfo } from './components/WorkflowInfo';
 
 const CHAT_HISTORY_KEY = 'chatHistory';
 const THEME_KEY = 'theme';
 const FONT_KEY = 'font';
+const USER_PROFILE_KEY = 'userProfile';
 
-type Theme = 'light' | 'dark';
-type Font = 'sans' | 'serif' | 'mono';
 type ImageData = ChatMessage['image'];
 
-const INITIAL_MESSAGE: ChatMessage = {
-  role: 'model',
-  content: 'Xin chào! Tôi là trợ lý ảo của V64. Tôi có thể trả lời các câu hỏi về công ty, giải pháp và các dự án của chúng tôi. Bạn muốn biết về điều gì?',
-  suggestions: [
-    'V64 cung cấp giải pháp gì?',
-    'Các dự án tiêu biểu của V64',
-    'Làm thế nào để liên hệ V64?',
-  ],
+const generateInitialMessage = (profile: UserProfile | null, theme: 'light' | 'dark', font: Font): ChatMessage => {
+  if (profile) {
+    const themeText = theme === 'light' ? 'Sáng' : 'Tối';
+    const fontText = { sans: 'Mặc định', serif: 'Serif', mono: 'Mono' }[font];
+
+    return {
+      role: 'model',
+      content: `Chào mừng trở lại, ${profile.name}! Cài đặt giao diện của bạn (Chủ đề: ${themeText}, Phông chữ: ${fontText}) đã được tải. Tôi có thể giúp gì cho bạn hôm nay?`,
+      suggestions: [
+        'V64 cung cấp giải pháp gì?',
+        'Các dự án tiêu biểu của V64',
+        'Làm thế nào để liên hệ V64?',
+      ],
+    };
+  }
+  return {
+    role: 'model',
+    content: 'Xin chào! Tôi là trợ lý ảo của V64. Để cá nhân hóa trải nghiệm, tôi có thể gọi bạn là gì?',
+  };
 };
 
+
 const App: React.FC = () => {
-  const [messages, setMessages] = useState<ChatMessage[]>(() => {
-    try {
-      const saved = window.localStorage.getItem(CHAT_HISTORY_KEY);
-      if (saved) {
-        const parsedMessages = JSON.parse(saved);
-        if (Array.isArray(parsedMessages) && parsedMessages.length > 0) {
-          return parsedMessages;
-        }
-      }
-    } catch (error) {
-      console.error('Failed to load chat history from localStorage:', error);
-    }
-    return [INITIAL_MESSAGE];
-  });
-  
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<Task | null>(null);
-  
-  const [theme, setTheme] = useState<Theme>(() => {
-    const storedTheme = localStorage.getItem(THEME_KEY) as Theme | null;
-    if (storedTheme) {
-      return storedTheme;
-    }
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
-  const [font, setFont] = useState<Font>(() => (localStorage.getItem(FONT_KEY) as Font) || 'sans');
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
 
-  useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove('light', 'dark');
-    root.classList.add(theme);
-    localStorage.setItem(THEME_KEY, theme);
-  }, [theme]);
+  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(THEME_KEY) as Theme) || 'system');
+  const [font, setFont] = useState<Font>(() => (localStorage.getItem(FONT_KEY) as Font) || 'sans');
   
+  // State to track OS theme preference
+  const [osPrefersDark, setOsPrefersDark] = useState(() => 
+      typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false
+  );
+
+  // Listen for changes in OS preference
+  useEffect(() => {
+      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+      const handleChange = (e: MediaQueryListEvent) => setOsPrefersDark(e.matches);
+      mediaQuery.addEventListener('change', handleChange);
+      return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+  
+  // Calculate the effective theme to be applied ('light' or 'dark')
+  const effectiveTheme = theme === 'system' ? (osPrefersDark ? 'dark' : 'light') : theme;
+
+  // Apply the theme to the DOM and save user's choice ('light', 'dark', or 'system')
+  useEffect(() => {
+      const root = window.document.documentElement;
+      root.classList.remove('light', 'dark');
+      root.classList.add(effectiveTheme);
+      localStorage.setItem(THEME_KEY, theme);
+  }, [theme, effectiveTheme]);
+
   useEffect(() => {
     localStorage.setItem(FONT_KEY, font);
   }, [font]);
+  
+  // Load initial state from localStorage on mount
+  useEffect(() => {
+    try {
+      const savedProfile = window.localStorage.getItem(USER_PROFILE_KEY);
+      const profile = savedProfile ? JSON.parse(savedProfile) : null;
+      setUserProfile(profile);
 
+      const savedHistory = window.localStorage.getItem(CHAT_HISTORY_KEY);
+      if (savedHistory) {
+        setMessages(JSON.parse(savedHistory));
+      } else {
+        const initialFont = (localStorage.getItem(FONT_KEY) as Font) || 'sans';
+        const storedThemeChoice = (localStorage.getItem(THEME_KEY) as Theme) || 'system';
+        const osPrefersDarkNow = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const initialEffectiveTheme = storedThemeChoice === 'system' ? (osPrefersDarkNow ? 'dark' : 'light') : storedThemeChoice;
+        setMessages([generateInitialMessage(profile, initialEffectiveTheme, initialFont)]);
+      }
+    } catch (error) {
+      console.error('Failed to load data from localStorage:', error);
+      const initialFont = (localStorage.getItem(FONT_KEY) as Font) || 'sans';
+      const storedThemeChoice = (localStorage.getItem(THEME_KEY) as Theme) || 'system';
+      const osPrefersDarkNow = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const initialEffectiveTheme = storedThemeChoice === 'system' ? (osPrefersDarkNow ? 'dark' : 'light') : storedThemeChoice;
+      setMessages([generateInitialMessage(null, initialEffectiveTheme, initialFont)]);
+    }
+  }, []);
 
   useEffect(() => {
     try {
-      window.localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messages));
-    } catch (error)
- {
+      if (messages.length > 0) {
+        window.localStorage.setItem(CHAT_HISTORY_KEY, JSON.stringify(messages, (key, value) => {
+            if (key === 'component') return undefined;
+            return value;
+        }));
+      }
+    } catch (error) {
       console.error('Failed to save chat history to localStorage:', error);
     }
   }, [messages]);
 
   const sendMessage = useCallback(async (userInput: string, image?: ImageData) => {
+    if (!userProfile) {
+      const trimmedName = userInput.trim();
+      if (!trimmedName) return;
+
+      const newProfile: UserProfile = { name: trimmedName };
+      setUserProfile(newProfile);
+      localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(newProfile));
+
+      const userMessage: ChatMessage = { role: 'user', content: userInput };
+      const welcomeMessage: ChatMessage = {
+          role: 'model',
+          content: `Rất vui được gặp bạn, ${newProfile.name}! Dưới đây là các quy trình làm việc bạn có thể tham khảo. Tôi có thể giúp gì cho bạn?`,
+          component: <WorkflowInfo />,
+          suggestions: [
+              'V64 cung cấp giải pháp gì?',
+              'Các dự án tiêu biểu của V64',
+              'Làm thế nào để liên hệ V64?',
+          ],
+      };
+      setMessages([userMessage, welcomeMessage]);
+      return;
+    }
+
     const userMessage: ChatMessage = { role: 'user', content: userInput, image };
-    
     const historyWithClearedSuggestions = messages.map((msg, index) => {
         if (index === messages.length - 1) {
             const { suggestions, ...rest } = msg;
@@ -92,8 +154,8 @@ const App: React.FC = () => {
     setActiveTool(null);
     
     try {
-      const { text, sources } = await getChatResponse(newHistory);
-      const modelMessage: ChatMessage = { role: 'model', content: text, sources };
+      const { text, sources, image } = await getChatResponse(newHistory);
+      const modelMessage: ChatMessage = { role: 'model', content: text, sources, image };
       setMessages(prev => [...prev, modelMessage]);
     } catch (error) {
       console.error(error);
@@ -105,14 +167,14 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [messages]);
+  }, [messages, userProfile]);
   
   const handleSuggestionClick = (suggestion: string) => {
     sendMessage(suggestion);
   };
   
   const handleNewChat = () => {
-    setMessages([INITIAL_MESSAGE]);
+    setMessages([generateInitialMessage(userProfile, effectiveTheme, font)]);
     setActiveTool(null);
   };
 
@@ -121,12 +183,24 @@ const App: React.FC = () => {
   };
 
   const confirmClearChat = () => {
-    setMessages([INITIAL_MESSAGE]);
+    setMessages([generateInitialMessage(userProfile, effectiveTheme, font)]);
     window.localStorage.removeItem(CHAT_HISTORY_KEY);
     setIsConfirmDialogOpen(false);
     setActiveTool(null);
   };
   
+  const handleUpdateProfile = (profile: UserProfile) => {
+    setUserProfile(profile);
+    localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+  };
+  
+  const handleForgetUser = () => {
+    localStorage.removeItem(USER_PROFILE_KEY);
+    localStorage.removeItem(CHAT_HISTORY_KEY);
+    setUserProfile(null);
+    setMessages([generateInitialMessage(null, effectiveTheme, font)]);
+  };
+
   const fontClass = {
     sans: 'font-sans',
     serif: 'font-serif',
@@ -146,7 +220,15 @@ const App: React.FC = () => {
             </h1>
           </div>
           <div className="flex-1 flex justify-end">
-            <SettingsPopover theme={theme} setTheme={setTheme} font={font} setFont={setFont} />
+            <SettingsPopover 
+                theme={theme} 
+                setTheme={setTheme} 
+                font={font} 
+                setFont={setFont}
+                userProfile={userProfile}
+                onUpdateProfile={handleUpdateProfile}
+                onForgetUser={handleForgetUser}
+            />
           </div>
         </header>
         <ChatWindow messages={messages} isLoading={isLoading} onSuggestionClick={handleSuggestionClick} />

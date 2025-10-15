@@ -1,4 +1,4 @@
-import { GoogleGenAI, Content, Part } from "@google/genai";
+import { GoogleGenAI, Content, Part, Modality } from "@google/genai";
 import type { ChatMessage } from '../types';
 
 const SYSTEM_INSTRUCTION = `Bạn là một trợ lý AI chuyên nghiệp của công ty V64. Nhiệm vụ của bạn là trả lời các câu hỏi của người dùng một cách chính xác và ngắn gọn. Khi được yêu cầu tính toán về giá sản phẩm, hãy đóng vai trò là một chuyên gia kinh doanh và đưa ra câu trả lời chi tiết, chuyên nghiệp với các bước tính toán rõ ràng. Với các câu hỏi khác, hãy chỉ dựa trên thông tin được cung cấp từ kết quả tìm kiếm trên trang web v64.vn. Luôn trả lời bằng tiếng Việt. Không đưa ra thông tin không có trong nguồn.`;
@@ -8,6 +8,15 @@ if (!process.env.API_KEY) {
 }
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const model = 'gemini-2.5-flash';
+
+interface ChatResponse {
+    text: string;
+    sources: { uri: string; title: string }[];
+    image?: {
+        data: string; // Data URL for the image
+        mimeType: string;
+    }
+}
 
 function mapHistoryToContent(history: ChatMessage[]): Content[] {
     return history.map(msg => {
@@ -39,7 +48,7 @@ function mapHistoryToContent(history: ChatMessage[]): Content[] {
 
 export async function getChatResponse(
     history: ChatMessage[]
-): Promise<{ text: string; sources: { uri: string; title: string }[] }> {
+): Promise<ChatResponse> {
   try {
     const lastMessage = history[history.length - 1];
     if (!lastMessage || lastMessage.role !== 'user') {
@@ -48,18 +57,16 @@ export async function getChatResponse(
 
     const isPricingTask = lastMessage.content.startsWith('Hãy tính giá') || lastMessage.content.startsWith('Tôi có nhóm sản phẩm');
     
-    // Create a deep copy to modify for the API call without affecting app state
     const historyForApi = JSON.parse(JSON.stringify(history));
     const lastMessageForApi = historyForApi[historyForApi.length - 1];
     
-    // Append search scope for non-pricing tasks
     if (!isPricingTask) {
         lastMessageForApi.content = `${lastMessageForApi.content} site:v64.vn`;
     }
     
     const contents = mapHistoryToContent(historyForApi);
 
-    const response = await ai.models.generateContent({
+    const textPromise = ai.models.generateContent({
       model: model,
       contents: contents,
       config: {
@@ -68,8 +75,35 @@ export async function getChatResponse(
       },
     });
 
-    const text = response.text;
-    const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+    let imagePromise: Promise<any> = Promise.resolve(null);
+    const lowercasedContent = lastMessage.content.toLowerCase();
+    
+    let imagePrompt = '';
+    if (!isPricingTask && lowercasedContent.includes('giải pháp')) {
+        imagePrompt = 'A professional, abstract image representing innovative business technology solutions. Clean, futuristic aesthetic with data visualizations and circuit patterns. Predominantly blue and white tones.';
+    } else if (!isPricingTask && lowercasedContent.includes('dự án')) {
+        imagePrompt = 'A dynamic, professional image symbolizing successful project completion and collaboration. Abstract representations of charts, graphs, and teamwork. Modern and inspiring.';
+    }
+
+    if (imagePrompt) {
+        imagePromise = ai.models.generateContent({
+            model: 'gemini-2.5-flash-image',
+            contents: {
+                parts: [{ text: imagePrompt }],
+            },
+            config: {
+                responseModalities: [Modality.IMAGE],
+            },
+        }).catch(err => {
+            console.error("Image generation failed:", err);
+            return null; // Gracefully handle failure
+        });
+    }
+
+    const [textResponse, imageResponse] = await Promise.all([textPromise, imagePromise]);
+
+    const text = textResponse.text;
+    const groundingChunks = textResponse.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
     
     const sources = groundingChunks
         .map(chunk => chunk.web)
@@ -78,7 +112,22 @@ export async function getChatResponse(
             index === self.findIndex((t) => (t.uri === value.uri))
         );
 
-    return { text, sources };
+    let imageResult: ChatResponse['image'] | undefined = undefined;
+    if (imageResponse && imageResponse.candidates?.[0]?.content?.parts) {
+        for (const part of imageResponse.candidates[0].content.parts) {
+          if (part.inlineData) {
+            const base64ImageBytes: string = part.inlineData.data;
+            const mimeType = part.inlineData.mimeType;
+            imageResult = {
+                data: `data:${mimeType};base64,${base64ImageBytes}`,
+                mimeType: mimeType,
+            };
+            break;
+          }
+        }
+    }
+    
+    return { text, sources, image: imageResult };
 
   } catch (error) {
     console.error("Gemini API error:", error);

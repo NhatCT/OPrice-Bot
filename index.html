@@ -7,7 +7,9 @@
     <title>Chatbot Chính Sách Giá</title>
     <script>
       // Apply theme from local storage or OS preference to prevent FOUC
-      if (localStorage.theme === 'dark' || (!('theme' in localStorage) && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+      const theme = localStorage.getItem('theme');
+      const osPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      if (theme === 'dark' || (theme === 'system' && osPrefersDark) || (!theme && osPrefersDark)) {
         document.documentElement.classList.add('dark');
       } else {
         document.documentElement.classList.remove('dark');

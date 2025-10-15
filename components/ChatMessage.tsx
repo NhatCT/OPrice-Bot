@@ -29,9 +29,13 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                         className="rounded-lg max-w-xs max-h-48 object-cover mb-2 border border-slate-300 dark:border-slate-600"
                     />
                 )}
-                <p className="text-base leading-relaxed whitespace-pre-wrap">
-                    {message.content}
-                </p>
+                {message.component ? (
+                    message.component
+                ) : (
+                    <p className="text-base leading-relaxed whitespace-pre-wrap">
+                        {message.content}
+                    </p>
+                )}
             </div>
         </div>
         {hasSuggestions && (

@@ -64,13 +64,13 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 <PlusIcon className="w-4 h-4" />
                 <span>Bắt đầu lại</span>
             </button>
-            <button onClick={onClearChat} className={`${actionButtonClass} hover:text-red-500`} disabled={isLoading} title="Xóa lịch sử cuộc trò chuyện">
-                <TrashIcon className="w-4 h-4" />
-                <span>Xóa lịch sử</span>
-            </button>
             <button onClick={() => setIsToolPopoverOpen(prev => !prev)} className={actionButtonClass} disabled={isLoading} title="Hỗ trợ tính giá">
                 <CalculatorIcon className="w-4 h-4" />
                 <span>Hỗ trợ tính giá</span>
+            </button>
+            <button onClick={onClearChat} className={`${actionButtonClass} hover:text-red-500`} disabled={isLoading} title="Xóa lịch sử cuộc trò chuyện">
+                <TrashIcon className="w-4 h-4" />
+                <span>Xóa lịch sử</span>
             </button>
 
             {isToolPopoverOpen && (
@@ -81,7 +81,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 >
                     <button onClick={() => handleToolSelect('selling-price')} role="menuitem" className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">Tính giá bán</button>
                     <button onClick={() => handleToolSelect('promo-price')} role="menuitem" className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">Tính giá khuyến mãi</button>
-                    <button onClick={() => handleToolSelect('group-price')} role="menuitem" className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">Tính giá theo nhóm</button>
+                    <button onClick={() => handleToolSelect('group-price')} role="menuitem" className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">Tính giá đồng giá</button>
                 </div>
             )}
         </div>

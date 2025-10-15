@@ -18,12 +18,6 @@ interface FormProps {
   isLoading: boolean;
 }
 
-interface PriceTier {
-    id: number;
-    fromQuantity: string;
-    price: string;
-}
-
 type FormErrors = { [key: string]: string | undefined };
 
 
@@ -31,12 +25,6 @@ const SpinnerIcon: React.FC<{ className?: string }> = ({ className }) => (
     <svg className={`animate-spin ${className}`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
         <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
         <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-    </svg>
-);
-
-const TrashIcon: React.FC<{ className?: string }> = ({ className }) => (
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className={className}>
-        <path fillRule="evenodd" d="M8.75 1A2.75 2.75 0 0 0 6 3.75v.443c-.795.077-1.58.22-2.365.468a.75.75 0 1 0 .23 1.482l.149-.022.841 10.518A2.75 2.75 0 0 0 7.596 19h4.807a2.75 2.75 0 0 0 2.742-2.53l.841-10.52.149.023a.75.75 0 0 0 .23-1.482A41.03 41.03 0 0 0 14 4.193v-.443A2.75 2.75 0 0 0 11.25 1h-2.5ZM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4ZM8.58 7.72a.75.75 0 0 0-1.5.06l.3 7.5a.75.75 0 1 0 1.5-.06l-.3-7.5Zm4.34.06a.75.75 0 1 0-1.5-.06l-.3 7.5a.75.75 0 1 0 1.5.06l.3-7.5Z" clipRule="evenodd" />
     </svg>
 );
 
@@ -62,21 +50,15 @@ const getInputClass = (hasError: boolean) =>
 const commonLabelClass = "block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1";
 const primaryButtonClass = "w-full bg-sky-600 text-white rounded-lg py-2.5 font-semibold hover:bg-sky-500 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-sky-500 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 flex items-center justify-center";
 const secondaryButtonClass = "w-full bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 rounded-lg py-2.5 font-semibold hover:bg-slate-300 dark:hover:bg-slate-500 disabled:bg-slate-500 disabled:cursor-not-allowed transition-colors duration-300";
-const radioLabelClass = "flex items-center space-x-2 text-sm text-slate-700 dark:text-slate-200 cursor-pointer";
-const radioInputClass = "h-4 w-4 text-sky-600 bg-slate-200 dark:bg-slate-600 border-slate-400 dark:border-slate-500 focus:ring-sky-500 focus:ring-offset-0";
-const checkboxInputClass = "h-4 w-4 text-sky-600 bg-slate-200 dark:bg-slate-600 border-slate-400 dark:border-slate-500 rounded focus:ring-sky-500 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800";
 
 
 const SellingPriceForm: React.FC<FormProps> = ({ onSubmit, onCancel, isLoading }) => {
   const [productName, setProductName] = useState('');
   const [costPrice, setCostPrice] = useState('');
   const [variableCost, setVariableCost] = useState('');
-  const [manufactureDate, setManufactureDate] = useState('');
-  const [manufactureTime, setManufactureTime] = useState('');
-  const [profitValue, setProfitValue] = useState('');
-  const [profitType, setProfitType] = useState<'margin' | 'fixed'>('margin');
-  const [useTieredPricing, setUseTieredPricing] = useState(false);
-  const [tiers, setTiers] = useState<PriceTier[]>([{ id: Date.now(), fromQuantity: '1', price: '' }]);
+  const [totalFixedCost, setTotalFixedCost] = useState('');
+  const [salesVolume, setSalesVolume] = useState('');
+  const [targetProfit, setTargetProfit] = useState('');
   const [productImage, setProductImage] = useState<ImageData | null>(null);
   const [errors, setErrors] = useState<FormErrors>({});
 
@@ -89,64 +71,36 @@ const SellingPriceForm: React.FC<FormProps> = ({ onSubmit, onCancel, isLoading }
         });
     }
   };
+  
+  const validateField = (name: string, value: string, requiredMessage: string, isPositiveNumber = true) => {
+    if (!value.trim()) return requiredMessage;
+    if (isPositiveNumber && (isNaN(Number(value)) || Number(value) <= 0)) {
+        return 'Vui lòng nhập một số dương hợp lệ.';
+    }
+    return undefined;
+  };
 
   const validate = () => {
     const newErrors: FormErrors = {};
-    if (!productName.trim()) newErrors.productName = 'Tên sản phẩm là bắt buộc.';
-    
-    if (!costPrice.trim()) {
-      newErrors.costPrice = 'Giá vốn là bắt buộc.';
-    } else if (isNaN(Number(costPrice)) || Number(costPrice) <= 0) {
-      newErrors.costPrice = 'Vui lòng nhập một số dương hợp lệ.';
-    }
+    newErrors.productName = validateField('productName', productName, 'Tên sản phẩm là bắt buộc.', false);
+    newErrors.costPrice = validateField('costPrice', costPrice, 'Giá vốn là bắt buộc.');
+    newErrors.totalFixedCost = validateField('totalFixedCost', totalFixedCost, 'Tổng chi phí cố định là bắt buộc.');
+    newErrors.salesVolume = validateField('salesVolume', salesVolume, 'Doanh số kỳ vọng là bắt buộc.');
+    newErrors.targetProfit = validateField('targetProfit', targetProfit, 'Lợi nhuận mục tiêu là bắt buộc.');
 
     if (variableCost.trim() && (isNaN(Number(variableCost)) || Number(variableCost) < 0)) {
-      newErrors.variableCost = 'Vui lòng nhập một số hợp lệ.';
+      newErrors.variableCost = 'Vui lòng nhập một số hợp lệ (lớn hơn hoặc bằng 0).';
     }
 
-    if (useTieredPricing) {
-      tiers.forEach(tier => {
-        const qtyKey = `tier_fromQuantity_${tier.id}`;
-        if (!tier.fromQuantity.trim()) {
-            newErrors[qtyKey] = 'Bắt buộc.';
-        } else if (isNaN(Number(tier.fromQuantity)) || Number(tier.fromQuantity) <= 0) {
-            newErrors[qtyKey] = 'Số lượng không hợp lệ.';
-        }
-        const priceKey = `tier_price_${tier.id}`;
-        if (!tier.price.trim()) {
-             newErrors[priceKey] = 'Bắt buộc.';
-        } else if (isNaN(Number(tier.price)) || Number(tier.price) <= 0) {
-            newErrors[priceKey] = 'Giá không hợp lệ.';
-        }
-      });
-    } else {
-        if (!profitValue.trim()) {
-          newErrors.profitValue = 'Giá trị lợi nhuận là bắt buộc.';
-        } else if (isNaN(Number(profitValue)) || Number(profitValue) <= 0) {
-          newErrors.profitValue = 'Vui lòng nhập một số dương hợp lệ.';
-        }
-    }
+    const validErrors = Object.entries(newErrors).reduce((acc, [key, value]) => {
+        if (value) acc[key] = value;
+        return acc;
+    }, {} as FormErrors);
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
+    setErrors(validErrors);
+    return Object.keys(validErrors).length === 0;
   };
   
-  const handleTierChange = (id: number, field: 'fromQuantity' | 'price', value: string) => {
-    setTiers(tiers.map(tier => 
-        tier.id === id ? { ...tier, [field]: value } : tier
-    ));
-    clearError(`tier_${field}_${id}`);
-  };
-  
-  const addTier = () => {
-    const lastQuantity = tiers.length > 0 ? parseInt(tiers[tiers.length - 1].fromQuantity) : 0;
-    const newQuantity = isNaN(lastQuantity) ? '' : (lastQuantity + 1).toString();
-    setTiers([...tiers, { id: Date.now(), fromQuantity: newQuantity, price: '' }]);
-  };
-
-  const removeTier = (idToRemove: number) => {
-    setTiers(tiers.filter(tier => tier.id !== idToRemove));
-  };
   
   const handleImageUpload = (file: File | null) => {
       if (file && file.type.startsWith('image/')) {
@@ -175,34 +129,8 @@ const SellingPriceForm: React.FC<FormProps> = ({ onSubmit, onCancel, isLoading }
     e.preventDefault();
     if (!validate()) return;
     
-    let prompt = `Hãy tính và phân tích giá bán cho sản phẩm '${productName}' với giá vốn là ${costPrice}`;
-    if (variableCost) {
-        prompt += ` và chi phí biến đổi trên mỗi sản phẩm là ${variableCost}`;
-    }
-
-    if (manufactureDate) {
-        prompt += `, được sản xuất/nhập vào ngày ${manufactureDate}`;
-        if (manufactureTime) {
-            prompt += ` lúc ${manufactureTime}`;
-        }
-    }
-
-    if (useTieredPricing) {
-        prompt += `. Áp dụng chính sách giá theo bậc thang như sau:\n`;
-        const tierDescriptions = tiers
-            .slice()
-            .sort((a, b) => Number(a.fromQuantity) - Number(b.fromQuantity))
-            .map(tier => `- Mua từ ${tier.fromQuantity} sản phẩm, giá bán là ${tier.price} VND/sản phẩm.`)
-            .join('\n');
-        prompt += tierDescriptions;
-        prompt += `\nHãy phân tích chi tiết về lợi nhuận và điểm hòa vốn cho từng bậc giá.`;
-    } else {
-        if (profitType === 'margin') {
-            prompt += `, lợi nhuận mong muốn là ${profitValue}%.`;
-        } else {
-            prompt += `, lợi nhuận cố định mong muốn là ${profitValue} VND.`;
-        }
-    }
+    let prompt = `Hãy tính và phân tích giá bán cho sản phẩm '${productName}' để đạt được lợi nhuận mục tiêu là ${targetProfit} VND/tháng. Các thông tin chi tiết: giá vốn ${costPrice} VND/sản phẩm, chi phí biến đổi ${variableCost || '0'} VND/sản phẩm, tổng chi phí cố định ${totalFixedCost} VND/tháng, và doanh số kỳ vọng là ${salesVolume} sản phẩm/tháng. Hãy phân tích chi tiết công thức tính, giá bán đề xuất, điểm hòa vốn và đưa ra lời khuyên.`;
+    
     onSubmit(prompt, productImage ?? undefined);
   };
 
@@ -246,93 +174,35 @@ const SellingPriceForm: React.FC<FormProps> = ({ onSubmit, onCancel, isLoading }
 
       <div className="grid grid-cols-2 gap-3">
         <div>
-            <label htmlFor="costPrice" className={commonLabelClass}>Giá vốn (VND)*</label>
+            <label htmlFor="costPrice" className={commonLabelClass}>Giá vốn (VND/sp)</label>
             <input id="costPrice" type="number" value={costPrice} onChange={(e) => { setCostPrice(e.target.value); clearError('costPrice'); }} placeholder="VD: 150000" className={getInputClass(!!errors.costPrice)} disabled={isLoading} required />
             <FieldError message={errors.costPrice} />
         </div>
         <div>
-            <label htmlFor="variableCost" className={commonLabelClass}>Chi phí biến đổi (VND)</label>
-            <input id="variableCost" type="number" value={variableCost} onChange={(e) => { setVariableCost(e.target.value); clearError('variableCost'); }} placeholder="VD: 10000 (tùy chọn)" className={getInputClass(!!errors.variableCost)} disabled={isLoading} />
+            <label htmlFor="variableCost" className={commonLabelClass}>Chi phí biến đổi (VND/sp)</label>
+            <input id="variableCost" type="number" value={variableCost} onChange={(e) => { setVariableCost(e.target.value); clearError('variableCost'); }} placeholder="VD: 10000" className={getInputClass(!!errors.variableCost)} disabled={isLoading} />
             <FieldError message={errors.variableCost} />
         </div>
       </div>
       
       <div className="grid grid-cols-2 gap-3">
-        <div>
-            <label htmlFor="manufactureDate" className={commonLabelClass}>Ngày sản xuất/nhập hàng</label>
-            <input 
-                id="manufactureDate" 
-                type="date" 
-                value={manufactureDate} 
-                onChange={(e) => setManufactureDate(e.target.value)} 
-                className={getInputClass(false)}
-                disabled={isLoading} 
-            />
+         <div>
+            <label htmlFor="totalFixedCost" className={commonLabelClass}>Tổng chi phí cố định (VND/tháng)</label>
+            <input id="totalFixedCost" type="number" value={totalFixedCost} onChange={(e) => { setTotalFixedCost(e.target.value); clearError('totalFixedCost'); }} placeholder="VD: 5000000" className={getInputClass(!!errors.totalFixedCost)} disabled={isLoading} required />
+            <FieldError message={errors.totalFixedCost} />
         </div>
         <div>
-            <label htmlFor="manufactureTime" className={commonLabelClass}>Giờ sản xuất/nhập hàng</label>
-            <input 
-                id="manufactureTime" 
-                type="time" 
-                value={manufactureTime} 
-                onChange={(e) => setManufactureTime(e.target.value)} 
-                className={getInputClass(false)}
-                disabled={isLoading} 
-            />
+            <label htmlFor="salesVolume" className={commonLabelClass}>Doanh số kỳ vọng (sp/tháng)</label>
+            <input id="salesVolume" type="number" value={salesVolume} onChange={(e) => { setSalesVolume(e.target.value); clearError('salesVolume'); }} placeholder="VD: 200" className={getInputClass(!!errors.salesVolume)} disabled={isLoading} required />
+            <FieldError message={errors.salesVolume} />
         </div>
       </div>
 
-       <div className="pt-1">
-            <label className="flex items-center space-x-2 text-sm text-slate-600 dark:text-slate-300 cursor-pointer">
-                <input type="checkbox" checked={useTieredPricing} onChange={(e) => setUseTieredPricing(e.target.checked)} className={checkboxInputClass} disabled={isLoading} />
-                <span>Áp dụng giá theo bậc thang (Tiered Pricing)</span>
-            </label>
-        </div>
-
-      {useTieredPricing ? (
-        <div className="space-y-3 p-3 bg-slate-100 dark:bg-slate-700/50 rounded-lg animate-fade-in-fast">
-            <label className={commonLabelClass}>Các bậc giá</label>
-            {tiers.map((tier) => (
-                <div key={tier.id} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-center">
-                    <div>
-                        <input type="number" value={tier.fromQuantity} onChange={(e) => handleTierChange(tier.id, 'fromQuantity', e.target.value)} placeholder="Số lượng từ" className={getInputClass(!!errors[`tier_fromQuantity_${tier.id}`])} disabled={isLoading} />
-                        <FieldError message={errors[`tier_fromQuantity_${tier.id}`]} />
-                    </div>
-                    <div>
-                        <input type="number" value={tier.price} onChange={(e) => handleTierChange(tier.id, 'price', e.target.value)} placeholder="Giá bán (VND)" className={getInputClass(!!errors[`tier_price_${tier.id}`])} disabled={isLoading} />
-                         <FieldError message={errors[`tier_price_${tier.id}`]} />
-                    </div>
-                    <button type="button" onClick={() => removeTier(tier.id)} className="text-slate-500 dark:text-slate-400 hover:text-red-500 disabled:opacity-50 p-2" disabled={isLoading || tiers.length <= 1} aria-label="Remove tier">
-                        <TrashIcon className="w-5 h-5" />
-                    </button>
-                </div>
-            ))}
-            <button type="button" onClick={addTier} disabled={isLoading} className="text-sm font-medium text-sky-600 dark:text-sky-400 hover:text-sky-500 dark:hover:text-sky-300 transition-colors">+ Thêm bậc giá</button>
-        </div>
-      ) : (
-        <div className="animate-fade-in-fast space-y-4">
-            <div>
-                <label className={commonLabelClass}>Hình thức lợi nhuận</label>
-                <div className="flex space-x-4 p-2 bg-slate-100 dark:bg-slate-700/50 rounded-lg">
-                    <label className={radioLabelClass}>
-                        <input type="radio" name="profitType" value="margin" checked={profitType === 'margin'} onChange={() => setProfitType('margin')} className={radioInputClass} />
-                        <span>Theo %</span>
-                    </label>
-                    <label className={radioLabelClass}>
-                        <input type="radio" name="profitType" value="fixed" checked={profitType === 'fixed'} onChange={() => setProfitType('fixed')} className={radioInputClass} />
-                        <span>Số tiền cố định</span>
-                    </label>
-                </div>
-            </div>
-            <div>
-                <label htmlFor="profitValue" className={commonLabelClass}>
-                    {profitType === 'margin' ? 'Lợi nhuận mong muốn (%)*' : 'Lợi nhuận mong muốn (VND)*'}
-                </label>
-                <input id="profitValue" type="number" value={profitValue} onChange={(e) => { setProfitValue(e.target.value); clearError('profitValue'); }} placeholder={profitType === 'margin' ? "VD: 40" : "VD: 80000"} className={getInputClass(!!errors.profitValue)} disabled={isLoading} required />
-                <FieldError message={errors.profitValue} />
-            </div>
-        </div>
-      )}
+       <div>
+        <label htmlFor="targetProfit" className={commonLabelClass}>Lợi nhuận mục tiêu (VND/tháng)</label>
+        <input id="targetProfit" type="number" value={targetProfit} onChange={(e) => { setTargetProfit(e.target.value); clearError('targetProfit'); }} placeholder="VD: 20000000" className={getInputClass(!!errors.targetProfit)} disabled={isLoading} required />
+        <FieldError message={errors.targetProfit} />
+      </div>
 
       <div className="grid grid-cols-2 gap-3 pt-2">
         <button type="button" onClick={onCancel} className={secondaryButtonClass} disabled={isLoading}>Hủy</button>
@@ -346,59 +216,38 @@ const SellingPriceForm: React.FC<FormProps> = ({ onSubmit, onCancel, isLoading }
 
 const PromoPriceForm: React.FC<FormProps> = ({ onSubmit, onCancel, isLoading }) => {
     const [productName, setProductName] = useState('');
+    const [costPrice, setCostPrice] = useState('');
     const [currentPrice, setCurrentPrice] = useState('');
-    const [discountValue, setDiscountValue] = useState('');
-    const [discountType, setDiscountType] = useState<'percentage' | 'fixed' | 'bogo'>('percentage');
+    const [currentSalesVolume, setCurrentSalesVolume] = useState('');
+    const [expectedSalesVolume, setExpectedSalesVolume] = useState('');
+    const [promotionGoal, setPromotionGoal] = useState<'maximize_profit' | 'maximize_revenue'>('maximize_profit');
     const [errors, setErrors] = useState<FormErrors>({});
 
     const clearError = (fieldName: string) => {
         if (errors[fieldName]) {
-            setErrors(prev => {
-                const newErrors = { ...prev };
-                delete newErrors[fieldName];
-                return newErrors;
-            });
+            setErrors(prev => ({ ...prev, [fieldName]: undefined }));
         }
     };
 
     const validate = () => {
         const newErrors: FormErrors = {};
         if (!productName.trim()) newErrors.productName = 'Tên sản phẩm là bắt buộc.';
-
-        if (!currentPrice.trim()) {
-            newErrors.currentPrice = 'Giá bán hiện tại là bắt buộc.';
-        } else if (isNaN(Number(currentPrice)) || Number(currentPrice) <= 0) {
-            newErrors.currentPrice = 'Vui lòng nhập một số dương hợp lệ.';
-        }
-        
-        if (discountType !== 'bogo') {
-            if (!discountValue.trim()) {
-                newErrors.discountValue = 'Giá trị khuyến mãi là bắt buộc.';
-            } else if (isNaN(Number(discountValue)) || Number(discountValue) <= 0) {
-                newErrors.discountValue = 'Vui lòng nhập một số dương hợp lệ.';
-            }
-        }
+        if (!costPrice.trim() || isNaN(Number(costPrice)) || Number(costPrice) <= 0) newErrors.costPrice = 'Giá vốn phải là số dương hợp lệ.';
+        if (!currentPrice.trim() || isNaN(Number(currentPrice)) || Number(currentPrice) <= 0) newErrors.currentPrice = 'Giá bán phải là số dương hợp lệ.';
+        if (!currentSalesVolume.trim() || isNaN(Number(currentSalesVolume)) || Number(currentSalesVolume) <= 0) newErrors.currentSalesVolume = 'Doanh số phải là số dương hợp lệ.';
+        if (!expectedSalesVolume.trim() || isNaN(Number(expectedSalesVolume)) || Number(expectedSalesVolume) <= 0) newErrors.expectedSalesVolume = 'Doanh số kỳ vọng phải là số dương hợp lệ.';
         
         setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        return Object.keys(newErrors).every(key => !newErrors[key]);
     };
   
     const handleSubmit = (e: React.FormEvent) => {
       e.preventDefault();
       if (!validate()) return;
 
-      let prompt = `Hãy tính giá và phân tích chương trình khuyến mãi cho sản phẩm '${productName}' có giá bán hiện tại là ${currentPrice}, với hình thức khuyến mãi là `;
-      switch (discountType) {
-          case 'percentage':
-              prompt += `giảm giá ${discountValue}%.`;
-              break;
-          case 'fixed':
-              prompt += `giảm giá ${discountValue} VND.`;
-              break;
-          case 'bogo':
-              prompt += `mua 1 tặng 1 (BOGO).`;
-              break;
-      }
+      const goalText = promotionGoal === 'maximize_profit' ? 'tối đa hóa lợi nhuận' : 'tối đa hóa doanh thu';
+      let prompt = `Hãy tính giá khuyến mãi và phân tích hiệu quả cho sản phẩm '${productName}'. Thông tin: giá vốn ${costPrice} VND, giá bán hiện tại ${currentPrice} VND, doanh số hiện tại ${currentSalesVolume} sản phẩm/tháng. Mục tiêu của chương trình là ${goalText} với doanh số kỳ vọng tăng lên ${expectedSalesVolume} sản phẩm/tháng. Hãy đề xuất mức giảm giá tối ưu (theo % và/hoặc số tiền), so sánh lợi nhuận trước và sau khuyến mãi để đưa ra kết luận.`;
+
       onSubmit(prompt);
     };
   
@@ -409,30 +258,37 @@ const PromoPriceForm: React.FC<FormProps> = ({ onSubmit, onCancel, isLoading }) 
           <input id="promoProductName" type="text" value={productName} onChange={(e) => { setProductName(e.target.value); clearError('productName'); }} placeholder="VD: Quần Jean rách gối" className={getInputClass(!!errors.productName)} disabled={isLoading} required />
           <FieldError message={errors.productName} />
         </div>
-        <div>
-            <label htmlFor="currentPrice" className={commonLabelClass}>Giá bán hiện tại (VND)</label>
-            <input id="currentPrice" type="number" value={currentPrice} onChange={(e) => { setCurrentPrice(e.target.value); clearError('currentPrice'); }} placeholder="VD: 450000" className={getInputClass(!!errors.currentPrice)} disabled={isLoading} required />
-            <FieldError message={errors.currentPrice} />
-        </div>
-        <div>
-            <label className={commonLabelClass}>Hình thức khuyến mãi</label>
-            <div className="grid grid-cols-3 gap-2 p-1 bg-slate-100 dark:bg-slate-700/50 rounded-lg">
-                <button type="button" onClick={() => setDiscountType('percentage')} className={`py-1.5 rounded-md text-sm transition-colors ${discountType === 'percentage' ? 'bg-sky-600 text-white' : 'hover:bg-slate-200 dark:hover:bg-slate-600'}`}>Giảm theo %</button>
-                <button type="button" onClick={() => setDiscountType('fixed')} className={`py-1.5 rounded-md text-sm transition-colors ${discountType === 'fixed' ? 'bg-sky-600 text-white' : 'hover:bg-slate-600'}`}>Giảm tiền</button>
-                <button type="button" onClick={() => setDiscountType('bogo')} className={`py-1.5 rounded-md text-sm transition-colors ${discountType === 'bogo' ? 'bg-sky-600 text-white' : 'hover:bg-slate-600'}`}>Mua 1 tặng 1</button>
+        <div className="grid grid-cols-2 gap-3">
+            <div>
+                <label htmlFor="costPrice" className={commonLabelClass}>Giá vốn (VND/sp)</label>
+                <input id="costPrice" type="number" value={costPrice} onChange={(e) => { setCostPrice(e.target.value); clearError('costPrice'); }} placeholder="VD: 250000" className={getInputClass(!!errors.costPrice)} disabled={isLoading} required />
+                <FieldError message={errors.costPrice} />
+            </div>
+            <div>
+                <label htmlFor="currentPrice" className={commonLabelClass}>Giá bán hiện tại (VND/sp)</label>
+                <input id="currentPrice" type="number" value={currentPrice} onChange={(e) => { setCurrentPrice(e.target.value); clearError('currentPrice'); }} placeholder="VD: 450000" className={getInputClass(!!errors.currentPrice)} disabled={isLoading} required />
+                <FieldError message={errors.currentPrice} />
             </div>
         </div>
-
-        {discountType !== 'bogo' && (
-            <div className="animate-fade-in-fast">
-                <label htmlFor="discountValue" className={commonLabelClass}>
-                    {discountType === 'percentage' ? 'Tỷ lệ giảm giá (%)' : 'Số tiền giảm giá (VND)'}
-                </label>
-                <input id="discountValue" type="number" value={discountValue} onChange={(e) => { setDiscountValue(e.target.value); clearError('discountValue'); }} placeholder={discountType === 'percentage' ? "VD: 20" : "VD: 50000"} className={getInputClass(!!errors.discountValue)} disabled={isLoading} required />
-                <FieldError message={errors.discountValue} />
+         <div className="grid grid-cols-2 gap-3">
+            <div>
+                <label htmlFor="currentSalesVolume" className={commonLabelClass}>Doanh số hiện tại (sp/tháng)</label>
+                <input id="currentSalesVolume" type="number" value={currentSalesVolume} onChange={(e) => { setCurrentSalesVolume(e.target.value); clearError('currentSalesVolume'); }} placeholder="VD: 100" className={getInputClass(!!errors.currentSalesVolume)} disabled={isLoading} required />
+                <FieldError message={errors.currentSalesVolume} />
             </div>
-        )}
-
+            <div>
+                <label htmlFor="expectedSalesVolume" className={commonLabelClass}>Doanh số kỳ vọng (sp/tháng)</label>
+                <input id="expectedSalesVolume" type="number" value={expectedSalesVolume} onChange={(e) => { setExpectedSalesVolume(e.target.value); clearError('expectedSalesVolume'); }} placeholder="VD: 150" className={getInputClass(!!errors.expectedSalesVolume)} disabled={isLoading} required />
+                <FieldError message={errors.expectedSalesVolume} />
+            </div>
+        </div>
+        <div>
+            <label className={commonLabelClass}>Mục tiêu khuyến mãi</label>
+            <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 dark:bg-slate-700/50 rounded-lg">
+                <button type="button" onClick={() => setPromotionGoal('maximize_profit')} className={`py-1.5 rounded-md text-sm transition-colors ${promotionGoal === 'maximize_profit' ? 'bg-sky-600 text-white' : 'hover:bg-slate-200 dark:hover:bg-slate-600'}`}>Tối đa hóa lợi nhuận</button>
+                <button type="button" onClick={() => setPromotionGoal('maximize_revenue')} className={`py-1.5 rounded-md text-sm transition-colors ${promotionGoal === 'maximize_revenue' ? 'bg-sky-600 text-white' : 'hover:bg-slate-600'}`}>Tối đa hóa doanh thu</button>
+            </div>
+        </div>
         <div className="grid grid-cols-2 gap-3 pt-2">
           <button type="button" onClick={onCancel} className={secondaryButtonClass} disabled={isLoading}>Hủy</button>
           <button type="submit" className={primaryButtonClass} disabled={isLoading}>
@@ -446,56 +302,57 @@ const PromoPriceForm: React.FC<FormProps> = ({ onSubmit, onCancel, isLoading }) 
 const GroupPriceForm: React.FC<FormProps> = ({ onSubmit, onCancel, isLoading }) => {
     const [products, setProducts] = useState('');
     const [targetFlatPrice, setTargetFlatPrice] = useState('');
+    const [salesIncrease, setSalesIncrease] = useState('');
     const [errors, setErrors] = useState<FormErrors>({});
 
     const clearError = (fieldName: string) => {
         if (errors[fieldName]) {
-            setErrors(prev => {
-                const newErrors = { ...prev };
-                delete newErrors[fieldName];
-                return newErrors;
-            });
+            setErrors(prev => ({ ...prev, [fieldName]: undefined }));
         }
     };
 
     const validate = () => {
         const newErrors: FormErrors = {};
         if (!products.trim()) newErrors.products = 'Danh sách sản phẩm là bắt buộc.';
-        
-        if (!targetFlatPrice.trim()) {
-            newErrors.targetFlatPrice = 'Giá đồng giá mục tiêu là bắt buộc.';
-        } else if (isNaN(Number(targetFlatPrice)) || Number(targetFlatPrice) <= 0) {
-            newErrors.targetFlatPrice = 'Vui lòng nhập một số dương hợp lệ.';
-        }
+        if (!targetFlatPrice.trim() || isNaN(Number(targetFlatPrice)) || Number(targetFlatPrice) <= 0) newErrors.targetFlatPrice = 'Giá đồng giá phải là số dương hợp lệ.';
+        if (!salesIncrease.trim() || isNaN(Number(salesIncrease)) || Number(salesIncrease) <= 0) newErrors.salesIncrease = 'Tỷ lệ tăng doanh số phải là số dương hợp lệ.';
 
         setErrors(newErrors);
-        return Object.keys(newErrors).length === 0;
+        return Object.keys(newErrors).every(key => !newErrors[key]);
     };
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if(!validate()) return;
         
-        const prompt = `Tôi có nhóm sản phẩm sau (định dạng: Tên sản phẩm, Giá vốn):\n${products}\nHãy đề xuất phương án bán đồng giá ${targetFlatPrice} và phân tích lợi nhuận.`;
+        const prompt = `Tôi có nhóm sản phẩm sau (định dạng: Tên sản phẩm, Giá vốn, Giá bán hiện tại, Doanh số/tháng):\n${products}\nTôi muốn chạy chương trình bán đồng giá tất cả sản phẩm này ở mức ${targetFlatPrice} VND. Tôi kỳ vọng doanh số của cả nhóm sẽ tăng ${salesIncrease}%. Hãy phân tích chi tiết về hiệu quả, so sánh lợi nhuận trước và sau khi áp dụng, và cho tôi lời khuyên có nên thực hiện chiến dịch này không.`;
         onSubmit(prompt);
     };
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-                <label htmlFor="products" className={commonLabelClass}>Danh sách sản phẩm và giá vốn</label>
-                <textarea id="products" value={products} onChange={(e) => { setProducts(e.target.value); clearError('products'); }} rows={4} placeholder={"VD:\nÁo sơ mi, 180000\nQuần tây, 250000\nThắt lưng da, 120000"} className={`${getInputClass(!!errors.products)} min-h-[100px]`} disabled={isLoading} required />
+                <label htmlFor="products" className={commonLabelClass}>Danh sách sản phẩm</label>
+                <textarea id="products" value={products} onChange={(e) => { setProducts(e.target.value); clearError('products'); }} rows={4} placeholder={"VD:\nÁo sơ mi, 180000, 299000, 150\nQuần tây, 250000, 450000, 100\nThắt lưng da, 120000, 250000, 80"} className={`${getInputClass(!!errors.products)} min-h-[100px]`} disabled={isLoading} required />
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Định dạng: Tên, Giá vốn, Giá bán, Doanh số/tháng. Mỗi sản phẩm một dòng.</p>
                 <FieldError message={errors.products} />
             </div>
-            <div>
-                <label htmlFor="targetFlatPrice" className={commonLabelClass}>Giá đồng giá mục tiêu (VND)</label>
-                <input id="targetFlatPrice" type="number" value={targetFlatPrice} onChange={(e) => { setTargetFlatPrice(e.target.value); clearError('targetFlatPrice'); }} placeholder="VD: 199000" className={getInputClass(!!errors.targetFlatPrice)} disabled={isLoading} required />
-                <FieldError message={errors.targetFlatPrice} />
+            <div className="grid grid-cols-2 gap-3">
+                <div>
+                    <label htmlFor="targetFlatPrice" className={commonLabelClass}>Giá đồng giá mục tiêu (VND)</label>
+                    <input id="targetFlatPrice" type="number" value={targetFlatPrice} onChange={(e) => { setTargetFlatPrice(e.target.value); clearError('targetFlatPrice'); }} placeholder="VD: 199000" className={getInputClass(!!errors.targetFlatPrice)} disabled={isLoading} required />
+                    <FieldError message={errors.targetFlatPrice} />
+                </div>
+                <div>
+                    <label htmlFor="salesIncrease" className={commonLabelClass}>Doanh số kỳ vọng tăng (%)</label>
+                    <input id="salesIncrease" type="number" value={salesIncrease} onChange={(e) => { setSalesIncrease(e.target.value); clearError('salesIncrease'); }} placeholder="VD: 30" className={getInputClass(!!errors.salesIncrease)} disabled={isLoading} required />
+                    <FieldError message={errors.salesIncrease} />
+                </div>
             </div>
             <div className="grid grid-cols-2 gap-3 pt-2">
                 <button type="button" onClick={onCancel} className={secondaryButtonClass} disabled={isLoading}>Hủy</button>
                 <button type="submit" className={primaryButtonClass} disabled={isLoading}>
-                    {isLoading ? <SpinnerIcon className="h-5 w-5" /> : 'Tính toán'}
+                    {isLoading ? <SpinnerIcon className="h-5 w-5" /> : 'Phân tích'}
                 </button>
             </div>
         </form>
