@@ -3,6 +3,7 @@ import { PaletteIcon } from './icons/PaletteIcon';
 import type { UserProfile, Theme, Font } from '../types';
 import { UserCircleIcon } from './icons/UserCircleIcon';
 import { TextSizeIcon } from './icons/TextSizeIcon';
+import { SpeakerWaveIcon } from './icons/SpeakerWaveIcon';
 
 interface SettingsPopoverProps {
   theme: Theme;
@@ -12,9 +13,11 @@ interface SettingsPopoverProps {
   userProfile: UserProfile | null;
   onUpdateProfile: (profile: UserProfile) => void;
   onForgetUser: () => void;
+  soundEnabled: boolean;
+  setSoundEnabled: (enabled: boolean) => void;
 }
 
-export const SettingsPopover: React.FC<SettingsPopoverProps> = ({ theme, setTheme, font, setFont, userProfile, onUpdateProfile, onForgetUser }) => {
+export const SettingsPopover: React.FC<SettingsPopoverProps> = ({ theme, setTheme, font, setFont, userProfile, onUpdateProfile, onForgetUser, soundEnabled, setSoundEnabled }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [isRendered, setIsRendered] = useState(false);
   const [nameInput, setNameInput] = useState('');
@@ -146,6 +149,25 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({ theme, setThem
                {fontOptions.map(f => (
                  <button key={f.key} onClick={() => setFont(f.key)} className={getButtonClass(font === f.key)}>{f.name}</button>
                ))}
+            </div>
+          </div>
+          <div>
+            <label className="flex items-center space-x-2 text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+              <SpeakerWaveIcon className="w-4 h-4" />
+              <span>Thông báo âm thanh</span>
+            </label>
+            <div className="mt-2 p-1 bg-slate-200 dark:bg-slate-800/60 rounded-lg">
+              <button
+                onClick={() => setSoundEnabled(!soundEnabled)}
+                className="w-full flex items-center justify-between px-3 py-1.5 text-sm rounded-md transition-colors duration-200 text-slate-700 dark:text-slate-200 hover:bg-slate-300/50 dark:hover:bg-slate-700/60"
+                role="switch"
+                aria-checked={soundEnabled}
+              >
+                <span>Bật âm thanh</span>
+                <div className={`relative w-10 h-5 rounded-full transition-colors duration-200 ease-in-out ${soundEnabled ? 'bg-sky-600' : 'bg-slate-400 dark:bg-slate-600'}`}>
+                  <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ease-in-out ${soundEnabled ? 'transform translate-x-5' : ''}`}></span>
+                </div>
+              </button>
             </div>
           </div>
         </div>

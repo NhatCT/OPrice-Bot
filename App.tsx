@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 import { getChatResponseStream, summarizeTitle } from './services/geminiService';
@@ -9,6 +9,8 @@ import { SettingsPopover } from './components/SettingsPopover';
 import { Welcome } from './components/Welcome';
 import { Sidebar } from './components/Sidebar';
 import { MenuIcon } from './components/icons/MenuIcon';
+import { typingSound } from './assets/typingSound';
+import { messageReceivedSound } from './assets/messageReceivedSound';
 
 
 const CONVERSATIONS_KEY = 'conversations';
@@ -16,6 +18,7 @@ const ACTIVE_CONVERSATION_ID_KEY = 'activeConversationId';
 const THEME_KEY = 'theme';
 const FONT_KEY = 'font';
 const USER_PROFILE_KEY = 'userProfile';
+const SOUND_ENABLED_KEY = 'soundEnabled';
 
 type ImageData = ChatMessage['image'];
 
@@ -46,12 +49,30 @@ const App: React.FC = () => {
 
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(THEME_KEY) as Theme) || 'system');
   const [font, setFont] = useState<Font>(() => (localStorage.getItem(FONT_KEY) as Font) || 'sans');
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
+    const saved = localStorage.getItem(SOUND_ENABLED_KEY);
+    return saved !== null ? JSON.parse(saved) : true; // Default to true
+  });
   
   const [osPrefersDark, setOsPrefersDark] = useState(() => 
       typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false
   );
 
   const activeConversation = activeConversationId ? conversations[activeConversationId] : null;
+  
+  const typingAudio = useMemo(() => new Audio(typingSound), []);
+  const messageAudio = useMemo(() => new Audio(messageReceivedSound), []);
+  
+  // Set volume for subtle effect
+  typingAudio.volume = 0.5;
+  messageAudio.volume = 0.6;
+  
+  const playSound = (audio: HTMLAudioElement) => {
+    if (soundEnabled) {
+        audio.currentTime = 0;
+        audio.play().catch(error => console.error("Error playing sound:", error));
+    }
+  };
 
   useEffect(() => {
       const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
@@ -72,6 +93,10 @@ const App: React.FC = () => {
   useEffect(() => {
     localStorage.setItem(FONT_KEY, font);
   }, [font]);
+  
+  useEffect(() => {
+    localStorage.setItem(SOUND_ENABLED_KEY, JSON.stringify(soundEnabled));
+  }, [soundEnabled]);
   
   // Load initial state from localStorage on mount
   useEffect(() => {
@@ -182,140 +207,130 @@ const App: React.FC = () => {
     setIsLoading(true);
     setActiveTool(null);
     setIsSidebarOpen(false);
+    playSound(typingAudio);
 
     const needsTitle = prevMessages.length === 0;
     
     updateActiveConversationMessages(prev => [...prev, { role: 'model', content: '' }]);
     
     abortControllerRef.current = new AbortController();
+    let generationSuccess = false;
 
     try {
       const stream = getChatResponseStream(historyForApi, abortControllerRef.current.signal);
       let fullText = '';
-      
       for await (const chunk of stream) {
-        if (chunk.error) {
-            throw new Error(chunk.error);
-        }
         if (chunk.textChunk) {
-            fullText += chunk.textChunk;
-            updateActiveConversationMessages(prev => {
-                const newMessages = [...prev];
-                if (newMessages.length > 0) {
-                    newMessages[newMessages.length - 1].content = fullText;
-                }
-                return newMessages;
-            });
-        }
-        if (chunk.sources) {
-             updateActiveConversationMessages(prev => {
-                const newMessages = [...prev];
-                if (newMessages.length > 0) {
-                    newMessages[newMessages.length - 1].sources = chunk.sources;
-                }
-                return newMessages;
-            });
-        }
-      }
-
-      if (needsTitle && fullText) {
-          summarizeTitle(userInput).then(title => {
-              handleRenameConversation(activeConversationId, title);
+          fullText += chunk.textChunk;
+          updateActiveConversationMessages(prev => {
+            const newMsgs = [...prev];
+            newMsgs[newMsgs.length - 1] = {
+              ...newMsgs[newMsgs.length - 1],
+              content: fullText,
+            };
+            return newMsgs;
           });
+        }
+        if (chunk.isFinal) {
+          generationSuccess = !chunk.error;
+          updateActiveConversationMessages(prev => {
+            const newMsgs = [...prev];
+            const lastMsg = { ...newMsgs[newMsgs.length - 1] };
+            if (chunk.error) {
+              lastMsg.content = chunk.error;
+            }
+            if (chunk.sources && chunk.sources.length > 0) {
+              lastMsg.sources = chunk.sources;
+            }
+            newMsgs[newMsgs.length - 1] = lastMsg;
+            return newMsgs;
+          });
+          break;
+        }
       }
-
     } catch (error: any) {
-      if (error.name === 'AbortError') {
-        console.log('Stream generation aborted.');
+      if (error.name !== 'AbortError') {
+        console.error("Stream failed:", error);
         updateActiveConversationMessages(prev => {
-            const newMessages = [...prev];
-            if (newMessages.length > 0 && newMessages[newMessages.length-1].content.trim() === '') {
-                return newMessages.slice(0,-2); // Remove user message and empty model message
-            }
-            if (newMessages.length > 0) {
-                newMessages[newMessages.length-1].content += "\n\n*(Đã dừng)*";
-            }
-            return newMessages;
-        });
-      } else {
-        console.error(error);
-        const content = error.message || 'Rất tiếc, đã có lỗi xảy ra. Vui lòng thử lại sau.';
-        updateActiveConversationMessages(prev => {
-            const newMessages = [...prev];
-            if (newMessages.length > 0) {
-                newMessages[newMessages.length - 1] = { role: 'model', content };
-            }
-            return newMessages;
+          const newMsgs = [...prev];
+          newMsgs[newMsgs.length - 1] = {
+            ...newMsgs[newMsgs.length - 1],
+            content: "Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại.",
+          };
+          return newMsgs;
         });
       }
     } finally {
       setIsLoading(false);
+      typingAudio.pause();
+      if(generationSuccess) playSound(messageAudio);
       abortControllerRef.current = null;
+      if (needsTitle && generationSuccess) {
+          summarizeTitle(userInput).then(title => {
+              handleRenameConversation(activeConversationId, title);
+          });
+      }
     }
-  }, [activeConversationId, conversations, updateActiveConversationMessages, handleRenameConversation]);
-  
-  const handleSuggestionClick = (suggestion: string) => {
-    sendMessage(suggestion);
-  };
-  
-  const handleNewChat = () => {
+  }, [activeConversationId, conversations, updateActiveConversationMessages, handleRenameConversation, typingAudio, messageAudio, playSound]);
+
+   const handleNewChat = () => {
     const newId = Date.now().toString();
     const newConversation: Conversation = {
-        id: newId,
-        title: "Cuộc trò chuyện mới",
-        messages: [],
+      id: newId,
+      title: "Cuộc trò chuyện mới",
+      messages: [],
     };
-    setConversations(prev => ({...prev, [newId]: newConversation }));
+    setConversations(prev => ({ ...prev, [newId]: newConversation }));
     setActiveConversationId(newId);
+    setIsLoading(false);
     setActiveTool(null);
     setIsSidebarOpen(false);
   };
-  
-  const handleSelectConversation = (id: string) => {
-    setActiveConversationId(id);
-    setIsSidebarOpen(false);
-  };
-  
-  const handleDeleteConversation = (id: string) => {
-    setIsConfirmDialogOpen({ action: 'delete', id });
-  };
-  
-  const handleClearChat = () => {
-    if (activeConversationId) {
-        setIsConfirmDialogOpen({ action: 'clear', id: activeConversationId });
-    }
-  };
 
-  const confirmAction = () => {
-    if (!isConfirmDialogOpen) return;
-    
-    if (isConfirmDialogOpen.action === 'clear' && isConfirmDialogOpen.id) {
-        updateActiveConversationMessages(() => []);
-    }
-    
-    if (isConfirmDialogOpen.action === 'delete' && isConfirmDialogOpen.id) {
-        const idToDelete = isConfirmDialogOpen.id;
-        const remainingConversations = { ...conversations };
-        delete remainingConversations[idToDelete];
-        setConversations(remainingConversations);
-
-        if (activeConversationId === idToDelete) {
-            const remainingIds = Object.keys(remainingConversations);
-            if (remainingIds.length > 0) {
-                setActiveConversationId(remainingIds[0]);
-            } else {
-                handleNewChat();
-            }
-        }
-    }
-    
+  const handleClearChat = (id: string) => {
+    setConversations(prev => ({
+        ...prev,
+        [id]: { ...prev[id], messages: [] }
+    }));
     setIsConfirmDialogOpen(null);
     setActiveTool(null);
   };
+
+  const handleDeleteConversation = (id: string) => {
+    setConversations(prev => {
+        const newConversations = { ...prev };
+        delete newConversations[id];
+        return newConversations;
+    });
+    // If the active conversation is deleted, switch to another one or create a new one
+    if (activeConversationId === id) {
+        const remainingIds = Object.keys(conversations).filter(convoId => convoId !== id);
+        if (remainingIds.length > 0) {
+            setActiveConversationId(remainingIds[0]);
+        } else {
+            handleNewChat();
+        }
+    }
+    setIsConfirmDialogOpen(null);
+  };
   
-  const handleUpdateProfile = (profile: UserProfile) => {
+  const handleFeedback = (messageIndex: number, feedback: 'positive' | 'negative') => {
+    updateActiveConversationMessages(prev => {
+      const newMessages = [...prev];
+      if (newMessages[messageIndex]) {
+        newMessages[messageIndex] = { ...newMessages[messageIndex], feedback };
+      }
+      return newMessages;
+    });
+  };
+  
+  const handleProfileUpdate = (profile: UserProfile) => {
     setUserProfile(profile);
-    localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+    window.localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+    // If this is the first time setting a name, update the initial message
+    if (activeConversation && activeConversation.messages.length === 1 && activeConversation.messages[0].content.includes('tôi có thể gọi bạn là gì?')) {
+        updateActiveConversationMessages(() => [generateInitialMessage(profile)]);
+    }
   };
   
   const handleForgetUser = () => {
@@ -323,102 +338,111 @@ const App: React.FC = () => {
     localStorage.removeItem(CONVERSATIONS_KEY);
     localStorage.removeItem(ACTIVE_CONVERSATION_ID_KEY);
     setUserProfile(null);
-    setConversations({});
-    setActiveConversationId(null);
-    handleNewChat(); // Start a fresh session
+    const newId = Date.now().toString();
+    const initialConvo: Conversation = {
+        id: newId,
+        title: "Cuộc trò chuyện mới",
+        messages: [generateInitialMessage(null)],
+    };
+    setConversations({ [newId]: initialConvo });
+    setActiveConversationId(newId);
   };
 
-  const handleFeedback = useCallback((messageIndex: number, feedback: 'positive' | 'negative') => {
-    updateActiveConversationMessages(prevMessages => {
-        const newMessages = [...prevMessages];
-        const messageToUpdate = newMessages[messageIndex];
-        if (messageToUpdate && messageToUpdate.role === 'model') {
-            newMessages[messageIndex] = { ...messageToUpdate, feedback };
-        }
-        return newMessages;
-    });
-    console.log(`Feedback for message ${messageIndex}: ${feedback}`);
-  }, [updateActiveConversationMessages]);
+  const handleSuggestionOrTool = (input: string, tool?: Task) => {
+      if (tool) {
+          setActiveTool(tool);
+      } else {
+          sendMessage(input);
+      }
+  };
 
-  const fontClass = {
-    sans: 'font-sans',
-    serif: 'font-serif',
-    mono: 'font-mono'
-  }[font];
-
-  const isWelcomeState = activeConversation?.messages.length === 0;
+  const currentMessages = activeConversation?.messages ?? [];
 
   return (
-    <div className={`h-screen w-screen bg-slate-100 dark:bg-slate-900 text-slate-800 dark:text-slate-100 flex flex-col items-center justify-center ${fontClass}`}>
-      <div className="w-full h-full md:h-[95vh] md:max-h-[900px] md:max-w-6xl bg-white dark:bg-slate-800 rounded-none md:rounded-2xl shadow-2xl flex border border-slate-200 dark:border-slate-700 overflow-hidden">
+    <div className={`font-${font} flex h-screen bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-300`}>
         <Sidebar 
             conversations={Object.values(conversations)}
             activeConversationId={activeConversationId}
             onNewChat={handleNewChat}
-            onSelectConversation={handleSelectConversation}
-            onDeleteConversation={handleDeleteConversation}
+            onSelectConversation={(id) => setActiveConversationId(id)}
+            onDeleteConversation={(id) => setIsConfirmDialogOpen({ action: 'delete', id })}
             onRenameConversation={handleRenameConversation}
             isOpen={isSidebarOpen}
             setIsOpen={setIsSidebarOpen}
         />
-        <main className="flex-1 flex flex-col h-full transition-all duration-300">
-            <header className="p-4 border-b border-slate-200 dark:border-slate-700 bg-slate-50/80 dark:bg-slate-900/50 backdrop-blur-sm flex items-center shrink-0">
-            <button 
-              onClick={() => setIsSidebarOpen(true)} 
-              className="md:hidden text-slate-500 dark:text-slate-400 p-2 -ml-2"
-              aria-label="Open sidebar"
-            >
-              <MenuIcon className="w-6 h-6" />
-            </button>
-            <div className="flex-1">
-                <h1 className="text-xl font-bold text-sky-600 dark:text-sky-400 tracking-wider text-center md:text-left md:ml-4 truncate">
-                {activeConversation?.title || "Chatbot V64.VN"}
-                </h1>
-            </div>
-            <div className="flex justify-end">
-                <SettingsPopover 
-                    theme={theme} 
-                    setTheme={setTheme} 
-                    font={font} 
-                    setFont={setFont}
-                    userProfile={userProfile}
-                    onUpdateProfile={handleUpdateProfile}
-                    onForgetUser={handleForgetUser}
-                />
-            </div>
+        
+        <main className="flex flex-col flex-1 h-screen relative">
+            <header className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shrink-0 z-10">
+                 <div className="flex items-center gap-2">
+                    <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-500 dark:text-slate-400 md:hidden">
+                        <MenuIcon className="w-6 h-6" />
+                    </button>
+                    <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100 truncate">
+                        {activeConversation?.title || 'Trợ lý Kinh doanh'}
+                    </h1>
+                </div>
+
+                <div className="flex items-center">
+                    <SettingsPopover 
+                        theme={theme}
+                        setTheme={setTheme}
+                        font={font}
+                        setFont={setFont}
+                        userProfile={userProfile}
+                        onUpdateProfile={handleProfileUpdate}
+                        onForgetUser={handleForgetUser}
+                        soundEnabled={soundEnabled}
+                        setSoundEnabled={setSoundEnabled}
+                    />
+                </div>
             </header>
             
-            {isWelcomeState ? (
-                <Welcome onSuggestionClick={handleSuggestionClick} onToolSelect={setActiveTool} />
-            ) : (
-                <ChatWindow 
-                    messages={activeConversation?.messages || []} 
-                    isLoading={isLoading} 
-                    onSuggestionClick={handleSuggestionClick}
-                    onFeedback={handleFeedback}
-                />
-            )}
+            <div className="flex-1 flex flex-col overflow-hidden">
+                {currentMessages.length === 0 ? (
+                    <Welcome onSuggestionClick={sendMessage} onToolSelect={setActiveTool} />
+                ) : (
+                    <ChatWindow 
+                        messages={currentMessages}
+                        isLoading={isLoading && !activeTool}
+                        onSuggestionClick={sendMessage}
+                        onFeedback={handleFeedback}
+                    />
+                )}
 
-            <MessageInput 
-                onSendMessage={sendMessage} 
-                isLoading={isLoading}
-                onNewChat={handleNewChat}
-                onClearChat={handleClearChat}
-                activeTool={activeTool}
-                setActiveTool={setActiveTool}
-                onStopGeneration={handleStopGeneration}
-            />
+                <MessageInput 
+                    onSendMessage={sendMessage}
+                    isLoading={isLoading}
+                    onNewChat={handleNewChat}
+                    onClearChat={() => activeConversationId && setIsConfirmDialogOpen({ action: 'clear', id: activeConversationId })}
+                    activeTool={activeTool}
+                    setActiveTool={setActiveTool}
+                    onStopGeneration={handleStopGeneration}
+                />
+            </div>
         </main>
-      </div>
-      <ConfirmationDialog 
-          isOpen={!!isConfirmDialogOpen}
-          onClose={() => setIsConfirmDialogOpen(null)}
-          onConfirm={confirmAction}
-          title={isConfirmDialogOpen?.action === 'clear' ? "Xác nhận Xóa Tin nhắn" : "Xác nhận Xóa Cuộc trò chuyện"}
-          message={isConfirmDialogOpen?.action === 'clear' ? "Bạn có chắc chắn muốn xóa tất cả tin nhắn trong cuộc trò chuyện này không?" : "Bạn có chắc chắn muốn xóa vĩnh viễn cuộc trò chuyện này không?"}
-      />
+
+        {isConfirmDialogOpen && (
+            <ConfirmationDialog 
+                isOpen={!!isConfirmDialogOpen}
+                onClose={() => setIsConfirmDialogOpen(null)}
+                onConfirm={() => {
+                    if (isConfirmDialogOpen.action === 'clear' && isConfirmDialogOpen.id) {
+                        handleClearChat(isConfirmDialogOpen.id);
+                    } else if (isConfirmDialogOpen.action === 'delete' && isConfirmDialogOpen.id) {
+                        handleDeleteConversation(isConfirmDialogOpen.id);
+                    }
+                }}
+                title={isConfirmDialogOpen.action === 'clear' ? "Xóa cuộc trò chuyện?" : "Xóa vĩnh viễn?"}
+                message={
+                    isConfirmDialogOpen.action === 'clear' 
+                    ? "Bạn có chắc chắn muốn xóa tất cả tin nhắn trong cuộc trò chuyện này không? Hành động này không thể hoàn tác."
+                    : "Bạn có chắc chắn muốn xóa vĩnh viễn cuộc trò chuyện này không? Hành động này không thể hoàn tác."
+                }
+            />
+        )}
     </div>
   );
 };
 
+// Fix: Export the App component to be used in index.tsx
 export default App;
