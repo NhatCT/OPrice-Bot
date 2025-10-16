@@ -11,6 +11,10 @@ import { Sidebar } from './components/Sidebar';
 import { MenuIcon } from './components/icons/MenuIcon';
 import { typingSound } from './assets/typingSound';
 import { messageReceivedSound } from './assets/messageReceivedSound';
+import { WorkflowDialog } from './components/WorkflowDialog';
+import { WorkflowIcon } from './components/icons/WorkflowIcon';
+import { TestingGuideDialog } from './components/TestingGuideDialog';
+import { CheckBadgeIcon } from './components/icons/CheckBadgeIcon';
 
 
 const CONVERSATIONS_KEY = 'conversations';
@@ -41,6 +45,8 @@ const App: React.FC = () => {
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<{ action: 'clear' | 'delete'; id?: string } | null>(null);
+  const [isWorkflowDialogOpen, setIsWorkflowDialogOpen] = useState(false);
+  const [isTestingGuideOpen, setIsTestingGuideOpen] = useState(false);
   const [activeTool, setActiveTool] = useState<Task | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -242,6 +248,9 @@ const App: React.FC = () => {
             if (chunk.sources && chunk.sources.length > 0) {
               lastMsg.sources = chunk.sources;
             }
+            if (chunk.performanceMetrics) {
+              lastMsg.performance = chunk.performanceMetrics;
+            }
             newMsgs[newMsgs.length - 1] = lastMsg;
             return newMsgs;
           });
@@ -382,7 +391,21 @@ const App: React.FC = () => {
                     </h1>
                 </div>
 
-                <div className="flex items-center">
+                <div className="flex items-center gap-1">
+                    <button
+                        onClick={() => setIsTestingGuideOpen(true)}
+                        className="text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700/50"
+                        title="Hướng dẫn kiểm thử"
+                    >
+                        <CheckBadgeIcon className="w-6 h-6" />
+                    </button>
+                    <button
+                        onClick={() => setIsWorkflowDialogOpen(true)}
+                        className="text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700/50"
+                        title="Xem quy trình làm việc"
+                    >
+                        <WorkflowIcon className="w-6 h-6" />
+                    </button>
                     <SettingsPopover 
                         theme={theme}
                         setTheme={setTheme}
@@ -420,6 +443,20 @@ const App: React.FC = () => {
                 />
             </div>
         </main>
+
+        {isWorkflowDialogOpen && (
+            <WorkflowDialog
+                isOpen={isWorkflowDialogOpen}
+                onClose={() => setIsWorkflowDialogOpen(false)}
+            />
+        )}
+        
+        {isTestingGuideOpen && (
+            <TestingGuideDialog
+                isOpen={isTestingGuideOpen}
+                onClose={() => setIsTestingGuideOpen(false)}
+            />
+        )}
 
         {isConfirmDialogOpen && (
             <ConfirmationDialog 

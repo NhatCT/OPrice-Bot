@@ -22,6 +22,10 @@ export interface ChatMessage {
     title: string;
   }[];
   feedback?: 'positive' | 'negative';
+  performance?: {
+    timeToFirstChunk: number;
+    totalTime: number;
+  };
 }
 
 export interface Conversation {

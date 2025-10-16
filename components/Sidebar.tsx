@@ -52,6 +52,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
     setEditingId(null);
   };
   
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      setEditingId(null);
+    }
+  };
+
   const sortedConversations = [...conversations].sort((a, b) => Number(b.id) - Number(a.id));
 
   const sidebarContent = (
@@ -91,6 +97,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                             value={renameInput}
                             onChange={(e) => setRenameInput(e.target.value)}
                             onBlur={handleRenameSubmit}
+                            onKeyDown={handleKeyDown}
                             className="w-full bg-transparent px-3 py-2 text-sm text-slate-700 dark:text-slate-50 focus:outline-none"
                         />
                     </form>
@@ -109,7 +116,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   
                   <div className={`pr-2 flex items-center shrink-0 ${editingId === convo.id ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
                      {editingId === convo.id ? (
-                         <button onClick={handleRenameSubmit} className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-700">
+                         <button 
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={handleRenameSubmit} 
+                            className="p-1.5 rounded-md text-slate-500 dark:text-slate-400 hover:bg-slate-300 dark:hover:bg-slate-700">
                              <CheckIcon className="w-4 h-4" />
                          </button>
                      ) : (

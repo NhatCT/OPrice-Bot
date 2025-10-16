@@ -56,12 +56,19 @@ export interface StreamedChatResponse {
     image?: { data: string; mimeType: string };
     isFinal: boolean;
     error?: string;
+    performanceMetrics?: {
+        timeToFirstChunk: number;
+        totalTime: number;
+    };
 }
 
 export async function* getChatResponseStream(
     history: ChatMessage[],
     signal: AbortSignal
 ): AsyncGenerator<StreamedChatResponse> {
+    const startTime = performance.now();
+    let firstChunkTime = 0;
+
     try {
         if (signal.aborted) return;
         
@@ -109,6 +116,10 @@ export async function* getChatResponseStream(
             ]).catch(e => { throw e; });
 
             if (done) break;
+            
+            if (chunk.text && firstChunkTime === 0) {
+                firstChunkTime = performance.now() - startTime;
+            }
 
             const text = chunk.text;
             if (text) {
@@ -118,6 +129,8 @@ export async function* getChatResponseStream(
         
         // Once the stream is finished, get the complete response to extract grounding sources
         const response = await stream.response;
+        const endTime = performance.now();
+        const totalTime = endTime - startTime;
 
         if (response) {
             const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
@@ -127,13 +140,22 @@ export async function* getChatResponseStream(
                 // Deduplicate sources by URI
                 .filter((value, index, self) => index === self.findIndex((t) => (t.uri === value.uri)));
             
-            if (sources.length > 0) {
-                 yield { sources, isFinal: true }; // Send sources with the final chunk
-            } else {
-                 yield { isFinal: true };
-            }
+            yield { 
+                sources: sources.length > 0 ? sources : undefined, 
+                isFinal: true,
+                performanceMetrics: {
+                    timeToFirstChunk: Math.round(firstChunkTime),
+                    totalTime: Math.round(totalTime)
+                }
+            };
         } else {
-             yield { isFinal: true };
+             yield { 
+                 isFinal: true,
+                 performanceMetrics: {
+                    timeToFirstChunk: Math.round(firstChunkTime),
+                    totalTime: Math.round(totalTime)
+                 }
+            };
         }
 
     } catch (error: any) {
@@ -148,5 +170,77 @@ export async function* getChatResponseStream(
             isFinal: true,
             error: "Xin lỗi, đã có lỗi xảy ra khi kết nối với AI. Vui lòng thử lại sau."
         };
+    }
+}
+
+export interface StressTestResult {
+    success: boolean;
+    error?: string;
+    performance?: {
+        timeToFirstChunk: number;
+        totalTime: number;
+    };
+}
+
+export async function runStressTestPrompt(prompt: string, signal: AbortSignal): Promise<StressTestResult> {
+    const startTime = performance.now();
+    let firstChunkTime = 0;
+
+    try {
+        if (signal.aborted) throw new DOMException('Aborted', 'AbortError');
+
+        const useMarketData = prompt.includes('tham khảo giá thị trường');
+        const isPricingTask = prompt.startsWith('Hãy đóng vai trò là một chuyên gia kinh doanh');
+
+        const content = {
+            role: 'user',
+            parts: [{ text: isPricingTask ? prompt : `${prompt} site:v64.vn` }],
+        };
+
+        const shouldUseSearch = useMarketData || !isPricingTask;
+
+        const stream = await ai.models.generateContentStream({
+            model,
+            contents: [content],
+            config: {
+                systemInstruction: SYSTEM_INSTRUCTION,
+                tools: shouldUseSearch ? [{ googleSearch: {} }] : undefined,
+            },
+        });
+
+        const signalPromise = new Promise((_, reject) => {
+            signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
+        });
+        
+        const streamIterator = stream[Symbol.asyncIterator]();
+
+        while (true) {
+            const { value: chunk, done } = await Promise.race([
+                streamIterator.next(),
+                signalPromise,
+            ]);
+            if (done) break;
+            if (chunk.text && firstChunkTime === 0) {
+                firstChunkTime = performance.now() - startTime;
+            }
+        }
+        
+        await stream.response; // Wait for the full response to complete
+        const endTime = performance.now();
+
+        return {
+            success: true,
+            performance: {
+                timeToFirstChunk: Math.round(firstChunkTime),
+                totalTime: Math.round(endTime - startTime),
+            },
+        };
+    } catch (error: any) {
+        if (error.name === 'AbortError') {
+            console.log('Stress test prompt aborted.');
+            return { success: false, error: 'Aborted' };
+        }
+        console.error("Stress test API error:", error);
+        return { success: false, error: error.message || "Unknown API error" };
     }
 }

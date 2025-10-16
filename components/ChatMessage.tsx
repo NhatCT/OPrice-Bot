@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import type { ChatMessage } from '../types';
 import { ExternalLinkIcon } from './icons/ExternalLinkIcon';
@@ -9,6 +8,8 @@ import { CheckIcon } from './icons/CheckIcon';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { V54Logo } from './icons/V54Logo';
+import { LightningBoltIcon } from './icons/LightningBoltIcon';
+import { ClockIcon } from './icons/ClockIcon';
 
 interface ChatMessageProps {
   message: ChatMessage;
@@ -23,6 +24,7 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
   const hasSources = isModel && message.sources && message.sources.length > 0;
   const canShowActions = isModel && !message.component && message.content;
   const feedbackGiven = !!message.feedback;
+  const hasPerformance = isModel && message.performance && message.performance.totalTime > 0;
 
   const handleCopy = () => {
     if (!message.content) return;
@@ -117,6 +119,19 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                         </div>
                     )}
                 </div>
+                
+                {hasPerformance && (
+                    <div className="text-xs text-slate-400 dark:text-slate-500 px-4 pb-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span className="flex items-center gap-1.5" title="Thời gian nhận chunk đầu tiên">
+                            <LightningBoltIcon className="w-3.5 h-3.5" />
+                            <span>{message.performance!.timeToFirstChunk}ms</span>
+                        </span>
+                        <span className="flex items-center gap-1.5" title="Tổng thời gian phản hồi">
+                            <ClockIcon className="w-3.5 h-3.5" />
+                            <span>{message.performance!.totalTime}ms</span>
+                        </span>
+                    </div>
+                )}
                 
                 {hasSources && (
                     <div className="w-full border-t border-slate-200 dark:border-slate-700 p-3 bg-slate-100/50 dark:bg-slate-900/30 rounded-b-xl">
