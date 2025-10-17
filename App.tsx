@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 import { getChatResponseStream, summarizeTitle } from './services/geminiService';
-import type { ChatMessage, UserProfile, Theme, Font, Conversation } from './types';
+import type { ChatMessage, UserProfile, Theme, Font, ConversationMeta } from './types';
 import { ConfirmationDialog } from './components/ConfirmationDialog';
 import type { Task } from './components/GuidedInputForm';
 import { SettingsPopover } from './components/SettingsPopover';
@@ -17,7 +17,8 @@ import { TestingGuideDialog } from './components/TestingGuideDialog';
 import { CheckBadgeIcon } from './components/icons/CheckBadgeIcon';
 
 
-const CONVERSATIONS_KEY = 'conversations';
+const CONVERSATIONS_KEY = 'conversations'; // Now stores ConversationMeta
+const CONVERSATION_MESSAGES_KEY_PREFIX = 'conversation_messages_';
 const ACTIVE_CONVERSATION_ID_KEY = 'activeConversationId';
 const THEME_KEY = 'theme';
 const FONT_KEY = 'font';
@@ -41,8 +42,9 @@ const generateInitialMessage = (profile: UserProfile | null): ChatMessage => {
 
 
 const App: React.FC = () => {
-  const [conversations, setConversations] = useState<Record<string, Conversation>>({});
+  const [conversations, setConversations] = useState<Record<string, ConversationMeta>>({});
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
+  const [activeConversationMessages, setActiveConversationMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<{ action: 'clear' | 'delete'; id?: string } | null>(null);
   const [isWorkflowDialogOpen, setIsWorkflowDialogOpen] = useState(false);
@@ -64,8 +66,6 @@ const App: React.FC = () => {
       typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false
   );
 
-  const activeConversation = activeConversationId ? conversations[activeConversationId] : null;
-  
   const typingAudio = useMemo(() => new Audio(typingSound), []);
   const messageAudio = useMemo(() => new Audio(messageReceivedSound), []);
   
@@ -104,26 +104,51 @@ const App: React.FC = () => {
     localStorage.setItem(SOUND_ENABLED_KEY, JSON.stringify(soundEnabled));
   }, [soundEnabled]);
   
-  // Load initial state from localStorage on mount
+  // Load initial state from localStorage on mount, with migration for old data structure
   useEffect(() => {
     try {
       const savedProfile = window.localStorage.getItem(USER_PROFILE_KEY);
       const profile = savedProfile ? JSON.parse(savedProfile) : null;
       setUserProfile(profile);
 
-      const savedConversations = window.localStorage.getItem(CONVERSATIONS_KEY);
+      const savedConversationsRaw = window.localStorage.getItem(CONVERSATIONS_KEY);
       const savedActiveId = window.localStorage.getItem(ACTIVE_CONVERSATION_ID_KEY);
 
-      if (savedConversations) {
-        const loadedConversations = JSON.parse(savedConversations);
+      let loadedConversations: Record<string, ConversationMeta> | null = null;
+
+      if (savedConversationsRaw) {
+        const savedData = JSON.parse(savedConversationsRaw);
+        const firstConvoId = Object.keys(savedData)[0];
+        
+        // Migration logic: Check if old format (with 'messages' key) exists
+        if (firstConvoId && savedData[firstConvoId] && typeof savedData[firstConvoId].messages !== 'undefined') {
+          console.log("Migrating old conversation data to new optimized format.");
+          const newMetas: Record<string, ConversationMeta> = {};
+          Object.values(savedData).forEach((convo: any) => {
+            if (convo.id && convo.title && Array.isArray(convo.messages)) {
+              newMetas[convo.id] = { id: convo.id, title: convo.title };
+              const messagesToSave = JSON.parse(JSON.stringify(convo.messages, (key, value) => {
+                  if (key === 'component') return undefined;
+                  return value;
+              }));
+              window.localStorage.setItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${convo.id}`, JSON.stringify(messagesToSave));
+            }
+          });
+          window.localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(newMetas)); // Overwrite with new metadata format
+          loadedConversations = newMetas;
+        } else {
+          loadedConversations = savedData; // Already in new format
+        }
+      }
+
+      if (loadedConversations && Object.keys(loadedConversations).length > 0) {
         setConversations(loadedConversations);
         setActiveConversationId(savedActiveId && loadedConversations[savedActiveId] ? savedActiveId : Object.keys(loadedConversations)[0] || null);
       } else {
         const newId = Date.now().toString();
-        const initialConvo: Conversation = {
+        const initialConvo: ConversationMeta = {
           id: newId,
           title: "Cuộc trò chuyện mới",
-          messages: [], // Start with an empty conversation for the Welcome screen
         };
         setConversations({ [newId]: initialConvo });
         setActiveConversationId(newId);
@@ -131,46 +156,58 @@ const App: React.FC = () => {
     } catch (error) {
       console.error('Failed to load data from localStorage:', error);
       const newId = Date.now().toString();
-      const initialConvo: Conversation = {
+      const initialConvo: ConversationMeta = {
         id: newId,
         title: "Cuộc trò chuyện mới",
-        messages: [],
       };
       setConversations({ [newId]: initialConvo });
       setActiveConversationId(newId);
     }
   }, []);
 
-  // Save conversations to localStorage whenever they change
+  // Effect to load messages when active conversation changes
+  useEffect(() => {
+    if (activeConversationId) {
+      try {
+        const savedMessagesRaw = window.localStorage.getItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${activeConversationId}`);
+        setActiveConversationMessages(savedMessagesRaw ? JSON.parse(savedMessagesRaw) : []);
+      } catch (error) {
+        console.error(`Failed to load messages for conversation ${activeConversationId}:`, error);
+        setActiveConversationMessages([]);
+      }
+    } else {
+      setActiveConversationMessages([]);
+    }
+  }, [activeConversationId]);
+
+  // Save conversation metadata and active ID
   useEffect(() => {
     try {
       if (Object.keys(conversations).length > 0) {
-        const conversationsToSave = JSON.parse(JSON.stringify(conversations, (key, value) => {
-            if (key === 'component') return undefined;
-            return value;
-        }));
-        window.localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversationsToSave));
+        window.localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations));
       }
       if (activeConversationId) {
         window.localStorage.setItem(ACTIVE_CONVERSATION_ID_KEY, activeConversationId);
       }
     } catch (error) {
-      console.error('Failed to save state to localStorage:', error);
+      console.error('Failed to save metadata to localStorage:', error);
     }
   }, [conversations, activeConversationId]);
-
-  const updateActiveConversationMessages = useCallback((updater: (prevMessages: ChatMessage[]) => ChatMessage[]) => {
-    if (!activeConversationId) return;
-    setConversations(prev => {
-        const activeConvo = prev[activeConversationId];
-        if (!activeConvo) return prev;
-        const newMessages = updater(activeConvo.messages);
-        return {
-            ...prev,
-            [activeConversationId]: { ...activeConvo, messages: newMessages }
-        };
-    });
-  }, [activeConversationId]);
+  
+  // Save messages for the active conversation whenever they change
+  useEffect(() => {
+    if (activeConversationId) {
+        try {
+            const messagesToSave = JSON.parse(JSON.stringify(activeConversationMessages, (key, value) => {
+                if (key === 'component') return undefined;
+                return value;
+            }));
+            window.localStorage.setItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${activeConversationId}`, JSON.stringify(messagesToSave));
+        } catch (error) {
+            console.error('Failed to save messages to localStorage:', error);
+        }
+    }
+  }, [activeConversationId, activeConversationMessages]);
 
   const handleRenameConversation = useCallback((id: string, newTitle: string) => {
       if (!newTitle.trim()) return;
@@ -193,10 +230,7 @@ const App: React.FC = () => {
     
     const userMessage: ChatMessage = { role: 'user', content: userInput, image };
     
-    const currentConversation = conversations[activeConversationId];
-    if (!currentConversation) return;
-
-    const prevMessages = currentConversation.messages;
+    const prevMessages = activeConversationMessages;
 
     const messagesForHistory = [...prevMessages];
     if (messagesForHistory.length > 0) {
@@ -208,7 +242,7 @@ const App: React.FC = () => {
 
     const historyForApi = messagesForHistory.map(m => ({ ...m, component: undefined }));
 
-    updateActiveConversationMessages(() => messagesForHistory);
+    setActiveConversationMessages(messagesForHistory);
 
     setIsLoading(true);
     setActiveTool(null);
@@ -217,7 +251,7 @@ const App: React.FC = () => {
 
     const needsTitle = prevMessages.length === 0;
     
-    updateActiveConversationMessages(prev => [...prev, { role: 'model', content: '' }]);
+    setActiveConversationMessages(prev => [...prev, { role: 'model', content: '' }]);
     
     abortControllerRef.current = new AbortController();
     let generationSuccess = false;
@@ -228,7 +262,7 @@ const App: React.FC = () => {
       for await (const chunk of stream) {
         if (chunk.textChunk) {
           fullText += chunk.textChunk;
-          updateActiveConversationMessages(prev => {
+          setActiveConversationMessages(prev => {
             const newMsgs = [...prev];
             newMsgs[newMsgs.length - 1] = {
               ...newMsgs[newMsgs.length - 1],
@@ -239,7 +273,7 @@ const App: React.FC = () => {
         }
         if (chunk.isFinal) {
           generationSuccess = !chunk.error;
-          updateActiveConversationMessages(prev => {
+          setActiveConversationMessages(prev => {
             const newMsgs = [...prev];
             const lastMsg = { ...newMsgs[newMsgs.length - 1] };
             if (chunk.error) {
@@ -260,7 +294,7 @@ const App: React.FC = () => {
     } catch (error: any) {
       if (error.name !== 'AbortError') {
         console.error("Stream failed:", error);
-        updateActiveConversationMessages(prev => {
+        setActiveConversationMessages(prev => {
           const newMsgs = [...prev];
           newMsgs[newMsgs.length - 1] = {
             ...newMsgs[newMsgs.length - 1],
@@ -280,14 +314,13 @@ const App: React.FC = () => {
           });
       }
     }
-  }, [activeConversationId, conversations, updateActiveConversationMessages, handleRenameConversation, typingAudio, messageAudio, playSound]);
+  }, [activeConversationId, activeConversationMessages, handleRenameConversation, typingAudio, messageAudio, playSound]);
 
    const handleNewChat = () => {
     const newId = Date.now().toString();
-    const newConversation: Conversation = {
+    const newConversation: ConversationMeta = {
       id: newId,
       title: "Cuộc trò chuyện mới",
-      messages: [],
     };
     setConversations(prev => ({ ...prev, [newId]: newConversation }));
     setActiveConversationId(newId);
@@ -297,23 +330,29 @@ const App: React.FC = () => {
   };
 
   const handleClearChat = (id: string) => {
-    setConversations(prev => ({
-        ...prev,
-        [id]: { ...prev[id], messages: [] }
-    }));
+    if (id === activeConversationId) {
+        setActiveConversationMessages([]);
+    }
+    window.localStorage.removeItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${id}`);
     setIsConfirmDialogOpen(null);
     setActiveTool(null);
   };
 
   const handleDeleteConversation = (id: string) => {
+    const oldConversations = conversations;
     setConversations(prev => {
         const newConversations = { ...prev };
         delete newConversations[id];
         return newConversations;
     });
-    // If the active conversation is deleted, switch to another one or create a new one
+    
+    window.localStorage.removeItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${id}`);
+    
     if (activeConversationId === id) {
-        const remainingIds = Object.keys(conversations).filter(convoId => convoId !== id);
+        const remainingIds = Object.keys(oldConversations)
+            .filter(convoId => convoId !== id)
+            .sort((a, b) => Number(b) - Number(a)); // Sort to get the most recent
+        
         if (remainingIds.length > 0) {
             setActiveConversationId(remainingIds[0]);
         } else {
@@ -324,7 +363,7 @@ const App: React.FC = () => {
   };
   
   const handleFeedback = (messageIndex: number, feedback: 'positive' | 'negative') => {
-    updateActiveConversationMessages(prev => {
+    setActiveConversationMessages(prev => {
       const newMessages = [...prev];
       if (newMessages[messageIndex]) {
         newMessages[messageIndex] = { ...newMessages[messageIndex], feedback };
@@ -336,22 +375,26 @@ const App: React.FC = () => {
   const handleProfileUpdate = (profile: UserProfile) => {
     setUserProfile(profile);
     window.localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
-    // If this is the first time setting a name, update the initial message
-    if (activeConversation && activeConversation.messages.length === 1 && activeConversation.messages[0].content.includes('tôi có thể gọi bạn là gì?')) {
-        updateActiveConversationMessages(() => [generateInitialMessage(profile)]);
+    
+    if (activeConversationMessages.length === 1 && activeConversationMessages[0].content.includes('tôi có thể gọi bạn là gì?')) {
+        setActiveConversationMessages([generateInitialMessage(profile)]);
     }
   };
   
   const handleForgetUser = () => {
-    localStorage.removeItem(USER_PROFILE_KEY);
-    localStorage.removeItem(CONVERSATIONS_KEY);
-    localStorage.removeItem(ACTIVE_CONVERSATION_ID_KEY);
+    const keysToRemove = [USER_PROFILE_KEY, CONVERSATIONS_KEY, ACTIVE_CONVERSATION_ID_KEY];
+    Object.keys(window.localStorage).forEach(key => {
+        if (key.startsWith(CONVERSATION_MESSAGES_KEY_PREFIX)) {
+            keysToRemove.push(key);
+        }
+    });
+    keysToRemove.forEach(key => window.localStorage.removeItem(key));
+
     setUserProfile(null);
     const newId = Date.now().toString();
-    const initialConvo: Conversation = {
+    const initialConvo: ConversationMeta = {
         id: newId,
         title: "Cuộc trò chuyện mới",
-        messages: [generateInitialMessage(null)],
     };
     setConversations({ [newId]: initialConvo });
     setActiveConversationId(newId);
@@ -364,8 +407,6 @@ const App: React.FC = () => {
           sendMessage(input);
       }
   };
-
-  const currentMessages = activeConversation?.messages ?? [];
 
   return (
     <div className={`font-${font} flex h-screen bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-300`}>
@@ -387,7 +428,7 @@ const App: React.FC = () => {
                         <MenuIcon className="w-6 h-6" />
                     </button>
                     <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100 truncate">
-                        {activeConversation?.title || 'Trợ lý Kinh doanh'}
+                        {(activeConversationId && conversations[activeConversationId]?.title) || 'Trợ lý Kinh doanh'}
                     </h1>
                 </div>
 
@@ -421,11 +462,11 @@ const App: React.FC = () => {
             </header>
             
             <div className="flex-1 flex flex-col overflow-hidden">
-                {currentMessages.length === 0 ? (
+                {activeConversationMessages.length === 0 ? (
                     <Welcome onSuggestionClick={sendMessage} onToolSelect={setActiveTool} />
                 ) : (
                     <ChatWindow 
-                        messages={currentMessages}
+                        messages={activeConversationMessages}
                         isLoading={isLoading && !activeTool}
                         onSuggestionClick={sendMessage}
                         onFeedback={handleFeedback}
@@ -481,5 +522,4 @@ const App: React.FC = () => {
   );
 };
 
-// Fix: Export the App component to be used in index.tsx
 export default App;

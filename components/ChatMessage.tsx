@@ -7,7 +7,7 @@ import { ClipboardIcon } from './icons/ClipboardIcon';
 import { CheckIcon } from './icons/CheckIcon';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { V54Logo } from './icons/V54Logo';
+import { V64Logo } from './icons/V54Logo';
 import { LightningBoltIcon } from './icons/LightningBoltIcon';
 import { ClockIcon } from './icons/ClockIcon';
 
@@ -87,7 +87,7 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
   // --- RENDER MODEL MESSAGE (Redesigned) ---
   return (
     <div className="flex flex-row items-start gap-3">
-        <V54Logo className="w-9 h-9 flex-shrink-0 mt-1" />
+        <V64Logo className="w-9 h-9 flex-shrink-0 mt-1" />
 
         <div className="flex flex-col w-full items-start max-w-xl lg:max-w-3xl">
             <div className="w-full bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">

@@ -33,3 +33,9 @@ export interface Conversation {
   title: string;
   messages: ChatMessage[];
 }
+
+// Add ConversationMeta for optimized loading
+export interface ConversationMeta {
+  id: string;
+  title: string;
+}

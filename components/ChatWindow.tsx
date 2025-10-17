@@ -2,7 +2,7 @@ import React, { useEffect, useRef } from 'react';
 import type { ChatMessage } from '../types';
 import { ChatMessageComponent } from './ChatMessage';
 import { TypingIndicator } from './TypingIndicator';
-import { V54Logo } from './icons/V54Logo';
+import { V64Logo } from './icons/V54Logo';
 
 interface ChatWindowProps {
   messages: ChatMessage[];
@@ -31,7 +31,7 @@ export const ChatWindow: React.FC<ChatWindowProps> = ({ messages, isLoading, onS
       ))}
       {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'model' && messages[messages.length - 1].content === '' && (
         <div className="flex items-start gap-3">
-             <V54Logo
+             <V64Logo
                 className="w-9 h-9 flex-shrink-0 mt-1"
             />
             <div className="bg-slate-200 dark:bg-slate-700 rounded-2xl rounded-bl-none shadow-md">
