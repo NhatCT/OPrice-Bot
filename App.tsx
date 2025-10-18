@@ -15,9 +15,15 @@ import { WorkflowDialog } from './components/WorkflowDialog';
 import { WorkflowIcon } from './components/icons/WorkflowIcon';
 import { TestingGuideDialog } from './components/TestingGuideDialog';
 import { CheckBadgeIcon } from './components/icons/CheckBadgeIcon';
+import { ComparisonToolbar } from './components/ComparisonToolbar';
+import { SourceComparisonDialog } from './components/SourceComparisonDialog';
+import { ExportDialog } from './components/ExportDialog';
+import { ArrowDownTrayIcon } from './components/icons/ArrowDownTrayIcon';
+import { toPng } from 'html-to-image';
+import type { FunctionCall } from '@google/genai';
 
 
-const CONVERSATIONS_KEY = 'conversations'; // Now stores ConversationMeta
+const CONVERSATIONS_KEY = 'conversations';
 const CONVERSATION_MESSAGES_KEY_PREFIX = 'conversation_messages_';
 const ACTIVE_CONVERSATION_ID_KEY = 'activeConversationId';
 const THEME_KEY = 'theme';
@@ -27,39 +33,31 @@ const SOUND_ENABLED_KEY = 'soundEnabled';
 
 type ImageData = ChatMessage['image'];
 
-const generateInitialMessage = (profile: UserProfile | null): ChatMessage => {
-  if (profile) {
-    return {
-      role: 'model',
-      content: `Chào mừng trở lại, ${profile.name}! Tôi có thể giúp gì cho bạn hôm nay?`,
-    };
-  }
-  return {
-    role: 'model',
-    content: 'Xin chào! Tôi là trợ lý ảo của V64. Để cá nhân hóa trải nghiệm, tôi có thể gọi bạn là gì?',
-  };
-};
-
-
 const App: React.FC = () => {
   const [conversations, setConversations] = useState<Record<string, ConversationMeta>>({});
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [activeConversationMessages, setActiveConversationMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
+  const [isExecutingTool, setIsExecutingTool] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<{ action: 'clear' | 'delete'; id?: string } | null>(null);
   const [isWorkflowDialogOpen, setIsWorkflowDialogOpen] = useState(false);
   const [isTestingGuideOpen, setIsTestingGuideOpen] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   const [activeTool, setActiveTool] = useState<Task | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
+  const chatWindowRef = useRef<HTMLDivElement>(null);
+  const [comparisonSelection, setComparisonSelection] = useState<number[]>([]);
+  const [isComparisonOpen, setIsComparisonOpen] = useState(false);
 
 
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(THEME_KEY) as Theme) || 'system');
   const [font, setFont] = useState<Font>(() => (localStorage.getItem(FONT_KEY) as Font) || 'sans');
   const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
     const saved = localStorage.getItem(SOUND_ENABLED_KEY);
-    return saved !== null ? JSON.parse(saved) : true; // Default to true
+    return saved !== null ? JSON.parse(saved) : true;
   });
   
   const [osPrefersDark, setOsPrefersDark] = useState(() => 
@@ -69,7 +67,6 @@ const App: React.FC = () => {
   const typingAudio = useMemo(() => new Audio(typingSound), []);
   const messageAudio = useMemo(() => new Audio(messageReceivedSound), []);
   
-  // Set volume for subtle effect
   typingAudio.volume = 0.5;
   messageAudio.volume = 0.6;
   
@@ -104,7 +101,6 @@ const App: React.FC = () => {
     localStorage.setItem(SOUND_ENABLED_KEY, JSON.stringify(soundEnabled));
   }, [soundEnabled]);
   
-  // Load initial state from localStorage on mount, with migration for old data structure
   useEffect(() => {
     try {
       const savedProfile = window.localStorage.getItem(USER_PROFILE_KEY);
@@ -120,7 +116,6 @@ const App: React.FC = () => {
         const savedData = JSON.parse(savedConversationsRaw);
         const firstConvoId = Object.keys(savedData)[0];
         
-        // Migration logic: Check if old format (with 'messages' key) exists
         if (firstConvoId && savedData[firstConvoId] && typeof savedData[firstConvoId].messages !== 'undefined') {
           console.log("Migrating old conversation data to new optimized format.");
           const newMetas: Record<string, ConversationMeta> = {};
@@ -134,10 +129,10 @@ const App: React.FC = () => {
               window.localStorage.setItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${convo.id}`, JSON.stringify(messagesToSave));
             }
           });
-          window.localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(newMetas)); // Overwrite with new metadata format
+          window.localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(newMetas));
           loadedConversations = newMetas;
         } else {
-          loadedConversations = savedData; // Already in new format
+          loadedConversations = savedData;
         }
       }
 
@@ -165,12 +160,12 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Effect to load messages when active conversation changes
   useEffect(() => {
     if (activeConversationId) {
       try {
         const savedMessagesRaw = window.localStorage.getItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${activeConversationId}`);
         setActiveConversationMessages(savedMessagesRaw ? JSON.parse(savedMessagesRaw) : []);
+        setComparisonSelection([]);
       } catch (error) {
         console.error(`Failed to load messages for conversation ${activeConversationId}:`, error);
         setActiveConversationMessages([]);
@@ -180,7 +175,6 @@ const App: React.FC = () => {
     }
   }, [activeConversationId]);
 
-  // Save conversation metadata and active ID
   useEffect(() => {
     try {
       if (Object.keys(conversations).length > 0) {
@@ -194,12 +188,11 @@ const App: React.FC = () => {
     }
   }, [conversations, activeConversationId]);
   
-  // Save messages for the active conversation whenever they change
   useEffect(() => {
     if (activeConversationId) {
         try {
             const messagesToSave = JSON.parse(JSON.stringify(activeConversationMessages, (key, value) => {
-                if (key === 'component') return undefined;
+                if (key === 'component' || key === 'isExecuting' || key === 'toolCall') return undefined;
                 return value;
             }));
             window.localStorage.setItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${activeConversationId}`, JSON.stringify(messagesToSave));
@@ -222,52 +215,96 @@ const App: React.FC = () => {
         abortControllerRef.current.abort();
     }
     setIsLoading(false);
+    setIsExecutingTool(false);
   };
 
+  const handleFunctionExecution = useCallback(async (functionCall: FunctionCall) => {
+    setIsExecutingTool(true);
+    let functionResult;
 
-  const sendMessage = useCallback(async (userInput: string, image?: ImageData) => {
-    if (!activeConversationId) return;
-    
-    const userMessage: ChatMessage = { role: 'user', content: userInput, image };
-    
-    const prevMessages = activeConversationMessages;
+    // Simulate API call to a backend system
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
-    const messagesForHistory = [...prevMessages];
-    if (messagesForHistory.length > 0) {
-      const lastMsg = messagesForHistory[messagesForHistory.length - 1];
-      const { suggestions, ...rest } = lastMsg;
-      messagesForHistory[messagesForHistory.length - 1] = rest;
+    if (functionCall.name === 'createDiscountCode') {
+        console.log('Executing function createDiscountCode with args:', functionCall.args);
+        // In a real app, you would call your backend here.
+        functionResult = { status: "thành công", message: `Mã ${functionCall.args.codeName} đã được tạo.` };
+    } else {
+        functionResult = { status: "lỗi", message: "Không tìm thấy công cụ." };
     }
-    messagesForHistory.push(userMessage);
+    
+    setIsExecutingTool(false);
+    
+    // Send the result back to the model to get a final natural language response
+    sendMessage(
+      '', // No user text, we're continuing the conversation
+      undefined,
+      { name: functionCall.name, response: { result: functionResult } }
+    );
 
-    const historyForApi = messagesForHistory.map(m => ({ ...m, component: undefined }));
+  }, [/* dependencies for sendMessage */ activeConversationId, activeConversationMessages, handleRenameConversation]);
 
-    setActiveConversationMessages(messagesForHistory);
+
+  const sendMessage = useCallback(async (userInput: string, image?: ImageData, functionResponse?: {name: string, response: any}) => {
+    if (!activeConversationId) return;
+
+    let currentMessages = activeConversationMessages;
+
+    // Add user message if there is input
+    if (userInput) {
+        const userMessage: ChatMessage = { role: 'user', content: userInput, image };
+        currentMessages = [...currentMessages, userMessage];
+    }
+    
+    // Clean up suggestions from previous message
+    if (currentMessages.length > 1) {
+      const lastMsg = currentMessages[currentMessages.length - 2];
+      const { suggestions, ...rest } = lastMsg;
+      currentMessages[currentMessages.length - 2] = rest;
+    }
+
+    const historyForApi = currentMessages.map(m => ({ ...m, component: undefined }));
+    setActiveConversationMessages(currentMessages);
+    setComparisonSelection([]);
 
     setIsLoading(true);
     setActiveTool(null);
     setIsSidebarOpen(false);
-    playSound(typingAudio);
+    if(!functionResponse) playSound(typingAudio);
 
-    const needsTitle = prevMessages.length === 0;
+    const needsTitle = currentMessages.length === (userInput ? 1 : 0);
     
+    // Add placeholder for model's response
     setActiveConversationMessages(prev => [...prev, { role: 'model', content: '' }]);
     
     abortControllerRef.current = new AbortController();
     let generationSuccess = false;
 
     try {
-      const stream = getChatResponseStream(historyForApi, abortControllerRef.current.signal);
+      const stream = getChatResponseStream(historyForApi, abortControllerRef.current.signal, functionResponse);
       let fullText = '';
       for await (const chunk of stream) {
+        if (chunk.functionCall) {
+            setActiveConversationMessages(prev => {
+                const newMsgs = [...prev];
+                newMsgs[newMsgs.length - 1] = { 
+                    role: 'model', 
+                    content: `Đang thực thi: ${chunk.functionCall.name}...`,
+                    isExecuting: true,
+                    toolCall: chunk.functionCall
+                };
+                return newMsgs;
+            });
+            handleFunctionExecution(chunk.functionCall);
+            // Stop processing this stream, as a new one will be started after execution
+            return; 
+        }
+
         if (chunk.textChunk) {
           fullText += chunk.textChunk;
           setActiveConversationMessages(prev => {
             const newMsgs = [...prev];
-            newMsgs[newMsgs.length - 1] = {
-              ...newMsgs[newMsgs.length - 1],
-              content: fullText,
-            };
+            newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: fullText, isExecuting: false };
             return newMsgs;
           });
         }
@@ -276,15 +313,9 @@ const App: React.FC = () => {
           setActiveConversationMessages(prev => {
             const newMsgs = [...prev];
             const lastMsg = { ...newMsgs[newMsgs.length - 1] };
-            if (chunk.error) {
-              lastMsg.content = chunk.error;
-            }
-            if (chunk.sources && chunk.sources.length > 0) {
-              lastMsg.sources = chunk.sources;
-            }
-            if (chunk.performanceMetrics) {
-              lastMsg.performance = chunk.performanceMetrics;
-            }
+            if (chunk.error) lastMsg.content = chunk.error;
+            if (chunk.sources) lastMsg.sources = chunk.sources;
+            if (chunk.performanceMetrics) lastMsg.performance = chunk.performanceMetrics;
             newMsgs[newMsgs.length - 1] = lastMsg;
             return newMsgs;
           });
@@ -296,10 +327,7 @@ const App: React.FC = () => {
         console.error("Stream failed:", error);
         setActiveConversationMessages(prev => {
           const newMsgs = [...prev];
-          newMsgs[newMsgs.length - 1] = {
-            ...newMsgs[newMsgs.length - 1],
-            content: "Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại.",
-          };
+          newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: "Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại."};
           return newMsgs;
         });
       }
@@ -308,13 +336,13 @@ const App: React.FC = () => {
       typingAudio.pause();
       if(generationSuccess) playSound(messageAudio);
       abortControllerRef.current = null;
-      if (needsTitle && generationSuccess) {
+      if (needsTitle && generationSuccess && userInput) {
           summarizeTitle(userInput).then(title => {
               handleRenameConversation(activeConversationId, title);
           });
       }
     }
-  }, [activeConversationId, activeConversationMessages, handleRenameConversation, typingAudio, messageAudio, playSound]);
+  }, [activeConversationId, activeConversationMessages, handleRenameConversation, typingAudio, messageAudio, playSound, handleFunctionExecution]);
 
    const handleNewChat = () => {
     const newId = Date.now().toString();
@@ -332,6 +360,7 @@ const App: React.FC = () => {
   const handleClearChat = (id: string) => {
     if (id === activeConversationId) {
         setActiveConversationMessages([]);
+        setComparisonSelection([]);
     }
     window.localStorage.removeItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${id}`);
     setIsConfirmDialogOpen(null);
@@ -351,7 +380,7 @@ const App: React.FC = () => {
     if (activeConversationId === id) {
         const remainingIds = Object.keys(oldConversations)
             .filter(convoId => convoId !== id)
-            .sort((a, b) => Number(b) - Number(a)); // Sort to get the most recent
+            .sort((a, b) => Number(b) - Number(a));
         
         if (remainingIds.length > 0) {
             setActiveConversationId(remainingIds[0]);
@@ -375,10 +404,6 @@ const App: React.FC = () => {
   const handleProfileUpdate = (profile: UserProfile) => {
     setUserProfile(profile);
     window.localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
-    
-    if (activeConversationMessages.length === 1 && activeConversationMessages[0].content.includes('tôi có thể gọi bạn là gì?')) {
-        setActiveConversationMessages([generateInitialMessage(profile)]);
-    }
   };
   
   const handleForgetUser = () => {
@@ -399,14 +424,83 @@ const App: React.FC = () => {
     setConversations({ [newId]: initialConvo });
     setActiveConversationId(newId);
   };
-
-  const handleSuggestionOrTool = (input: string, tool?: Task) => {
-      if (tool) {
-          setActiveTool(tool);
-      } else {
-          sendMessage(input);
-      }
+  
+  const handleToggleCompare = (index: number) => {
+    setComparisonSelection(prev => {
+        const isSelected = prev.includes(index);
+        if (isSelected) {
+            return prev.filter(i => i !== index);
+        }
+        if (prev.length < 2) {
+            return [...prev, index].sort((a, b) => a - b);
+        }
+        return [prev[0], index].sort((a, b) => a - b);
+    });
   };
+
+  const handleClearCompare = () => {
+      setComparisonSelection([]);
+  };
+  
+  const handleExportPng = useCallback(async () => {
+    if (!chatWindowRef.current) {
+        alert('Không thể tìm thấy nội dung chat để xuất.');
+        return;
+    }
+    setIsExporting(true);
+    try {
+        const dataUrl = await toPng(chatWindowRef.current, { 
+            cacheBust: true, 
+            backgroundColor: effectiveTheme === 'dark' ? '#0f172a' : '#ffffff',
+            pixelRatio: 2,
+        });
+        const link = document.createElement('a');
+        const convoTitle = (activeConversationId && conversations[activeConversationId]?.title) || 'conversation';
+        const safeTitle = convoTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        link.download = `conversation-V64-${safeTitle}.png`;
+        link.href = dataUrl;
+        link.click();
+    } catch (err) {
+        console.error('Không thể xuất ảnh PNG:', err);
+        alert('Đã xảy ra lỗi khi xuất ảnh. Vui lòng thử lại.');
+    } finally {
+        setIsExporting(false);
+        setIsExportDialogOpen(false);
+    }
+  }, [effectiveTheme, activeConversationId, conversations]);
+
+  const handleExportTxt = useCallback(() => {
+    setIsExporting(true);
+    const convoTitle = (activeConversationId && conversations[activeConversationId]?.title) || 'Cuộc trò chuyện';
+    
+    let textContent = `Chủ đề: ${convoTitle}\n`;
+    textContent += `Ngày xuất: ${new Date().toLocaleString('vi-VN')}\n`;
+    textContent += "========================================\n\n";
+
+    activeConversationMessages.forEach(msg => {
+        const prefix = msg.role === 'user' ? '[Người dùng]' : '[AI - V64]';
+        textContent += `${prefix}:\n${msg.content}\n\n`;
+        if (msg.sources && msg.sources.length > 0) {
+            textContent += 'Nguồn tham khảo:\n';
+            msg.sources.forEach(source => {
+                textContent += `- ${source.title}: ${source.uri}\n`;
+            });
+            textContent += '\n';
+        }
+    });
+
+    const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    const safeTitle = convoTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    link.download = `conversation-V64-${safeTitle}.txt`;
+    link.href = url;
+    link.click();
+    URL.revokeObjectURL(url);
+    
+    setIsExporting(false);
+    setIsExportDialogOpen(false);
+  }, [activeConversationId, conversations, activeConversationMessages]);
 
   return (
     <div className={`font-${font} flex h-screen bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-300`}>
@@ -434,15 +528,23 @@ const App: React.FC = () => {
 
                 <div className="flex items-center gap-1">
                     <button
+                        onClick={() => setIsExportDialogOpen(true)}
+                        disabled={activeConversationMessages.length === 0}
+                        className="text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        title="Xuất cuộc trò chuyện"
+                    >
+                        <ArrowDownTrayIcon className="w-6 h-6" />
+                    </button>
+                    <button
                         onClick={() => setIsTestingGuideOpen(true)}
-                        className="text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700/50"
+                        className="hidden md:flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700/50"
                         title="Hướng dẫn kiểm thử"
                     >
                         <CheckBadgeIcon className="w-6 h-6" />
                     </button>
                     <button
                         onClick={() => setIsWorkflowDialogOpen(true)}
-                        className="text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700/50"
+                        className="hidden md:flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700/50"
                         title="Xem quy trình làm việc"
                     >
                         <WorkflowIcon className="w-6 h-6" />
@@ -457,6 +559,8 @@ const App: React.FC = () => {
                         onForgetUser={handleForgetUser}
                         soundEnabled={soundEnabled}
                         setSoundEnabled={setSoundEnabled}
+                        onOpenWorkflow={() => setIsWorkflowDialogOpen(true)}
+                        onOpenTestingGuide={() => setIsTestingGuideOpen(true)}
                     />
                 </div>
             </header>
@@ -466,16 +570,28 @@ const App: React.FC = () => {
                     <Welcome onSuggestionClick={sendMessage} onToolSelect={setActiveTool} />
                 ) : (
                     <ChatWindow 
+                        ref={chatWindowRef}
                         messages={activeConversationMessages}
-                        isLoading={isLoading && !activeTool}
+                        isLoading={isLoading && !activeTool && !isExecutingTool}
                         onSuggestionClick={sendMessage}
                         onFeedback={handleFeedback}
+                        comparisonSelection={comparisonSelection}
+                        onToggleCompare={handleToggleCompare}
+                    />
+                )}
+
+                {comparisonSelection.length > 0 && (
+                    <ComparisonToolbar
+                        selection={comparisonSelection}
+                        messages={activeConversationMessages}
+                        onCompare={() => setIsComparisonOpen(true)}
+                        onClear={handleClearCompare}
                     />
                 )}
 
                 <MessageInput 
                     onSendMessage={sendMessage}
-                    isLoading={isLoading}
+                    isLoading={isLoading || isExecutingTool}
                     onNewChat={handleNewChat}
                     onClearChat={() => activeConversationId && setIsConfirmDialogOpen({ action: 'clear', id: activeConversationId })}
                     activeTool={activeTool}
@@ -484,6 +600,16 @@ const App: React.FC = () => {
                 />
             </div>
         </main>
+
+        {isExportDialogOpen && (
+            <ExportDialog
+                isOpen={isExportDialogOpen}
+                onClose={() => setIsExportDialogOpen(false)}
+                onExportPng={handleExportPng}
+                onExportTxt={handleExportTxt}
+                isExporting={isExporting}
+            />
+        )}
 
         {isWorkflowDialogOpen && (
             <WorkflowDialog
@@ -496,6 +622,15 @@ const App: React.FC = () => {
             <TestingGuideDialog
                 isOpen={isTestingGuideOpen}
                 onClose={() => setIsTestingGuideOpen(false)}
+            />
+        )}
+
+        {isComparisonOpen && comparisonSelection.length === 2 && (
+            <SourceComparisonDialog
+                isOpen={isComparisonOpen}
+                onClose={() => setIsComparisonOpen(false)}
+                message1={activeConversationMessages[comparisonSelection[0]]}
+                message2={activeConversationMessages[comparisonSelection[1]]}
             />
         )}
 

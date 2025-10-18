@@ -1,5 +1,5 @@
-// Fix: Import ReactNode to resolve the 'Cannot find namespace React' error.
 import type { ReactNode } from 'react';
+import type { FunctionCall } from '@google/genai';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type Font = 'sans' | 'serif' | 'mono';
@@ -26,6 +26,9 @@ export interface ChatMessage {
     timeToFirstChunk: number;
     totalTime: number;
   };
+  // Fields for Function Calling
+  isExecuting?: boolean;
+  toolCall?: FunctionCall;
 }
 
 export interface Conversation {
@@ -36,6 +39,6 @@ export interface Conversation {
 
 // Add ConversationMeta for optimized loading
 export interface ConversationMeta {
-  id: string;
+  id:string;
   title: string;
 }

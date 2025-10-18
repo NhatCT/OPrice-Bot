@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
-import type { Conversation } from '../types';
+// FIX: Use ConversationMeta to align with optimized data loading and fix type error.
+import type { ConversationMeta } from '../types';
 import { PlusIcon } from './icons/PlusIcon';
 import { ChatBubbleIcon } from './icons/ChatBubbleIcon';
 import { PencilIcon } from './icons/PencilIcon';
@@ -8,7 +9,7 @@ import { CheckIcon } from './icons/CheckIcon';
 import { XIcon } from './icons/XIcon';
 
 interface SidebarProps {
-  conversations: Conversation[];
+  conversations: ConversationMeta[];
   activeConversationId: string | null;
   onNewChat: () => void;
   onSelectConversation: (id: string) => void;
@@ -39,7 +40,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     }
   }, [editingId]);
 
-  const handleStartRename = (conversation: Conversation) => {
+  const handleStartRename = (conversation: ConversationMeta) => {
     setEditingId(conversation.id);
     setRenameInput(conversation.title);
   };

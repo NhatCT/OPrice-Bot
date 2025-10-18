@@ -10,27 +10,33 @@ import remarkGfm from 'remark-gfm';
 import { V64Logo } from './icons/V54Logo';
 import { LightningBoltIcon } from './icons/LightningBoltIcon';
 import { ClockIcon } from './icons/ClockIcon';
+import { ScaleIcon } from './icons/ScaleIcon';
+import { CogIcon } from './icons/CogIcon';
 
 interface ChatMessageProps {
   message: ChatMessage;
   onSuggestionClick: (suggestion: string) => void;
   onFeedback: (feedback: 'positive' | 'negative') => void;
+  index: number;
+  onToggleCompare: (index: number) => void;
+  isSelectedForCompare: boolean;
 }
 
-export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSuggestionClick, onFeedback }) => {
+export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSuggestionClick, onFeedback, index, onToggleCompare, isSelectedForCompare }) => {
   const [isCopied, setIsCopied] = useState(false);
   const isModel = message.role === 'model';
   const hasSuggestions = isModel && message.suggestions && message.suggestions.length > 0;
   const hasSources = isModel && message.sources && message.sources.length > 0;
-  const canShowActions = isModel && !message.component && message.content;
+  const canShowActions = isModel && !message.component && message.content && !message.isExecuting;
   const feedbackGiven = !!message.feedback;
   const hasPerformance = isModel && message.performance && message.performance.totalTime > 0;
+  const canShowCompare = isModel && message.sources && message.sources.length > 0;
 
   const handleCopy = () => {
     if (!message.content) return;
     navigator.clipboard.writeText(message.content).then(() => {
         setIsCopied(true);
-        setTimeout(() => setIsCopied(false), 2000); // Reset after 2 seconds
+        setTimeout(() => setIsCopied(false), 2000);
     }).catch(err => {
         console.error('Failed to copy text: ', err);
     });
@@ -61,9 +67,8 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
   };
   
   if (!isModel) {
-      // --- RENDER USER MESSAGE (Unchanged) ---
       return (
-        <div className="flex flex-col items-end">
+        <div className="flex flex-col items-end animate-message-in">
           <div className="flex items-end gap-2 flex-row-reverse">
             <div className="max-w-xl lg:max-w-3xl px-5 py-3 rounded-2xl shadow-md bg-sky-600 text-white rounded-br-none">
               {message.image && (
@@ -84,9 +89,25 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
       );
   }
 
-  // --- RENDER MODEL MESSAGE (Redesigned) ---
+  // --- RENDER EXECUTING TOOL MESSAGE ---
+  if (message.isExecuting) {
+    const toolName = message.toolCall?.name === 'createDiscountCode' ? 'Tạo mã giảm giá' : 'Thực thi tác vụ';
+    return (
+        <div className="flex flex-row items-start gap-3 animate-message-in">
+            <V64Logo className="w-9 h-9 flex-shrink-0 mt-1" />
+            <div className="flex items-center gap-3 px-4 py-3 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm">
+                <CogIcon className="w-5 h-5 text-sky-500 animate-spin" />
+                <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+                  Đang thực thi: {toolName}...
+                </span>
+            </div>
+        </div>
+    );
+  }
+
+  // --- RENDER MODEL MESSAGE ---
   return (
-    <div className="flex flex-row items-start gap-3">
+    <div className="flex flex-row items-start gap-3 animate-message-in">
         <V64Logo className="w-9 h-9 flex-shrink-0 mt-1" />
 
         <div className="flex flex-col w-full items-start max-w-xl lg:max-w-3xl">
@@ -94,7 +115,17 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                  <div className="flex justify-between items-center p-3 border-b border-slate-200 dark:border-slate-700">
                     <h3 className="font-semibold text-slate-700 dark:text-slate-200 text-sm">Phân tích từ AI</h3>
                     {canShowActions && (
-                        <div className="flex gap-1.5">
+                        <div className="hidden md:flex gap-1.5">
+                            {canShowCompare && (
+                                <button
+                                    onClick={() => onToggleCompare(index)}
+                                    className={`p-1.5 rounded-full transition-colors duration-200 ${isSelectedForCompare ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+                                    aria-label="Compare Sources"
+                                    title="Chọn để so sánh nguồn"
+                                >
+                                    <ScaleIcon className="w-4 h-4" />
+                                </button>
+                            )}
                             <button onClick={handleCopy} className={`p-1.5 rounded-full transition-all duration-200 ${isCopied ? 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`} aria-label={isCopied ? "Copied" : "Copy"} title={isCopied ? "Đã sao chép!" : "Sao chép"} >
                                 {isCopied ? <CheckIcon className="w-4 h-4" /> : <ClipboardIcon className="w-4 h-4" />}
                             </button>
@@ -133,6 +164,34 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                     </div>
                 )}
                 
+                {canShowActions && (
+                    <div className="md:hidden px-3 pb-3 mt-1 pt-3 border-t border-slate-200 dark:border-slate-700">
+                        <div className="flex flex-wrap gap-2">
+                            {canShowCompare && (
+                                <button
+                                    onClick={() => onToggleCompare(index)}
+                                    className={`flex items-center gap-1.5 text-sm rounded-lg px-3 py-1.5 transition-colors duration-200 ${isSelectedForCompare ? 'bg-purple-600 text-white font-semibold' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600'}`}
+                                >
+                                    <ScaleIcon className="w-4 h-4" />
+                                    <span>So sánh</span>
+                                </button>
+                            )}
+                            <button onClick={handleCopy} className={`flex items-center gap-1.5 text-sm rounded-lg px-3 py-1.5 transition-colors duration-200 ${isCopied ? 'bg-green-600 text-white font-semibold' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600'}`}>
+                                {isCopied ? <CheckIcon className="w-4 h-4" /> : <ClipboardIcon className="w-4 h-4" />}
+                                <span>{isCopied ? "Đã chép" : "Sao chép"}</span>
+                            </button>
+                            <button onClick={() => onFeedback('positive')} disabled={feedbackGiven} className={`flex items-center gap-1.5 text-sm rounded-lg px-3 py-1.5 transition-colors duration-200 disabled:opacity-50 ${message.feedback === 'positive' ? 'bg-sky-600 text-white font-semibold' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600'}`}>
+                                <ThumbUpIcon className="w-4 h-4" />
+                                <span>Thích</span>
+                            </button>
+                            <button onClick={() => onFeedback('negative')} disabled={feedbackGiven} className={`flex items-center gap-1.5 text-sm rounded-lg px-3 py-1.5 transition-colors duration-200 disabled:opacity-50 ${message.feedback === 'negative' ? 'bg-red-600 text-white font-semibold' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600'}`}>
+                                <ThumbDownIcon className="w-4 h-4" />
+                                <span>Không thích</span>
+                            </button>
+                        </div>
+                    </div>
+                )}
+
                 {hasSources && (
                     <div className="w-full border-t border-slate-200 dark:border-slate-700 p-3 bg-slate-100/50 dark:bg-slate-900/30 rounded-b-xl">
                         <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Nguồn tham khảo</h4>
@@ -165,3 +224,21 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
     </div>
   );
 };
+
+const style = document.createElement('style');
+style.innerHTML = `
+    @keyframes messageIn {
+        from {
+            opacity: 0;
+            transform: translateY(15px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    .animate-message-in {
+        animation: messageIn 0.4s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+    }
+`;
+document.head.appendChild(style);

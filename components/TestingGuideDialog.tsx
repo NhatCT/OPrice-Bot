@@ -6,6 +6,7 @@ import { BeakerIcon } from './icons/BeakerIcon';
 import { toPng } from 'html-to-image';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 
 interface TestingGuideDialogProps {
@@ -33,7 +34,6 @@ const TestStep: React.FC<{ title: string, description: string, examples?: string
     </li>
 );
 
-
 const defaultPrompts = [
     "V64 là công ty gì?",
     "Kể tên các dự án tiêu biểu của V64.",
@@ -42,6 +42,33 @@ const defaultPrompts = [
     "Hãy phân tích lợi nhuận cho sản phẩm 'Nón V64' với giá vốn 50000, chi phí biến đổi 5000, chi phí cố định 10tr, và giá bán 120000.",
     "So sánh giá thị trường cho 'Áo Thun Thể Thao'.",
 ].join('\n');
+
+const PerformanceChart: React.FC<{ data: any[] }> = ({ data }) => {
+  return (
+    <div className="mt-4 h-64">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+          <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
+          <XAxis dataKey="request" label={{ value: 'Yêu cầu', position: 'insideBottom', offset: -5 }} stroke="rgb(100 116 139)" />
+          <YAxis label={{ value: 'Time (ms)', angle: -90, position: 'insideLeft' }} stroke="rgb(100 116 139)" />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: 'rgba(255, 255, 255, 0.8)',
+              backdropFilter: 'blur(4px)',
+              border: '1px solid rgb(226 232 240)',
+              borderRadius: '0.5rem',
+              color: 'black'
+            }}
+            labelStyle={{ fontWeight: 'bold' }}
+          />
+          <Legend />
+          <Line type="monotone" dataKey="timeToFirstChunk" name="⚡️ TTFC" stroke="#38bdf8" strokeWidth={2} dot={{ r: 2 }} />
+          <Line type="monotone" dataKey="totalTime" name="⏱️ Total Time" stroke="#34d399" strokeWidth={2} dot={{ r: 2 }}/>
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
 
 
 export const TestingGuideDialog: React.FC<TestingGuideDialogProps> = ({ isOpen, onClose }) => {
@@ -100,12 +127,19 @@ export const TestingGuideDialog: React.FC<TestingGuideDialogProps> = ({ isOpen, 
             avgFirstChunk: 0, p95FirstChunk: 0,
             avgTotalTime: 0, p95TotalTime: 0,
             totalRequests: simulationResults.length,
+            chartData: [],
         };
         
         const firstChunkTimes = successfulRuns.map(r => r.result.performance!.timeToFirstChunk).sort((a,b) => a - b);
         const totalTimes = successfulRuns.map(r => r.result.performance!.totalTime).sort((a,b) => a-b);
         
         const p95Index = Math.floor(0.95 * successfulRuns.length) -1;
+
+        const chartData = simulationResults.map((r, i) => ({
+            request: i + 1,
+            timeToFirstChunk: r.result.performance?.timeToFirstChunk ?? null,
+            totalTime: r.result.performance?.totalTime ?? null,
+        })).filter(d => d.totalTime !== null);
 
         return {
             successRate: (successfulRuns.length / simulationResults.length) * 100,
@@ -115,6 +149,7 @@ export const TestingGuideDialog: React.FC<TestingGuideDialogProps> = ({ isOpen, 
             avgTotalTime: Math.round(totalTimes.reduce((a, b) => a + b, 0) / totalTimes.length) || 0,
             p95TotalTime: totalTimes[p95Index >= 0 ? p95Index : 0] || 0,
             totalRequests: simulationResults.length,
+            chartData,
         };
     }, [simulationResults]);
     
@@ -140,15 +175,15 @@ export const TestingGuideDialog: React.FC<TestingGuideDialogProps> = ({ isOpen, 
         if (!simulationResults) return;
 
         let csvContent = "data:text/csv;charset=utf-8,";
-        csvContent += "Prompt,Success,Error,TimeToFirstChunk (ms),TotalTime (ms)\r\n";
+        csvContent += "Request,Prompt,Success,Error,TimeToFirstChunk (ms),TotalTime (ms)\r\n";
 
-        simulationResults.forEach(item => {
+        simulationResults.forEach((item, index) => {
             const prompt = `"${item.prompt.replace(/"/g, '""')}"`;
             const success = item.result.success;
             const error = item.result.error ? `"${item.result.error.replace(/"/g, '""')}"` : '';
             const ttfc = item.result.performance?.timeToFirstChunk ?? '';
             const totalTime = item.result.performance?.totalTime ?? '';
-            csvContent += [prompt, success, error, ttfc, totalTime].join(',') + "\r\n";
+            csvContent += [index + 1, prompt, success, error, ttfc, totalTime].join(',') + "\r\n";
         });
 
         const encodedUri = encodeURI(csvContent);
@@ -272,6 +307,12 @@ export const TestingGuideDialog: React.FC<TestingGuideDialogProps> = ({ isOpen, 
                                         <p className="text-lg font-bold text-slate-800 dark:text-slate-100">{stats.avgTotalTime}ms / {stats.p95TotalTime}ms</p>
                                     </div>
                                 </div>
+                                {stats.chartData.length > 0 && (
+                                    <>
+                                        <h5 className="font-semibold text-center text-slate-800 dark:text-slate-100 mt-6 mb-2">Phân tích Thời gian Phản hồi</h5>
+                                        <PerformanceChart data={stats.chartData} />
+                                    </>
+                                )}
                             </div>
                         </div>
                     )}

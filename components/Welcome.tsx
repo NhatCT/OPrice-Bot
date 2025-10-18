@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { Task } from './GuidedInputForm';
 import { ChartBarIcon } from './icons/ChartBarIcon';
@@ -35,7 +36,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ onSuggestionClick, onToolSelec
         <div className="flex-1 flex flex-col justify-center items-center p-6 overflow-y-auto">
             <div className="text-center mb-8">
                 <SparklesIcon className="w-16 h-16 mx-auto text-sky-500 mb-4" />
-                <h1 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Chào mừng đến với Trợ lý Kinh doanh V64</h1>
+                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100">Chào mừng đến với Trợ lý Kinh doanh V64</h1>
                 <p className="mt-2 text-slate-600 dark:text-slate-300 max-w-xl mx-auto">
                     Tôi có thể giúp bạn phân tích chiến lược giá hoặc trả lời các câu hỏi về V64. Hãy chọn một gợi ý bên dưới để bắt đầu!
                 </p>
