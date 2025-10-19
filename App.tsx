@@ -268,8 +268,6 @@ const App: React.FC = () => {
     }
 
     const historyForApi = currentMessages.map(m => ({ ...m, component: undefined }));
-    const wasPricingTask = !!activeTool || !!analysisPayload;
-    const expectsJsonResponse = wasPricingTask && !(analysisPayload?.params?.useMarket);
 
     setActiveConversationMessages(currentMessages);
     setComparisonSelection([]);
@@ -341,51 +339,58 @@ const App: React.FC = () => {
     } finally {
       setIsLoading(false);
       typingAudio.pause();
-      if(generationSuccess) playSound(messageAudio);
+      if (generationSuccess) playSound(messageAudio);
       abortControllerRef.current = null;
 
-      // FIX: Capture ref value before state update to prevent race condition.
-      // The state updater function runs later, by which time the ref might be cleared.
-      if (pendingAnalysisParamsRef.current) {
-        const analysisData = pendingAnalysisParamsRef.current;
-        setActiveConversationMessages(prev => {
-            const newMsgs = [...prev];
-            if (newMsgs.length > 0) {
-              const lastMsg = { ...newMsgs[newMsgs.length - 1] };
-              lastMsg.analysisParams = analysisData.params;
-              lastMsg.task = analysisData.task;
-              newMsgs[newMsgs.length - 1] = lastMsg;
-            }
-            return newMsgs;
-        });
-        pendingAnalysisParamsRef.current = null;
+      const analysisData = pendingAnalysisParamsRef.current;
+      pendingAnalysisParamsRef.current = null; // Clear the ref for the next turn.
+
+      const wasPricingTask = !!analysisData;
+      const useMarket = analysisData?.params?.useMarket;
+      let parsedData: any = null;
+
+      if (wasPricingTask && generationSuccess && fullText) {
+        if (useMarket) {
+          const jsonRegex = /```json\s*([\s\S]*?)\s*```/;
+          const match = fullText.match(jsonRegex);
+          if (match && match[1]) {
+            try {
+              parsedData = JSON.parse(match[1]);
+            } catch (e) { console.error("Failed to parse JSON from markdown:", e); }
+          }
+        } else {
+          try {
+            parsedData = JSON.parse(fullText);
+          } catch (e) { console.error("Failed to parse raw analysis JSON:", e); }
+        }
       }
 
-      // FIX: Handle JSON parsing for charts only when a JSON response was expected.
-      // Analysis tasks with market data requests will return Markdown instead of JSON.
-      if (expectsJsonResponse && generationSuccess && fullText) {
-          try {
-              const parsedData = JSON.parse(fullText);
-              if (parsedData.analysis && Array.isArray(parsedData.charts)) {
-                  setActiveConversationMessages(prev => {
-                      const newMsgs = [...prev];
-                      const lastMsg = { ...newMsgs[newMsgs.length - 1] };
-                      lastMsg.content = parsedData.analysis;
-                      lastMsg.component = (
-                          <div>
-                              {parsedData.charts.map((chart: any, index: number) => (
-                                  <AnalysisChart key={index} chart={chart} theme={effectiveTheme} />
-                              ))}
-                          </div>
-                      );
-                      newMsgs[newMsgs.length - 1] = lastMsg;
-                      return newMsgs;
-                  });
-              }
-          } catch (e) {
-              console.error("Failed to parse analysis JSON:", e);
-              // Fallback to showing the raw text if parsing fails
+      // Consolidate final message updates (analysis params and chart component)
+      if (analysisData || (parsedData && parsedData.analysis)) {
+        setActiveConversationMessages(prev => {
+          const newMsgs = [...prev];
+          if (newMsgs.length > 0) {
+            const lastMsg = { ...newMsgs[newMsgs.length - 1] };
+            
+            if (analysisData) {
+              lastMsg.analysisParams = analysisData.params;
+              lastMsg.task = analysisData.task;
+            }
+
+            if (parsedData && parsedData.analysis && Array.isArray(parsedData.charts)) {
+              lastMsg.content = parsedData.analysis;
+              lastMsg.component = (
+                <div>
+                  {parsedData.charts.map((chart: any, index: number) => (
+                    <AnalysisChart key={index} chart={chart} theme={effectiveTheme} />
+                  ))}
+                </div>
+              );
+            }
+            newMsgs[newMsgs.length - 1] = lastMsg;
           }
+          return newMsgs;
+        });
       }
 
       if (needsTitle && generationSuccess && userInput) {

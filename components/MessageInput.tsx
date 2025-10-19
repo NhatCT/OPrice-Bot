@@ -213,7 +213,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 <CollectionIcon className="w-4 h-4 text-purple-500" />
                 <span>Phân tích Đồng giá</span>
             </button>
-             <button onClick={() => handleQuickAction("Tạo mã giảm giá 15% cho 'Áo Thun V64' mã HEV64")} className={quickActionClass} disabled={isLoading}>
+             <button onClick={() => setActiveTool({ task: 'create-discount'})} className={quickActionClass} disabled={isLoading}>
                 <ReceiptPercentIcon className="w-4 h-4 text-orange-500" />
                 <span>Tạo mã giảm giá</span>
             </button>

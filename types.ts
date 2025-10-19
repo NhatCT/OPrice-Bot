@@ -3,7 +3,7 @@ import type { FunctionCall } from '@google/genai';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type Font = 'sans' | 'serif' | 'mono';
-export type Task = 'profit-analysis' | 'promo-price' | 'group-price';
+export type Task = 'profit-analysis' | 'promo-price' | 'group-price' | 'create-discount';
 
 export interface UserProfile {
   name: string;
