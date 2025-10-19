@@ -1,11 +1,19 @@
-// FIX: Removed IteratorResult from the import as it's a global TypeScript type.
-import { GoogleGenAI, Content, Part, Modality, FunctionDeclaration, Type, GenerateContentResponse, FunctionCall } from "@google/genai";
-import type { ChatMessage } from '../types';
+// FIXED & CLEAN VERSION — compatible with Gemini 2.5 Flash + Vite/Vercel
+import {
+  GoogleGenAI,
+  Content,
+  Part,
+  FunctionDeclaration,
+  Type,
+  GenerateContentResponse,
+  FunctionCall,
+} from "@google/genai";
+import type { ChatMessage } from "../types";
 
-// FIX: Define a model constant to resolve "Cannot find name 'model'" errors. 
-// 'gemini-2.5-flash' is selected as a capable and cost-effective default.
-const model = 'gemini-2.5-flash';
+// --- Model ---
+const model = "gemini-2.5-flash";
 
+// --- System Instruction ---
 const SYSTEM_INSTRUCTION = `Bạn là một trợ lý AI chuyên nghiệp của công ty V64, chuyên hỗ trợ các vấn đề liên quan đến V64, phân tích kinh doanh và thực thi các tác vụ được yêu cầu.
 
 **QUY TẮC CỰC KỲ QUAN TRỌNG (BẮT BUỘC TUÂN THỦ):**
@@ -21,304 +29,290 @@ const SYSTEM_INSTRUCTION = `Bạn là một trợ lý AI chuyên nghiệp của 
 
 4.  **Luôn cung cấp nguồn tham khảo** khi trả lời các câu hỏi về V64.`;
 
-// FIX: Replaced custom API key logic with the standard approach from @google/genai guidelines.
-// This resolves the TypeScript error related to 'import.meta.env' and ensures compliance.
+// --- API Key ---
 const ai = new GoogleGenAI({
-  apiKey: import.meta.env.VITE_API_KEY
+  apiKey: import.meta.env.VITE_API_KEY,
 });
+
 // --- Function Calling Definition ---
 const createDiscountCodeTool: FunctionDeclaration = {
-  name: 'createDiscountCode',
-  description: 'Tạo một mã giảm giá mới cho một sản phẩm cụ thể.',
+  name: "createDiscountCode",
+  description: "Tạo một mã giảm giá mới cho một sản phẩm cụ thể.",
   parameters: {
     type: Type.OBJECT,
     properties: {
       productName: {
         type: Type.STRING,
-        description: 'Tên của sản phẩm cần tạo mã giảm giá.',
+        description: "Tên của sản phẩm cần tạo mã giảm giá.",
       },
       discountPercentage: {
         type: Type.NUMBER,
-        description: 'Tỷ lệ phần trăm giảm giá (ví dụ: 15 cho 15%).',
+        description: "Tỷ lệ phần trăm giảm giá (ví dụ: 15 cho 15%).",
       },
       codeName: {
         type: Type.STRING,
-        description: 'Tên mã giảm giá tùy chỉnh (ví dụ: SALE15, HEV64).',
+        description: "Tên mã giảm giá tùy chỉnh (ví dụ: SALE15, HEV64).",
       },
     },
-    required: ['productName', 'discountPercentage', 'codeName'],
+    required: ["productName", "discountPercentage", "codeName"],
   },
 };
 
 // --- JSON Schema for Analysis Responses ---
 const chartDataSchema = {
-    type: Type.OBJECT,
-    properties: {
-        name: { type: Type.STRING, description: 'Tên của danh mục (ví dụ: Doanh thu, Lợi nhuận).' },
-        value: { type: Type.NUMBER, description: 'Giá trị số của danh mục.' }
-    },
-    required: ['name', 'value']
+  type: Type.OBJECT,
+  properties: {
+    name: { type: Type.STRING, description: "Tên danh mục (VD: Doanh thu)." },
+    value: { type: Type.NUMBER, description: "Giá trị số của danh mục." },
+  },
+  required: ["name", "value"],
 };
 
 const chartSchema = {
-    type: Type.OBJECT,
-    properties: {
-        type: { type: Type.STRING, description: 'Loại biểu đồ, mặc định là "bar".', enum: ['bar'] },
-        title: { type: Type.STRING, description: 'Tiêu đề của biểu đồ.' },
-        data: {
-            type: Type.ARRAY,
-            items: chartDataSchema
-        }
-    },
-    required: ['type', 'title', 'data']
+  type: Type.OBJECT,
+  properties: {
+    type: { type: Type.STRING, enum: ["bar"], description: "Loại biểu đồ." },
+    title: { type: Type.STRING, description: "Tiêu đề của biểu đồ." },
+    data: { type: Type.ARRAY, items: chartDataSchema },
+  },
+  required: ["type", "title", "data"],
 };
 
 const analysisResponseSchema = {
-    type: Type.OBJECT,
-    properties: {
-        analysis: {
-            type: Type.STRING,
-            description: 'Phân tích chi tiết bằng văn bản, định dạng Markdown.'
-        },
-        charts: {
-            type: Type.ARRAY,
-            description: 'Một mảng các đối tượng biểu đồ để trực quan hóa dữ liệu.',
-            items: chartSchema
-        }
+  type: Type.OBJECT,
+  properties: {
+    analysis: {
+      type: Type.STRING,
+      description: "Phân tích chi tiết bằng văn bản (Markdown).",
     },
-    required: ['analysis', 'charts']
+    charts: {
+      type: Type.ARRAY,
+      description: "Danh sách biểu đồ dữ liệu.",
+      items: chartSchema,
+    },
+  },
+  required: ["analysis", "charts"],
 };
 
-
+// --- Map chat history to Gemini format ---
 function mapHistoryToContent(history: ChatMessage[]): Content[] {
-    return history
-      .filter(msg => !msg.isExecuting) // Do not include "executing" messages in history
-      .map(msg => {
-        const parts: Part[] = [];
-        
-        // Handle function calls and responses
-        if (msg.toolCall) {
-            parts.push({ functionCall: msg.toolCall });
-        } else if (msg.role === 'model' && history.find(h => h.toolCall?.name === (msg as any).toolResponse?.name)) {
-            // This is a function response, but the SDK expects it in a specific format
-            // which is complex to reconstruct. We will rely on the text content instead.
-            // For now, let's just push the text part.
-            parts.push({ text: msg.content });
-        }
-        else {
-           parts.push({ text: msg.content });
-        }
-        
-        return { role: msg.role, parts: parts };
+  return history
+    .filter((msg) => !msg.isExecuting)
+    .map((msg) => {
+      const parts: Part[] = [];
+      if (msg.toolCall) {
+        parts.push({ functionCall: msg.toolCall });
+      } else {
+        parts.push({ text: msg.content });
+      }
+      return { role: msg.role, parts };
     });
 }
 
-
+// --- Summarize Title ---
 export async function summarizeTitle(firstMessage: string): Promise<string> {
-    try {
-        const prompt = `Hãy tóm tắt yêu cầu sau thành một tiêu đề ngắn gọn (tối đa 6 từ) bằng tiếng Việt: "${firstMessage}"`;
-        const result = await ai.models.generateContent({ model: model, contents: prompt });
-        let title = result.text.trim().replace(/["']/g, "");
-        title = title.charAt(0).toUpperCase() + title.slice(1);
-        return title;
-    } catch (error) {
-        console.error("Title summarization failed:", error);
-        return firstMessage.substring(0, 30) + '...';
-    }
+  try {
+    const prompt = `Hãy tóm tắt yêu cầu sau thành một tiêu đề ngắn gọn (tối đa 6 từ) bằng tiếng Việt: "${firstMessage}"`;
+    const result = await ai.models.generateContent({
+      model,
+      contents: prompt,
+    });
+    let title = result.text.trim().replace(/["']/g, "");
+    title = title.charAt(0).toUpperCase() + title.slice(1);
+    return title;
+  } catch (error) {
+    console.error("Title summarization failed:", error);
+    return firstMessage.substring(0, 30) + "...";
+  }
 }
 
+// --- Types ---
 export interface StreamedChatResponse {
-    textChunk?: string;
-    sources?: { uri: string; title: string }[];
-    functionCall?: FunctionCall;
-    isFinal: boolean;
-    error?: string;
-    performanceMetrics?: {
-        timeToFirstChunk: number;
-        totalTime: number;
-    };
+  textChunk?: string;
+  sources?: { uri: string; title: string }[];
+  functionCall?: FunctionCall;
+  isFinal: boolean;
+  error?: string;
+  performanceMetrics?: { timeToFirstChunk: number; totalTime: number };
 }
 
-// FIX: Export StressTestResult interface for stress testing.
 export interface StressTestResult {
-    success: boolean;
-    error?: string;
-    performance?: {
-        timeToFirstChunk: number;
-        totalTime: number;
-    };
+  success: boolean;
+  error?: string;
+  performance?: { timeToFirstChunk: number; totalTime: number };
 }
 
+// --- Main Streaming Function ---
 export async function* getChatResponseStream(
-    history: ChatMessage[],
-    signal: AbortSignal,
-    functionResponse?: {name: string; response: any}
+  history: ChatMessage[],
+  signal: AbortSignal,
+  functionResponse?: { name: string; response: any }
 ): AsyncGenerator<StreamedChatResponse> {
-    const startTime = performance.now();
-    let firstChunkTime = 0;
+  const startTime = performance.now();
+  let firstChunkTime = 0;
 
-    try {
-        if (signal.aborted) return;
-        
-        const lastMessage = history[history.length - 1];
-        if (!lastMessage && !functionResponse) {
-            yield { isFinal: true, error: "Lỗi: Không tìm thấy tin nhắn hợp lệ." };
-            return;
-        }
+  try {
+    if (signal.aborted) return;
 
-        // FIX: Update isPricingTask to correctly identify all analysis prompts.
-        // This ensures the promo-price task also requests a JSON response and avoids sending 'tools'.
-        const isPricingTask = lastMessage?.content.startsWith('Hãy đóng vai trò là một chuyên gia kinh doanh') 
-            || lastMessage?.content.startsWith('Tôi có một nhóm sản phẩm')
-            || lastMessage?.content.startsWith('Hãy phân tích hiệu quả cho chương trình khuyến mãi');
-            
-        const useMarketData = lastMessage?.content.includes('tham khảo giá thị trường');
-        
-        const historyForApi = JSON.parse(JSON.stringify(history));
-        
-        if(functionResponse) {
-            historyForApi.push({
-                role: 'model', // This is technically a 'tool' role in the new API, but 'model' works here for simplicity
-                parts: [{
-                    functionResponse: {
-                        name: functionResponse.name,
-                        response: functionResponse.response
-                    }
-                }]
-            });
-        }
-        
-        // Append site search for non-pricing tasks to ground responses
-        if (lastMessage?.role === 'user' && !isPricingTask) {
-            const lastUserMessage = historyForApi[historyForApi.length - (functionResponse ? 2 : 1)];
-            lastUserMessage.content = `${lastUserMessage.content} site:v64.vn`;
-        }
-        
-        const contents = mapHistoryToContent(historyForApi);
-
-        const config: any = {
-            systemInstruction: SYSTEM_INSTRUCTION,
-        };
-
-        // FIX: Conditionally build the config. Only request JSON for pricing tasks that DO NOT need market data.
-        // The API throws an error if 'tools' (like googleSearch) are used with 'responseMimeType: application/json'.
-        if (isPricingTask && !useMarketData) {
-            config.responseMimeType = "application/json";
-            config.responseSchema = analysisResponseSchema;
-        } else {
-            // For general queries OR analysis tasks that require market data, enable tools.
-            const shouldUseSearch = useMarketData || !isPricingTask;
-            config.tools = [{
-                functionDeclarations: [createDiscountCodeTool],
-                ...(shouldUseSearch && { googleSearch: {} })
-            }];
-        }
-
-        const stream = await ai.models.generateContentStream({
-            model: model,
-            contents: contents,
-            config: config,
-        });
-        
-        const signalPromise = new Promise((_, reject) => {
-            signal.addEventListener('abort', () => reject(new DOMException('Aborted', 'AbortError')));
-        });
-
-        const streamIterator = stream[Symbol.asyncIterator]();
-
-        while (true) {
-            // FIX: Add type assertion to resolve TypeScript inference issue with Promise.race and .catch
-            const { value: chunk, done } = await Promise.race([
-                streamIterator.next(),
-                signalPromise,
-            ]).catch(e => { throw e; }) as IteratorResult<GenerateContentResponse>;
-
-            if (done) break;
-            
-            if ((chunk.text || chunk.functionCalls) && firstChunkTime === 0) {
-                firstChunkTime = performance.now() - startTime;
-            }
-
-            if (chunk.functionCalls && chunk.functionCalls.length > 0) {
-                // Yield the function call and stop this stream
-                yield { functionCall: chunk.functionCalls[0], isFinal: false };
-                return;
-            }
-
-            const text = chunk.text;
-            if (text) {
-                yield { textChunk: text, isFinal: false };
-            }
-        }
-        
-        // FIX: Use type assertion as TypeScript is not correctly inferring the .response property on the stream result.
-        const response = await (stream as any).response;
-        const endTime = performance.now();
-        const totalTime = endTime - startTime;
-
-        if (response) {
-            const groundingChunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
-            const sources = groundingChunks
-                .map(chunk => chunk.web)
-                .filter((web): web is { uri: string; title:string } => !!web?.uri && !!web?.title)
-                .filter((value, index, self) => index === self.findIndex((t) => (t.uri === value.uri)));
-            
-            yield { 
-                sources: sources.length > 0 ? sources : undefined, 
-                isFinal: true,
-                performanceMetrics: {
-                    timeToFirstChunk: Math.round(firstChunkTime),
-                    totalTime: Math.round(totalTime)
-                }
-            };
-        } else {
-             yield { 
-                 isFinal: true,
-                 performanceMetrics: {
-                    timeToFirstChunk: Math.round(firstChunkTime),
-                    totalTime: Math.round(totalTime)
-                 }
-            };
-        }
-
-    } catch (error: any) {
-        if (error.name === 'AbortError') {
-             console.log('Stream generation aborted by user.');
-             yield { isFinal: true };
-             return;
-        }
-        console.error("Gemini API error:", error);
-        yield {
-            isFinal: true,
-            error: "Xin lỗi, đã có lỗi xảy ra khi kết nối với AI. Vui lòng thử lại sau."
-        };
+    const lastMessage = history[history.length - 1];
+    if (!lastMessage && !functionResponse) {
+      yield { isFinal: true, error: "Lỗi: Không tìm thấy tin nhắn hợp lệ." };
+      return;
     }
+
+    // Detect task types
+    const isPricingTask =
+      lastMessage?.content.startsWith(
+        "Hãy đóng vai trò là một chuyên gia kinh doanh"
+      ) ||
+      lastMessage?.content.startsWith("Tôi có một nhóm sản phẩm") ||
+      lastMessage?.content.startsWith(
+        "Hãy phân tích hiệu quả cho chương trình khuyến mãi"
+      );
+
+    const useMarketData =
+      lastMessage?.content.includes("tham khảo giá thị trường");
+
+    const historyForApi = JSON.parse(JSON.stringify(history));
+
+    if (functionResponse) {
+      historyForApi.push({
+        role: "model",
+        parts: [
+          {
+            functionResponse: {
+              name: functionResponse.name,
+              response: functionResponse.response,
+            },
+          },
+        ],
+      });
+    }
+
+    // Append site search query
+    if (lastMessage?.role === "user" && !isPricingTask) {
+      const lastUserMessage =
+        historyForApi[historyForApi.length - (functionResponse ? 2 : 1)];
+      lastUserMessage.content = `${lastUserMessage.content} site:v64.vn`;
+    }
+
+    const contents = mapHistoryToContent(historyForApi);
+
+    const config: any = { systemInstruction: SYSTEM_INSTRUCTION };
+
+    // ✅ FIXED CONFIG LOGIC (no tool conflict)
+    if (isPricingTask && !useMarketData) {
+      config.responseMimeType = "application/json";
+      config.responseSchema = analysisResponseSchema;
+    } else if (useMarketData) {
+      config.tools = [{ googleSearch: {} }];
+    } else {
+      config.tools = [{ functionDeclarations: [createDiscountCodeTool] }];
+    }
+
+    const stream = await ai.models.generateContentStream({
+      model,
+      contents,
+      config,
+    });
+
+    const signalPromise = new Promise((_, reject) => {
+      signal.addEventListener("abort", () =>
+        reject(new DOMException("Aborted", "AbortError"))
+      );
+    });
+
+    const streamIterator = stream[Symbol.asyncIterator]();
+
+    while (true) {
+      const { value: chunk, done } = (await Promise.race([
+        streamIterator.next(),
+        signalPromise,
+      ]).catch((e) => {
+        throw e;
+      })) as IteratorResult<GenerateContentResponse>;
+
+      if (done) break;
+
+      if ((chunk.text || chunk.functionCalls) && firstChunkTime === 0) {
+        firstChunkTime = performance.now() - startTime;
+      }
+
+      if (chunk.functionCalls && chunk.functionCalls.length > 0) {
+        yield { functionCall: chunk.functionCalls[0], isFinal: false };
+        return;
+      }
+
+      const text = chunk.text;
+      if (text) yield { textChunk: text, isFinal: false };
+    }
+
+    const response = await (stream as any).response;
+    const endTime = performance.now();
+    const totalTime = endTime - startTime;
+
+    const groundingChunks =
+      response?.candidates?.[0]?.groundingMetadata?.groundingChunks ?? [];
+    const sources = groundingChunks
+      .map((chunk) => chunk.web)
+      .filter(
+        (web): web is { uri: string; title: string } =>
+          !!web?.uri && !!web?.title
+      )
+      .filter(
+        (value, index, self) =>
+          index === self.findIndex((t) => t.uri === value.uri)
+      );
+
+    yield {
+      sources: sources.length > 0 ? sources : undefined,
+      isFinal: true,
+      performanceMetrics: {
+        timeToFirstChunk: Math.round(firstChunkTime),
+        totalTime: Math.round(totalTime),
+      },
+    };
+  } catch (error: any) {
+    if (error.name === "AbortError") {
+      console.log("Stream generation aborted by user.");
+      yield { isFinal: true };
+      return;
+    }
+    console.error("Gemini API error:", error);
+    yield {
+      isFinal: true,
+      error: "Xin lỗi, đã có lỗi xảy ra khi kết nối với AI. Vui lòng thử lại sau.",
+    };
+  }
 }
 
-// FIX: Add and export runStressTestPrompt function for stress testing.
-export async function runStressTestPrompt(prompt: string, signal: AbortSignal): Promise<StressTestResult> {
-    const history: ChatMessage[] = [{ role: 'user', content: prompt }];
-    
-    try {
-        const stream = getChatResponseStream(history, signal);
-        for await (const chunk of stream) {
-            if (chunk.isFinal) {
-                if (chunk.error) {
-                    return { success: false, error: chunk.error };
-                }
-                return { 
-                    success: true, 
-                    performance: chunk.performanceMetrics 
-                };
-            }
-        }
-        // This case should ideally not be reached if the stream is well-behaved.
-        return { success: false, error: "Stream ended without a final chunk." };
-    } catch (error: any) {
-        if (error.name === 'AbortError') {
-            return { success: false, error: 'Aborted by user.' };
-        }
-        console.error("Stress test run failed:", error);
-        return { success: false, error: error.message || "An unknown error occurred during stress test." };
+// --- Stress Test Helper ---
+export async function runStressTestPrompt(
+  prompt: string,
+  signal: AbortSignal
+): Promise<StressTestResult> {
+  const history: ChatMessage[] = [{ role: "user", content: prompt }];
+
+  try {
+    const stream = getChatResponseStream(history, signal);
+    for await (const chunk of stream) {
+      if (chunk.isFinal) {
+        if (chunk.error) return { success: false, error: chunk.error };
+        return {
+          success: true,
+          performance: chunk.performanceMetrics,
+        };
+      }
     }
+    return { success: false, error: "Stream ended without a final chunk." };
+  } catch (error: any) {
+    if (error.name === "AbortError") {
+      return { success: false, error: "Aborted by user." };
+    }
+    console.error("Stress test run failed:", error);
+    return {
+      success: false,
+      error: error.message || "An unknown error occurred during stress test.",
+    };
+  }
 }
