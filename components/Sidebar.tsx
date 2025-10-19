@@ -62,13 +62,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const sortedConversations = [...conversations].sort((a, b) => Number(b.id) - Number(a.id));
 
   const sidebarContent = (
-    <div className="flex flex-col h-full bg-slate-50 dark:bg-slate-900/70 border-r border-slate-200 dark:border-slate-700/50">
-      <div className="p-3 flex justify-between items-center border-b border-slate-200 dark:border-slate-700/50 shrink-0">
+    <div className="flex flex-col h-full bg-slate-100 dark:bg-gray-900 border-r border-slate-200 dark:border-slate-800">
+      <div className="p-3 flex justify-between items-center border-b border-slate-200 dark:border-slate-800 shrink-0">
         <h2 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Lịch sử Chat</h2>
         <button 
           onClick={onNewChat} 
           title="Cuộc trò chuyện mới" 
-          className="flex items-center gap-2 text-sm font-semibold text-sky-600 dark:text-sky-400 bg-sky-100/80 dark:bg-sky-900/50 hover:bg-sky-200/80 dark:hover:bg-sky-800/70 rounded-lg px-3 py-1.5 transition-colors duration-200"
+          className="flex items-center gap-2 text-sm font-semibold text-blue-600 dark:text-blue-400 bg-blue-100/80 dark:bg-blue-500/20 hover:bg-blue-200/80 dark:hover:bg-blue-500/30 rounded-lg px-3 py-1.5 transition-colors duration-200"
         >
           <PlusIcon className="w-4 h-4" />
           <span>Mới</span>
@@ -79,15 +79,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {sortedConversations.map((convo) => {
             const isActive = convo.id === activeConversationId;
             const isPlaceholder = convo.title === "Cuộc trò chuyện mới";
-            const iconClass = `w-5 h-5 shrink-0 ${isActive ? 'text-sky-600 dark:text-sky-400' : 'text-slate-500 dark:text-slate-400'}`;
+            const iconClass = `w-5 h-5 shrink-0 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 group-hover:text-slate-700 dark:group-hover:text-slate-200'}`;
 
             return (
               <li key={convo.id}>
                 <div
                   className={`group w-full flex items-center justify-between rounded-md transition-colors duration-200 cursor-pointer ${
                     isActive
-                      ? 'bg-sky-100 dark:bg-sky-900/50'
-                      : 'hover:bg-slate-200 dark:hover:bg-slate-800/60'
+                      ? 'bg-blue-100 dark:bg-blue-500/20'
+                      : 'hover:bg-slate-200 dark:hover:bg-slate-800'
                   }`}
                 >
                   {editingId === convo.id ? (
@@ -109,7 +109,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         ) : (
                             <ChatBubbleIcon className={iconClass} />
                         )}
-                        <span className={`text-sm truncate ${isActive ? 'font-semibold text-slate-800 dark:text-slate-50' : 'text-slate-600 dark:text-slate-300'}`}>
+                        <span className={`text-sm truncate ${isActive ? 'font-semibold text-blue-800 dark:text-blue-200' : 'text-slate-600 dark:text-slate-300'}`}>
                             {convo.title}
                         </span>
                     </button>
@@ -156,7 +156,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         onClick={() => setIsOpen(false)}
       ></div>
       <aside
-        className={`fixed top-0 left-0 h-full w-72 z-50 bg-slate-50 dark:bg-slate-900 transition-transform duration-300 ease-in-out md:hidden ${
+        className={`fixed top-0 left-0 h-full w-72 z-50 bg-slate-100 dark:bg-gray-900 transition-transform duration-300 ease-in-out md:hidden ${
           isOpen ? 'transform-none' : '-translate-x-full'
         }`}
       >

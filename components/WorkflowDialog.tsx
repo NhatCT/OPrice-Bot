@@ -8,7 +8,7 @@ interface WorkflowDialogProps {
 
 // Icons for workflow steps, defined inline for simplicity
 const StepIcon: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <div className="flex-shrink-0 w-10 h-10 bg-sky-100 dark:bg-sky-900/50 text-sky-600 dark:text-sky-400 rounded-full flex items-center justify-center">
+    <div className="flex-shrink-0 w-10 h-10 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center">
         {children}
     </div>
 );
@@ -41,7 +41,7 @@ export const WorkflowDialog: React.FC<WorkflowDialogProps> = ({ isOpen, onClose 
 
         <div className="p-6 max-h-[70vh] overflow-y-auto space-y-8">
             <section>
-                <h3 className="text-lg font-semibold text-sky-600 dark:text-sky-400 mb-4">Hỗ trợ tính giá chuyên sâu</h3>
+                <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-4">Hỗ trợ tính giá chuyên sâu</h3>
                 <ul className="space-y-4">
                     <li className="flex items-start space-x-4">
                         <StepIcon><SelectIcon /></StepIcon>
@@ -77,7 +77,7 @@ export const WorkflowDialog: React.FC<WorkflowDialogProps> = ({ isOpen, onClose 
              <div className="border-t border-slate-200 dark:border-slate-600/70"></div>
 
             <section>
-                <h3 className="text-lg font-semibold text-sky-600 dark:text-sky-400 mb-4">Hỏi đáp thông tin V64.VN</h3>
+                <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-4">Hỏi đáp thông tin V64.VN</h3>
                  <ul className="space-y-4">
                     <li className="flex items-start space-x-4">
                         <StepIcon><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></StepIcon>

@@ -11,10 +11,11 @@ interface ChatWindowProps {
   onFeedback: (messageIndex: number, feedback: 'positive' | 'negative') => void;
   comparisonSelection: number[];
   onToggleCompare: (index: number) => void;
+  onEditAnalysis: (message: ChatMessage) => void;
 }
 
 export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
-  ({ messages, isLoading, onSuggestionClick, onFeedback, comparisonSelection, onToggleCompare }, ref) => {
+  ({ messages, isLoading, onSuggestionClick, onFeedback, comparisonSelection, onToggleCompare, onEditAnalysis }, ref) => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -22,7 +23,7 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
     }, [messages, isLoading]);
 
     return (
-      <div ref={ref} className="flex-1 overflow-y-auto p-6 space-y-6">
+      <div ref={ref} className="flex-1 overflow-y-auto p-6 space-y-8">
         {messages.map((msg, index) => (
           <ChatMessageComponent 
               key={index}
@@ -32,6 +33,7 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
               onFeedback={(feedback) => onFeedback(index, feedback)}
               onToggleCompare={onToggleCompare}
               isSelectedForCompare={comparisonSelection.includes(index)}
+              onEditAnalysis={onEditAnalysis}
           />
         ))}
         {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'model' && messages[messages.length - 1].content === '' && (
@@ -39,7 +41,7 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
                <V64Logo
                   className="w-9 h-9 flex-shrink-0 mt-1"
               />
-              <div className="bg-slate-200 dark:bg-slate-700 rounded-2xl rounded-bl-none shadow-md">
+              <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-bl-none">
                    <TypingIndicator />
               </div>
           </div>

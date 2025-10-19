@@ -2,9 +2,8 @@ import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
 import { getChatResponseStream, summarizeTitle } from './services/geminiService';
-import type { ChatMessage, UserProfile, Theme, Font, ConversationMeta } from './types';
+import type { ChatMessage, UserProfile, Theme, Font, ConversationMeta, Task } from './types';
 import { ConfirmationDialog } from './components/ConfirmationDialog';
-import type { Task } from './components/GuidedInputForm';
 import { SettingsPopover } from './components/SettingsPopover';
 import { Welcome } from './components/Welcome';
 import { Sidebar } from './components/Sidebar';
@@ -21,6 +20,7 @@ import { ExportDialog } from './components/ExportDialog';
 import { ArrowDownTrayIcon } from './components/icons/ArrowDownTrayIcon';
 import { toPng } from 'html-to-image';
 import type { FunctionCall } from '@google/genai';
+import { AnalysisChart } from './components/charts/AnalysisChart';
 
 
 const CONVERSATIONS_KEY = 'conversations';
@@ -30,8 +30,6 @@ const THEME_KEY = 'theme';
 const FONT_KEY = 'font';
 const USER_PROFILE_KEY = 'userProfile';
 const SOUND_ENABLED_KEY = 'soundEnabled';
-
-type ImageData = ChatMessage['image'];
 
 const App: React.FC = () => {
   const [conversations, setConversations] = useState<Record<string, ConversationMeta>>({});
@@ -44,13 +42,14 @@ const App: React.FC = () => {
   const [isTestingGuideOpen, setIsTestingGuideOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
-  const [activeTool, setActiveTool] = useState<Task | null>(null);
+  const [activeTool, setActiveTool] = useState<{ task: Task; initialData?: Record<string, any> } | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
   const [comparisonSelection, setComparisonSelection] = useState<number[]>([]);
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
+  const pendingAnalysisParamsRef = useRef<{ params: any; task: Task } | null>(null);
 
 
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(THEME_KEY) as Theme) || 'system');
@@ -94,6 +93,8 @@ const App: React.FC = () => {
   }, [theme, effectiveTheme]);
 
   useEffect(() => {
+    document.body.classList.remove('font-sans', 'font-serif', 'font-mono');
+    document.body.classList.add(`font-${font}`);
     localStorage.setItem(FONT_KEY, font);
   }, [font]);
   
@@ -238,21 +239,24 @@ const App: React.FC = () => {
     // Send the result back to the model to get a final natural language response
     sendMessage(
       '', // No user text, we're continuing the conversation
-      undefined,
       { name: functionCall.name, response: { result: functionResult } }
     );
 
   }, [/* dependencies for sendMessage */ activeConversationId, activeConversationMessages, handleRenameConversation]);
 
 
-  const sendMessage = useCallback(async (userInput: string, image?: ImageData, functionResponse?: {name: string, response: any}) => {
+  const sendMessage = useCallback(async (userInput: string, functionResponse?: {name: string, response: any}, analysisPayload?: { params: any; task: Task }) => {
     if (!activeConversationId) return;
+
+    if (analysisPayload) {
+        pendingAnalysisParamsRef.current = analysisPayload;
+    }
 
     let currentMessages = activeConversationMessages;
 
     // Add user message if there is input
     if (userInput) {
-        const userMessage: ChatMessage = { role: 'user', content: userInput, image };
+        const userMessage: ChatMessage = { role: 'user', content: userInput };
         currentMessages = [...currentMessages, userMessage];
     }
     
@@ -264,6 +268,9 @@ const App: React.FC = () => {
     }
 
     const historyForApi = currentMessages.map(m => ({ ...m, component: undefined }));
+    const wasPricingTask = !!activeTool || !!analysisPayload;
+    const expectsJsonResponse = wasPricingTask && !(analysisPayload?.params?.useMarket);
+
     setActiveConversationMessages(currentMessages);
     setComparisonSelection([]);
 
@@ -279,10 +286,10 @@ const App: React.FC = () => {
     
     abortControllerRef.current = new AbortController();
     let generationSuccess = false;
+    let fullText = '';
 
     try {
       const stream = getChatResponseStream(historyForApi, abortControllerRef.current.signal, functionResponse);
-      let fullText = '';
       for await (const chunk of stream) {
         if (chunk.functionCall) {
             setActiveConversationMessages(prev => {
@@ -336,13 +343,58 @@ const App: React.FC = () => {
       typingAudio.pause();
       if(generationSuccess) playSound(messageAudio);
       abortControllerRef.current = null;
+
+      // FIX: Capture ref value before state update to prevent race condition.
+      // The state updater function runs later, by which time the ref might be cleared.
+      if (pendingAnalysisParamsRef.current) {
+        const analysisData = pendingAnalysisParamsRef.current;
+        setActiveConversationMessages(prev => {
+            const newMsgs = [...prev];
+            if (newMsgs.length > 0) {
+              const lastMsg = { ...newMsgs[newMsgs.length - 1] };
+              lastMsg.analysisParams = analysisData.params;
+              lastMsg.task = analysisData.task;
+              newMsgs[newMsgs.length - 1] = lastMsg;
+            }
+            return newMsgs;
+        });
+        pendingAnalysisParamsRef.current = null;
+      }
+
+      // FIX: Handle JSON parsing for charts only when a JSON response was expected.
+      // Analysis tasks with market data requests will return Markdown instead of JSON.
+      if (expectsJsonResponse && generationSuccess && fullText) {
+          try {
+              const parsedData = JSON.parse(fullText);
+              if (parsedData.analysis && Array.isArray(parsedData.charts)) {
+                  setActiveConversationMessages(prev => {
+                      const newMsgs = [...prev];
+                      const lastMsg = { ...newMsgs[newMsgs.length - 1] };
+                      lastMsg.content = parsedData.analysis;
+                      lastMsg.component = (
+                          <div>
+                              {parsedData.charts.map((chart: any, index: number) => (
+                                  <AnalysisChart key={index} chart={chart} theme={effectiveTheme} />
+                              ))}
+                          </div>
+                      );
+                      newMsgs[newMsgs.length - 1] = lastMsg;
+                      return newMsgs;
+                  });
+              }
+          } catch (e) {
+              console.error("Failed to parse analysis JSON:", e);
+              // Fallback to showing the raw text if parsing fails
+          }
+      }
+
       if (needsTitle && generationSuccess && userInput) {
           summarizeTitle(userInput).then(title => {
               handleRenameConversation(activeConversationId, title);
           });
       }
     }
-  }, [activeConversationId, activeConversationMessages, handleRenameConversation, typingAudio, messageAudio, playSound, handleFunctionExecution]);
+  }, [activeConversationId, activeConversationMessages, handleRenameConversation, typingAudio, messageAudio, playSound, handleFunctionExecution, activeTool, effectiveTheme]);
 
    const handleNewChat = () => {
     const newId = Date.now().toString();
@@ -434,13 +486,21 @@ const App: React.FC = () => {
         if (prev.length < 2) {
             return [...prev, index].sort((a, b) => a - b);
         }
-        return [prev[0], index].sort((a, b) => a - b);
+        // Replace the first item in the sorted array when adding a third.
+        return [prev[1], index].sort((a, b) => a - b);
     });
   };
 
   const handleClearCompare = () => {
       setComparisonSelection([]);
   };
+
+  const handleEditAnalysis = useCallback((message: ChatMessage) => {
+    if (message.task && message.analysisParams) {
+        setActiveTool({ task: message.task, initialData: message.analysisParams });
+        setIsSidebarOpen(false);
+    }
+  }, []);
   
   const handleExportPng = useCallback(async () => {
     if (!chatWindowRef.current) {
@@ -451,12 +511,13 @@ const App: React.FC = () => {
     try {
         const dataUrl = await toPng(chatWindowRef.current, { 
             cacheBust: true, 
-            backgroundColor: effectiveTheme === 'dark' ? '#0f172a' : '#ffffff',
+            backgroundColor: effectiveTheme === 'dark' ? '#020617' : '#ffffff', // dark:bg-gray-950
             pixelRatio: 2,
         });
-        const link = document.createElement('a');
         const convoTitle = (activeConversationId && conversations[activeConversationId]?.title) || 'conversation';
         const safeTitle = convoTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+        // FIX: Declare the 'link' variable before using it to trigger the download.
+        const link = document.createElement('a');
         link.download = `conversation-V64-${safeTitle}.png`;
         link.href = dataUrl;
         link.click();
@@ -502,8 +563,12 @@ const App: React.FC = () => {
     setIsExportDialogOpen(false);
   }, [activeConversationId, conversations, activeConversationMessages]);
 
+  const handleSendAnalysis = (prompt: string, params: Record<string, any>) => {
+    sendMessage(prompt, undefined, { params, task: activeTool!.task });
+  };
+
   return (
-    <div className={`font-${font} flex h-screen bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-300`}>
+    <div className={`flex h-dvh bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-300`}>
         <Sidebar 
             conversations={Object.values(conversations)}
             activeConversationId={activeConversationId}
@@ -515,8 +580,8 @@ const App: React.FC = () => {
             setIsOpen={setIsSidebarOpen}
         />
         
-        <main className="flex flex-col flex-1 h-screen relative">
-            <header className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-700 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm shrink-0 z-10">
+        <main className="flex flex-col flex-1 h-dvh relative">
+            <header className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm shrink-0 z-10">
                  <div className="flex items-center gap-2">
                     <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-500 dark:text-slate-400 md:hidden">
                         <MenuIcon className="w-6 h-6" />
@@ -530,21 +595,21 @@ const App: React.FC = () => {
                     <button
                         onClick={() => setIsExportDialogOpen(true)}
                         disabled={activeConversationMessages.length === 0}
-                        className="text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700/50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                        className="text-slate-500 dark:text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
                         title="Xuất cuộc trò chuyện"
                     >
                         <ArrowDownTrayIcon className="w-6 h-6" />
                     </button>
                     <button
                         onClick={() => setIsTestingGuideOpen(true)}
-                        className="hidden md:flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700/50"
+                        className="hidden md:flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
                         title="Hướng dẫn kiểm thử"
                     >
                         <CheckBadgeIcon className="w-6 h-6" />
                     </button>
                     <button
                         onClick={() => setIsWorkflowDialogOpen(true)}
-                        className="hidden md:flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700/50"
+                        className="hidden md:flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
                         title="Xem quy trình làm việc"
                     >
                         <WorkflowIcon className="w-6 h-6" />
@@ -567,16 +632,17 @@ const App: React.FC = () => {
             
             <div className="flex-1 flex flex-col overflow-hidden">
                 {activeConversationMessages.length === 0 ? (
-                    <Welcome onSuggestionClick={sendMessage} onToolSelect={setActiveTool} />
+                    <Welcome onSuggestionClick={(prompt) => sendMessage(prompt)} onToolSelect={(task) => setActiveTool({ task })} />
                 ) : (
                     <ChatWindow 
                         ref={chatWindowRef}
                         messages={activeConversationMessages}
                         isLoading={isLoading && !activeTool && !isExecutingTool}
-                        onSuggestionClick={sendMessage}
+                        onSuggestionClick={(prompt) => sendMessage(prompt)}
                         onFeedback={handleFeedback}
                         comparisonSelection={comparisonSelection}
                         onToggleCompare={handleToggleCompare}
+                        onEditAnalysis={handleEditAnalysis}
                     />
                 )}
 
@@ -590,7 +656,8 @@ const App: React.FC = () => {
                 )}
 
                 <MessageInput 
-                    onSendMessage={sendMessage}
+                    onSendMessage={(prompt) => sendMessage(prompt)}
+                    onSendAnalysis={handleSendAnalysis}
                     isLoading={isLoading || isExecutingTool}
                     onNewChat={handleNewChat}
                     onClearChat={() => activeConversationId && setIsConfirmDialogOpen({ action: 'clear', id: activeConversationId })}

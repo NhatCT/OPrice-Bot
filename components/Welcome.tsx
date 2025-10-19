@@ -1,6 +1,8 @@
 
+
 import React from 'react';
-import type { Task } from './GuidedInputForm';
+// FIX: The Task type should be imported from the central types file.
+import type { Task } from '../types';
 import { ChartBarIcon } from './icons/ChartBarIcon';
 import { TagIcon } from './icons/TagIcon';
 import { CollectionIcon } from './icons/CollectionIcon';
@@ -21,10 +23,10 @@ const StarterPromptCard: React.FC<{
 }> = ({ icon, title, description, onClick }) => (
     <button
         onClick={onClick}
-        className="text-left p-4 bg-slate-100/70 dark:bg-slate-800/50 rounded-xl hover:bg-slate-200/70 dark:hover:bg-slate-700/50 border border-slate-200 dark:border-slate-700/50 transition-all duration-200 hover:shadow-md hover:-translate-y-1"
+        className="text-left p-4 bg-white dark:bg-slate-800/50 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 border border-slate-200 dark:border-slate-700/50 transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
     >
         <div className="flex items-center space-x-3">
-            <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center text-sky-500">{icon}</div>
+            <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center text-blue-500">{icon}</div>
             <h3 className="font-semibold text-slate-700 dark:text-slate-200">{title}</h3>
         </div>
         <p className="mt-2 text-sm text-slate-500 dark:text-slate-400 pl-11">{description}</p>
@@ -35,7 +37,7 @@ export const Welcome: React.FC<WelcomeProps> = ({ onSuggestionClick, onToolSelec
     return (
         <div className="flex-1 flex flex-col justify-center items-center p-6 overflow-y-auto">
             <div className="text-center mb-8">
-                <SparklesIcon className="w-16 h-16 mx-auto text-sky-500 mb-4" />
+                <SparklesIcon className="w-16 h-16 mx-auto text-blue-500 mb-4" />
                 <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100">Chào mừng đến với Trợ lý Kinh doanh V64</h1>
                 <p className="mt-2 text-slate-600 dark:text-slate-300 max-w-xl mx-auto">
                     Tôi có thể giúp bạn phân tích chiến lược giá hoặc trả lời các câu hỏi về V64. Hãy chọn một gợi ý bên dưới để bắt đầu!

@@ -3,6 +3,7 @@ import type { FunctionCall } from '@google/genai';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type Font = 'sans' | 'serif' | 'mono';
+export type Task = 'profit-analysis' | 'promo-price' | 'group-price';
 
 export interface UserProfile {
   name: string;
@@ -12,10 +13,6 @@ export interface ChatMessage {
   role: 'user' | 'model';
   content: string;
   component?: ReactNode;
-  image?: {
-    data: string; // Data URL for the image
-    mimeType: string;
-  };
   suggestions?: string[];
   sources?: {
     uri: string;
@@ -29,6 +26,9 @@ export interface ChatMessage {
   // Fields for Function Calling
   isExecuting?: boolean;
   toolCall?: FunctionCall;
+  // Fields for re-running analysis
+  analysisParams?: Record<string, any>;
+  task?: Task;
 }
 
 export interface Conversation {

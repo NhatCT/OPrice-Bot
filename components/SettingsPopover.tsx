@@ -95,7 +95,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
   const getButtonClass = (isActive: boolean) => 
     `w-full text-center px-3 py-1.5 text-sm rounded-md transition-colors duration-200 ${
       isActive
-        ? 'bg-sky-600 text-white font-semibold'
+        ? 'bg-blue-600 text-white font-semibold'
         : 'text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600/70'
     }`;
 
@@ -104,7 +104,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
     <div className="relative" ref={popoverRef}>
       <button
         onClick={handleToggle}
-        className="text-slate-500 dark:text-slate-400 hover:text-sky-500 dark:hover:text-sky-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700/50"
+        className="text-slate-500 dark:text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
         title="Tùy chỉnh giao diện"
       >
         <PaletteIcon className="w-6 h-6" />
@@ -129,9 +129,9 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                         value={nameInput}
                         onChange={(e) => setNameInput(e.target.value)}
                         placeholder="Tên của bạn"
-                        className="flex-grow bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 border border-slate-300 dark:border-transparent"
+                        className="flex-grow bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 rounded-md px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-300 dark:border-transparent"
                     />
-                    <button onClick={handleSaveName} className="px-3 py-1.5 text-sm bg-sky-600 text-white rounded-md hover:bg-sky-500 font-semibold transition-colors disabled:opacity-70" disabled={!nameInput.trim() || nameInput.trim() === userProfile.name}>Lưu</button>
+                    <button onClick={handleSaveName} className="px-3 py-1.5 text-sm bg-blue-600 text-white rounded-md hover:bg-blue-500 font-semibold transition-colors disabled:opacity-70" disabled={!nameInput.trim() || nameInput.trim() === userProfile.name}>Lưu</button>
                 </div>
                 <button onClick={onForgetUser} className="w-full text-center px-2 py-1 text-xs text-red-500 dark:text-red-400 hover:bg-red-500/10 rounded-md transition-colors">Quên tôi và xóa dữ liệu</button>
               </div>
@@ -190,7 +190,7 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                 aria-checked={soundEnabled}
               >
                 <span>Bật âm thanh</span>
-                <div className={`relative w-10 h-5 rounded-full transition-colors duration-200 ease-in-out ${soundEnabled ? 'bg-sky-600' : 'bg-slate-400 dark:bg-slate-600'}`}>
+                <div className={`relative w-10 h-5 rounded-full transition-colors duration-200 ease-in-out ${soundEnabled ? 'bg-blue-600' : 'bg-slate-400 dark:bg-slate-600'}`}>
                   <span className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform duration-200 ease-in-out ${soundEnabled ? 'transform translate-x-5' : ''}`}></span>
                 </div>
               </button>

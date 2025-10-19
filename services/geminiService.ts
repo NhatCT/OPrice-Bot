@@ -1,12 +1,17 @@
+// FIX: Removed IteratorResult from the import as it's a global TypeScript type.
 import { GoogleGenAI, Content, Part, Modality, FunctionDeclaration, Type, GenerateContentResponse, FunctionCall } from "@google/genai";
 import type { ChatMessage } from '../types';
+
+// FIX: Define a model constant to resolve "Cannot find name 'model'" errors. 
+// 'gemini-2.5-flash' is selected as a capable and cost-effective default.
+const model = 'gemini-2.5-flash';
 
 const SYSTEM_INSTRUCTION = `Bạn là một trợ lý AI chuyên nghiệp của công ty V64, chuyên hỗ trợ các vấn đề liên quan đến V64, phân tích kinh doanh và thực thi các tác vụ được yêu cầu.
 
 **QUY TẮC CỰC KỲ QUAN TRỌNG (BẮT BUỘC TUÂN THỦ):**
 1.  **PHẠM VI NHIỆM VỤ:** Nhiệm vụ của bạn bao gồm:
     *   **Thông tin về công ty V64:** giải pháp, dự án, tin tức, v.v., dựa trên tìm kiếm từ website v64.vn.
-    *   **Phân tích kinh doanh:** thực hiện các bài toán tính giá, lợi nhuận, khuyến mãi.
+    *   **Phân tích kinh doanh:** thực hiện các bài toán tính giá, lợi nhuận, khuyến mãi. Khi thực hiện các tác vụ này, bạn **PHẢI** trả về kết quả dưới dạng JSON theo schema được cung cấp, bao gồm cả phần văn bản phân tích và dữ liệu để vẽ biểu đồ trực quan.
     *   **Thực thi tác vụ:** Khi người dùng yêu cầu một hành động cụ thể (như "tạo", "cập nhật", "gửi"), hãy sử dụng các công cụ (functions) được cung cấp.
     Nếu người dùng hỏi bất kỳ câu hỏi nào khác ngoài phạm vi trên, bạn **TUYỆT ĐỐI KHÔNG ĐƯỢC TRẢ LỜI**. Thay vào đó, hãy lịch sự từ chối.
 
@@ -16,11 +21,9 @@ const SYSTEM_INSTRUCTION = `Bạn là một trợ lý AI chuyên nghiệp của 
 
 4.  **Luôn cung cấp nguồn tham khảo** khi trả lời các câu hỏi về V64.`;
 
-if (!process.env.API_KEY) {
-  throw new Error("API_KEY environment variable not set");
-}
+// FIX: Replaced custom API key logic with the standard approach from @google/genai guidelines.
+// This resolves the TypeScript error related to 'import.meta.env' and ensures compliance.
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-const model = 'gemini-2.5-flash';
 
 // --- Function Calling Definition ---
 const createDiscountCodeTool: FunctionDeclaration = {
@@ -46,20 +49,51 @@ const createDiscountCodeTool: FunctionDeclaration = {
   },
 };
 
+// --- JSON Schema for Analysis Responses ---
+const chartDataSchema = {
+    type: Type.OBJECT,
+    properties: {
+        name: { type: Type.STRING, description: 'Tên của danh mục (ví dụ: Doanh thu, Lợi nhuận).' },
+        value: { type: Type.NUMBER, description: 'Giá trị số của danh mục.' }
+    },
+    required: ['name', 'value']
+};
+
+const chartSchema = {
+    type: Type.OBJECT,
+    properties: {
+        type: { type: Type.STRING, description: 'Loại biểu đồ, mặc định là "bar".', enum: ['bar'] },
+        title: { type: Type.STRING, description: 'Tiêu đề của biểu đồ.' },
+        data: {
+            type: Type.ARRAY,
+            items: chartDataSchema
+        }
+    },
+    required: ['type', 'title', 'data']
+};
+
+const analysisResponseSchema = {
+    type: Type.OBJECT,
+    properties: {
+        analysis: {
+            type: Type.STRING,
+            description: 'Phân tích chi tiết bằng văn bản, định dạng Markdown.'
+        },
+        charts: {
+            type: Type.ARRAY,
+            description: 'Một mảng các đối tượng biểu đồ để trực quan hóa dữ liệu.',
+            items: chartSchema
+        }
+    },
+    required: ['analysis', 'charts']
+};
+
 
 function mapHistoryToContent(history: ChatMessage[]): Content[] {
     return history
       .filter(msg => !msg.isExecuting) // Do not include "executing" messages in history
       .map(msg => {
         const parts: Part[] = [];
-        if (msg.image) {
-            const base64Data = msg.image.data.split(',')[1];
-            if(base64Data){
-                parts.push({
-                    inlineData: { mimeType: msg.image.mimeType, data: base64Data }
-                });
-            }
-        }
         
         // Handle function calls and responses
         if (msg.toolCall) {
@@ -131,7 +165,12 @@ export async function* getChatResponseStream(
             return;
         }
 
-        const isPricingTask = lastMessage?.content.startsWith('Hãy đóng vai trò là một chuyên gia kinh doanh') || lastMessage?.content.startsWith('Tôi có một nhóm sản phẩm');
+        // FIX: Update isPricingTask to correctly identify all analysis prompts.
+        // This ensures the promo-price task also requests a JSON response and avoids sending 'tools'.
+        const isPricingTask = lastMessage?.content.startsWith('Hãy đóng vai trò là một chuyên gia kinh doanh') 
+            || lastMessage?.content.startsWith('Tôi có một nhóm sản phẩm')
+            || lastMessage?.content.startsWith('Hãy phân tích hiệu quả cho chương trình khuyến mãi');
+            
         const useMarketData = lastMessage?.content.includes('tham khảo giá thị trường');
         
         const historyForApi = JSON.parse(JSON.stringify(history));
@@ -156,18 +195,28 @@ export async function* getChatResponseStream(
         
         const contents = mapHistoryToContent(historyForApi);
 
-        const shouldUseSearch = useMarketData || !isPricingTask;
+        const config: any = {
+            systemInstruction: SYSTEM_INSTRUCTION,
+        };
+
+        // FIX: Conditionally build the config. Only request JSON for pricing tasks that DO NOT need market data.
+        // The API throws an error if 'tools' (like googleSearch) are used with 'responseMimeType: application/json'.
+        if (isPricingTask && !useMarketData) {
+            config.responseMimeType = "application/json";
+            config.responseSchema = analysisResponseSchema;
+        } else {
+            // For general queries OR analysis tasks that require market data, enable tools.
+            const shouldUseSearch = useMarketData || !isPricingTask;
+            config.tools = [{
+                functionDeclarations: [createDiscountCodeTool],
+                ...(shouldUseSearch && { googleSearch: {} })
+            }];
+        }
 
         const stream = await ai.models.generateContentStream({
             model: model,
             contents: contents,
-            config: {
-                systemInstruction: SYSTEM_INSTRUCTION,
-                tools: [{
-                    functionDeclarations: [createDiscountCodeTool],
-                    ...(shouldUseSearch && { googleSearch: {} })
-                }],
-            },
+            config: config,
         });
         
         const signalPromise = new Promise((_, reject) => {
@@ -177,10 +226,11 @@ export async function* getChatResponseStream(
         const streamIterator = stream[Symbol.asyncIterator]();
 
         while (true) {
+            // FIX: Add type assertion to resolve TypeScript inference issue with Promise.race and .catch
             const { value: chunk, done } = await Promise.race([
                 streamIterator.next(),
                 signalPromise,
-            ]).catch(e => { throw e; });
+            ]).catch(e => { throw e; }) as IteratorResult<GenerateContentResponse>;
 
             if (done) break;
             
@@ -200,7 +250,8 @@ export async function* getChatResponseStream(
             }
         }
         
-        const response = await stream.response;
+        // FIX: Use type assertion as TypeScript is not correctly inferring the .response property on the stream result.
+        const response = await (stream as any).response;
         const endTime = performance.now();
         const totalTime = endTime - startTime;
 

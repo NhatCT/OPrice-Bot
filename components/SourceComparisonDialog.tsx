@@ -22,7 +22,7 @@ interface ComparedSource {
 
 const SourceRow: React.FC<{ source: ComparedSource }> = ({ source }) => (
     <td>
-        <a href={source.uri} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 group p-3 text-sky-600 dark:text-sky-400">
+        <a href={source.uri} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 group p-3 text-blue-600 dark:text-blue-400">
             <ExternalLinkIcon className="w-4 h-4 flex-shrink-0" />
             <span className="truncate group-hover:underline" title={source.title}>{source.title}</span>
         </a>
@@ -49,7 +49,6 @@ export const SourceComparisonDialog: React.FC<SourceComparisonDialogProps> = ({ 
   const uris1 = new Map<string, string>(sources1.map(s => [s.uri, s.title]));
   const uris2 = new Map<string, string>(sources2.map(s => [s.uri, s.title]));
   
-  // Fix: Explicitly type `allUris` as string[] to resolve type inference issue.
   const allUris: string[] = [...new Set([...uris1.keys(), ...uris2.keys()])];
 
   const comparedSources: ComparedSource[] = allUris.map(uri => ({

@@ -16,7 +16,7 @@ interface TestingGuideDialogProps {
 
 const TestStep: React.FC<{ title: string, description: string, examples?: string[] }> = ({ title, description, examples }) => (
     <li className="flex items-start space-x-4 py-3">
-        <div className="flex-shrink-0 w-6 h-6 bg-sky-100 dark:bg-sky-900/50 text-sky-600 dark:text-sky-400 rounded-full flex items-center justify-center mt-1">
+        <div className="flex-shrink-0 w-6 h-6 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400 rounded-full flex items-center justify-center mt-1">
             <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4"><path fillRule="evenodd" d="M16.704 4.153a.75.75 0 01.143 1.052l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 011.052-.143z" clipRule="evenodd" /></svg>
         </div>
         <div>
@@ -62,7 +62,7 @@ const PerformanceChart: React.FC<{ data: any[] }> = ({ data }) => {
             labelStyle={{ fontWeight: 'bold' }}
           />
           <Legend />
-          <Line type="monotone" dataKey="timeToFirstChunk" name="⚡️ TTFC" stroke="#38bdf8" strokeWidth={2} dot={{ r: 2 }} />
+          <Line type="monotone" dataKey="timeToFirstChunk" name="⚡️ TTFC" stroke="#3b82f6" strokeWidth={2} dot={{ r: 2 }} />
           <Line type="monotone" dataKey="totalTime" name="⏱️ Total Time" stroke="#34d399" strokeWidth={2} dot={{ r: 2 }}/>
         </LineChart>
       </ResponsiveContainer>
@@ -213,7 +213,7 @@ export const TestingGuideDialog: React.FC<TestingGuideDialogProps> = ({ isOpen, 
       >
         <header className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
              <div className="flex items-center gap-3">
-                <CheckBadgeIcon className="w-7 h-7 text-sky-500"/>
+                <CheckBadgeIcon className="w-7 h-7 text-blue-500"/>
                 <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Hướng dẫn Kiểm thử Chatbot</h2>
              </div>
              <button onClick={onClose} className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Close dialog">
@@ -223,7 +223,7 @@ export const TestingGuideDialog: React.FC<TestingGuideDialogProps> = ({ isOpen, 
 
         <div className="p-6 max-h-[70vh] overflow-y-auto space-y-6">
             <section>
-                <h3 className="text-lg font-semibold text-sky-600 dark:text-sky-400 mb-2">1. Kiểm thử Chức năng</h3>
+                <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-2">1. Kiểm thử Chức năng</h3>
                 <ul className="divide-y divide-slate-200 dark:divide-slate-700">
                     <TestStep title="Hỏi đáp V64" description="Kiểm tra khả năng trả lời các câu hỏi về công ty, giải pháp và dự án. Đảm bảo mỗi câu trả lời đều có nguồn tham khảo hợp lệ từ v64.vn." examples={["V64 là công ty gì?", "Kể tên các dự án tiêu biểu."]}/>
                     <TestStep title="Phân tích Kinh doanh" description="Thử nghiệm cả 3 công cụ (Lợi nhuận, Khuyến mãi, Đồng giá). Đánh giá chất lượng phân tích và các lời khuyên chiến lược mà AI đưa ra."/>
@@ -232,7 +232,7 @@ export const TestingGuideDialog: React.FC<TestingGuideDialogProps> = ({ isOpen, 
             </section>
             
             <section>
-                <h3 className="text-lg font-semibold text-sky-600 dark:text-sky-400 mb-2">2. Kiểm thử Hiệu năng & Độ ổn định</h3>
+                <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-2">2. Kiểm thử Hiệu năng & Độ ổn định</h3>
                 <ul className="divide-y divide-slate-200 dark:divide-slate-700">
                     <TestStep title="Đánh giá tốc độ phản hồi" description="Sau mỗi câu trả lời của AI, hãy quan sát các chỉ số hiệu năng bên dưới: ⚡️ (Time to First Chunk): Thời gian nhận được ký tự đầu tiên. Lý tưởng là dưới 500ms. ⏱️ (Total Time): Tổng thời gian để nhận toàn bộ phản hồi."/>
                     <TestStep title="Stress Test: Hội thoại dài" description="Tạo một cuộc hội thoại rất dài (trên 50 lượt hỏi-đáp). Cuộn lên xuống và gửi tin nhắn mới để kiểm tra xem giao diện có bị giật, lag hay chậm đi không."/>
@@ -242,31 +242,31 @@ export const TestingGuideDialog: React.FC<TestingGuideDialogProps> = ({ isOpen, 
             
             <section>
                 <div className="flex items-center gap-3 mb-3">
-                    <BeakerIcon className="w-6 h-6 text-sky-500"/>
-                    <h3 className="text-lg font-semibold text-sky-600 dark:text-sky-400">3. Kiểm thử Tải (Stress Test)</h3>
+                    <BeakerIcon className="w-6 h-6 text-blue-500"/>
+                    <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400">3. Kiểm thử Tải (Stress Test)</h3>
                 </div>
                 <div className="bg-slate-100 dark:bg-slate-900/40 p-4 rounded-lg border border-slate-200 dark:border-slate-700">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                             <label htmlFor="numRequests" className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Số lượng yêu cầu</label>
-                            <input type="number" id="numRequests" value={numRequests} onChange={e => setNumRequests(parseInt(e.target.value, 10))} disabled={isSimulating} className="w-full bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 border border-slate-300 dark:border-slate-600"/>
+                            <input type="number" id="numRequests" value={numRequests} onChange={e => setNumRequests(parseInt(e.target.value, 10))} disabled={isSimulating} className="w-full bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-300 dark:border-slate-600"/>
                         </div>
                         <div>
                             <label htmlFor="prompts" className="block text-sm font-medium text-slate-600 dark:text-slate-300 mb-1.5">Danh sách Prompts (mỗi dòng 1 prompt)</label>
-                            <textarea id="prompts" value={prompts} onChange={e => setPrompts(e.target.value)} disabled={isSimulating} rows={4} className="w-full bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-sky-500 border border-slate-300 dark:border-slate-600 font-mono"></textarea>
+                            <textarea id="prompts" value={prompts} onChange={e => setPrompts(e.target.value)} disabled={isSimulating} rows={4} className="w-full bg-white dark:bg-slate-700 text-slate-800 dark:text-slate-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 border border-slate-300 dark:border-slate-600 font-mono"></textarea>
                         </div>
                     </div>
                     <div className="mt-4 flex items-center gap-4">
                          {isSimulating ? (
                              <button onClick={handleStopSimulation} className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-500 transition-colors">Dừng Giả lập</button>
                          ) : (
-                             <button onClick={handleStartSimulation} className="px-4 py-2 text-sm font-semibold text-white bg-sky-600 rounded-lg hover:bg-sky-500 transition-colors">Bắt đầu Giả lập</button>
+                             <button onClick={handleStartSimulation} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors">Bắt đầu Giả lập</button>
                          )}
                          {isSimulating && (
                             <div className="text-sm text-slate-600 dark:text-slate-300">
                                 <p>Đang xử lý: {simulationProgress.current} / {simulationProgress.total}</p>
                                 <div className="w-32 bg-slate-200 dark:bg-slate-600 rounded-full h-2 mt-1">
-                                    <div className="bg-sky-500 h-2 rounded-full" style={{ width: `${(simulationProgress.current / simulationProgress.total) * 100}%` }}></div>
+                                    <div className="bg-blue-500 h-2 rounded-full" style={{ width: `${(simulationProgress.current / simulationProgress.total) * 100}%` }}></div>
                                 </div>
                             </div>
                          )}
