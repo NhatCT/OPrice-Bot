@@ -19,7 +19,6 @@ import { SourceComparisonDialog } from './components/SourceComparisonDialog';
 import { ExportDialog } from './components/ExportDialog';
 import { ArrowDownTrayIcon } from './components/icons/ArrowDownTrayIcon';
 import { toPng } from 'html-to-image';
-import type { FunctionCall } from '@google/genai';
 import { AnalysisChart } from './components/charts/AnalysisChart';
 
 
@@ -31,12 +30,25 @@ const FONT_KEY = 'font';
 const USER_PROFILE_KEY = 'userProfile';
 const SOUND_ENABLED_KEY = 'soundEnabled';
 
+const generateSummaryForTask = (task: Task, params: any): string => {
+    switch (task) {
+        case 'profit-analysis':
+            return `Yêu cầu "Phân tích Lợi nhuận" cho sản phẩm "${params.productName}".`;
+        case 'promo-price':
+            return `Yêu cầu "Phân tích Khuyến mãi" cho sản phẩm "${params.productName}".`;
+        case 'group-price':
+            const price = Number(params.flatPrice).toLocaleString('vi-VN');
+            return `Yêu cầu "Phân tích Đồng giá" với mức giá ${price} VND.`;
+        default:
+            return "Yêu cầu phân tích tùy chỉnh.";
+    }
+}
+
 const App: React.FC = () => {
   const [conversations, setConversations] = useState<Record<string, ConversationMeta>>({});
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [activeConversationMessages, setActiveConversationMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isExecutingTool, setIsExecutingTool] = useState(false);
   const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<{ action: 'clear' | 'delete'; id?: string } | null>(null);
   const [isWorkflowDialogOpen, setIsWorkflowDialogOpen] = useState(false);
   const [isTestingGuideOpen, setIsTestingGuideOpen] = useState(false);
@@ -193,7 +205,7 @@ const App: React.FC = () => {
     if (activeConversationId) {
         try {
             const messagesToSave = JSON.parse(JSON.stringify(activeConversationMessages, (key, value) => {
-                if (key === 'component' || key === 'isExecuting' || key === 'toolCall') return undefined;
+                if (key === 'component') return undefined;
                 return value;
             }));
             window.localStorage.setItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${activeConversationId}`, JSON.stringify(messagesToSave));
@@ -216,68 +228,59 @@ const App: React.FC = () => {
         abortControllerRef.current.abort();
     }
     setIsLoading(false);
-    setIsExecutingTool(false);
   };
 
-  const handleFunctionExecution = useCallback(async (functionCall: FunctionCall) => {
-    setIsExecutingTool(true);
-    let functionResult;
-
-    // Simulate API call to a backend system
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    if (functionCall.name === 'createDiscountCode') {
-        console.log('Executing function createDiscountCode with args:', functionCall.args);
-        // In a real app, you would call your backend here.
-        functionResult = { status: "thành công", message: `Mã ${functionCall.args.codeName} đã được tạo.` };
-    } else {
-        functionResult = { status: "lỗi", message: "Không tìm thấy công cụ." };
-    }
-    
-    setIsExecutingTool(false);
-    
-    // Send the result back to the model to get a final natural language response
-    sendMessage(
-      '', // No user text, we're continuing the conversation
-      { name: functionCall.name, response: { result: functionResult } }
-    );
-
-  }, [/* dependencies for sendMessage */ activeConversationId, activeConversationMessages, handleRenameConversation]);
-
-
-  const sendMessage = useCallback(async (userInput: string, functionResponse?: {name: string, response: any}, analysisPayload?: { params: any; task: Task }) => {
+  const sendMessage = useCallback(async (userInput: string, analysisPayload?: { params: any; task: Task }) => {
     if (!activeConversationId) return;
 
     if (analysisPayload) {
         pendingAnalysisParamsRef.current = analysisPayload;
     }
 
-    let currentMessages = activeConversationMessages;
+    const initialMessages = [...activeConversationMessages];
 
-    // Add user message if there is input
-    if (userInput) {
-        const userMessage: ChatMessage = { role: 'user', content: userInput };
-        currentMessages = [...currentMessages, userMessage];
+    // Clean up suggestions from the previous message
+    if (initialMessages.length > 0) {
+        const lastMsg = initialMessages[initialMessages.length - 1];
+        if (lastMsg.role === 'model' && lastMsg.suggestions) {
+            const { suggestions, ...rest } = lastMsg;
+            initialMessages[initialMessages.length - 1] = rest;
+        }
     }
     
-    // Clean up suggestions from previous message
-    if (currentMessages.length > 1) {
-      const lastMsg = currentMessages[currentMessages.length - 2];
-      const { suggestions, ...rest } = lastMsg;
-      currentMessages[currentMessages.length - 2] = rest;
+    let messagesForDisplay = [...initialMessages];
+    // FIX: Removed problematic .map() that was stripping the 'component' property.
+    // This was causing a subtle type inference issue. The geminiService is designed
+    // to handle messages with components gracefully by only selecting needed properties.
+    let historyForApi = [...initialMessages];
+
+    let titleSource = userInput;
+
+    if (analysisPayload) {
+        const summary = generateSummaryForTask(analysisPayload.task, analysisPayload.params);
+        // FIX: The errors were resolved by updating the ChatMessage type to a discriminated union in types.ts.
+        // No changes are needed here as the object correctly matches the 'user' message type.
+        messagesForDisplay.push({ role: 'user', content: summary });
+        // Use the full prompt for the API
+        historyForApi.push({ role: 'user', content: userInput });
+        titleSource = summary;
+    } else if (userInput) {
+        // FIX: The errors were resolved by updating the ChatMessage type to a discriminated union in types.ts.
+        // No changes are needed here as the object correctly matches the 'user' message type.
+        messagesForDisplay.push({ role: 'user', content: userInput });
+        historyForApi.push({ role: 'user', content: userInput });
+    } else {
+        return; // Do nothing if there's no input
     }
-
-    const historyForApi = currentMessages.map(m => ({ ...m, component: undefined }));
-
-    setActiveConversationMessages(currentMessages);
+    
+    setActiveConversationMessages(messagesForDisplay);
     setComparisonSelection([]);
-
     setIsLoading(true);
     setActiveTool(null);
     setIsSidebarOpen(false);
-    if(!functionResponse) playSound(typingAudio);
+    playSound(typingAudio);
 
-    const needsTitle = currentMessages.length === (userInput ? 1 : 0);
+    const needsTitle = messagesForDisplay.length === 1;
     
     // Add placeholder for model's response
     setActiveConversationMessages(prev => [...prev, { role: 'model', content: '' }]);
@@ -287,29 +290,16 @@ const App: React.FC = () => {
     let fullText = '';
 
     try {
-      const stream = getChatResponseStream(historyForApi, abortControllerRef.current.signal, functionResponse);
+      const stream = getChatResponseStream(historyForApi, abortControllerRef.current.signal);
       for await (const chunk of stream) {
-        if (chunk.functionCall) {
-            setActiveConversationMessages(prev => {
-                const newMsgs = [...prev];
-                newMsgs[newMsgs.length - 1] = { 
-                    role: 'model', 
-                    content: `Đang thực thi: ${chunk.functionCall.name}...`,
-                    isExecuting: true,
-                    toolCall: chunk.functionCall
-                };
-                return newMsgs;
-            });
-            handleFunctionExecution(chunk.functionCall);
-            // Stop processing this stream, as a new one will be started after execution
-            return; 
-        }
-
         if (chunk.textChunk) {
           fullText += chunk.textChunk;
           setActiveConversationMessages(prev => {
             const newMsgs = [...prev];
-            newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: fullText, isExecuting: false };
+            const lastMsg = newMsgs[newMsgs.length - 1];
+            if (lastMsg.role === 'model') {
+              newMsgs[newMsgs.length - 1] = { ...lastMsg, content: fullText };
+            }
             return newMsgs;
           });
         }
@@ -319,8 +309,10 @@ const App: React.FC = () => {
             const newMsgs = [...prev];
             const lastMsg = { ...newMsgs[newMsgs.length - 1] };
             if (chunk.error) lastMsg.content = chunk.error;
-            if (chunk.sources) lastMsg.sources = chunk.sources;
-            if (chunk.performanceMetrics) lastMsg.performance = chunk.performanceMetrics;
+            if (lastMsg.role === 'model') {
+                if (chunk.sources) lastMsg.sources = chunk.sources;
+                if (chunk.performanceMetrics) lastMsg.performance = chunk.performanceMetrics;
+            }
             newMsgs[newMsgs.length - 1] = lastMsg;
             return newMsgs;
           });
@@ -343,41 +335,48 @@ const App: React.FC = () => {
       abortControllerRef.current = null;
 
       const analysisData = pendingAnalysisParamsRef.current;
-      pendingAnalysisParamsRef.current = null; // Clear the ref for the next turn.
+      pendingAnalysisParamsRef.current = null;
 
       const wasPricingTask = !!analysisData;
-      const useMarket = analysisData?.params?.useMarket;
       let parsedData: any = null;
+      let jsonString = '';
 
       if (wasPricingTask && generationSuccess && fullText) {
-        if (useMarket) {
-          const jsonRegex = /```json\s*([\s\S]*?)\s*```/;
-          const match = fullText.match(jsonRegex);
-          if (match && match[1]) {
-            try {
-              parsedData = JSON.parse(match[1]);
-            } catch (e) { console.error("Failed to parse JSON from markdown:", e); }
-          }
-        } else {
+        // For all analysis tasks, the AI is instructed to return data in a single JSON markdown block.
+        // We also handle the case where it might return raw JSON.
+        const jsonRegex = /```json\s*([\s\S]*?)\s*```/;
+        const match = fullText.match(jsonRegex);
+        
+        if (match && match[1]) {
+          jsonString = match[1];
+        } else if (fullText.trim().startsWith('{') && fullText.trim().endsWith('}')) {
+          jsonString = fullText.trim();
+        }
+        
+        if (jsonString) {
           try {
-            parsedData = JSON.parse(fullText);
-          } catch (e) { console.error("Failed to parse raw analysis JSON:", e); }
+            parsedData = JSON.parse(jsonString);
+          } catch (e) {
+            console.error("Failed to parse JSON:", e);
+            // Fallback: fullText will be displayed as the message content
+          }
         }
       }
 
-      // Consolidate final message updates (analysis params and chart component)
-      if (analysisData || (parsedData && parsedData.analysis)) {
-        setActiveConversationMessages(prev => {
-          const newMsgs = [...prev];
-          if (newMsgs.length > 0) {
-            const lastMsg = { ...newMsgs[newMsgs.length - 1] };
-            
+      // Consolidate final message updates
+      setActiveConversationMessages(prev => {
+        const newMsgs = [...prev];
+        if (newMsgs.length > 0) {
+          const lastMsg = { ...newMsgs[newMsgs.length - 1] };
+          
+          if (lastMsg.role === 'model') {
             if (analysisData) {
               lastMsg.analysisParams = analysisData.params;
               lastMsg.task = analysisData.task;
             }
-
+  
             if (parsedData && parsedData.analysis && Array.isArray(parsedData.charts)) {
+              // Success case: we have structured data.
               lastMsg.content = parsedData.analysis;
               lastMsg.component = (
                 <div>
@@ -386,20 +385,22 @@ const App: React.FC = () => {
                   ))}
                 </div>
               );
-            }
-            newMsgs[newMsgs.length - 1] = lastMsg;
+            } 
+            // If parsing fails or data is missing, the existing `lastMsg.content` (which is fullText) is used by default.
           }
-          return newMsgs;
-        });
-      }
+          
+          newMsgs[newMsgs.length - 1] = lastMsg;
+        }
+        return newMsgs;
+      });
 
-      if (needsTitle && generationSuccess && userInput) {
-          summarizeTitle(userInput).then(title => {
+      if (needsTitle && generationSuccess && titleSource) {
+          summarizeTitle(titleSource).then(title => {
               handleRenameConversation(activeConversationId, title);
           });
       }
     }
-  }, [activeConversationId, activeConversationMessages, handleRenameConversation, typingAudio, messageAudio, playSound, handleFunctionExecution, activeTool, effectiveTheme]);
+  }, [activeConversationId, activeConversationMessages, handleRenameConversation, typingAudio, messageAudio, playSound, effectiveTheme]);
 
    const handleNewChat = () => {
     const newId = Date.now().toString();
@@ -546,7 +547,7 @@ const App: React.FC = () => {
     activeConversationMessages.forEach(msg => {
         const prefix = msg.role === 'user' ? '[Người dùng]' : '[AI - V64]';
         textContent += `${prefix}:\n${msg.content}\n\n`;
-        if (msg.sources && msg.sources.length > 0) {
+        if (msg.role === 'model' && msg.sources && msg.sources.length > 0) {
             textContent += 'Nguồn tham khảo:\n';
             msg.sources.forEach(source => {
                 textContent += `- ${source.title}: ${source.uri}\n`;
@@ -569,7 +570,7 @@ const App: React.FC = () => {
   }, [activeConversationId, conversations, activeConversationMessages]);
 
   const handleSendAnalysis = (prompt: string, params: Record<string, any>) => {
-    sendMessage(prompt, undefined, { params, task: activeTool!.task });
+    sendMessage(prompt, { params, task: activeTool!.task });
   };
 
   return (
@@ -642,7 +643,7 @@ const App: React.FC = () => {
                     <ChatWindow 
                         ref={chatWindowRef}
                         messages={activeConversationMessages}
-                        isLoading={isLoading && !activeTool && !isExecutingTool}
+                        isLoading={isLoading && !activeTool}
                         onSuggestionClick={(prompt) => sendMessage(prompt)}
                         onFeedback={handleFeedback}
                         comparisonSelection={comparisonSelection}
@@ -663,7 +664,7 @@ const App: React.FC = () => {
                 <MessageInput 
                     onSendMessage={(prompt) => sendMessage(prompt)}
                     onSendAnalysis={handleSendAnalysis}
-                    isLoading={isLoading || isExecutingTool}
+                    isLoading={isLoading}
                     onNewChat={handleNewChat}
                     onClearChat={() => activeConversationId && setIsConfirmDialogOpen({ action: 'clear', id: activeConversationId })}
                     activeTool={activeTool}

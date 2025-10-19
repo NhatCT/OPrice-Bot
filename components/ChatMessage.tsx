@@ -29,7 +29,7 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
   const isModel = message.role === 'model';
   const hasSuggestions = isModel && message.suggestions && message.suggestions.length > 0;
   const hasSources = isModel && message.sources && message.sources.length > 0;
-  const canShowActions = isModel && !message.isExecuting;
+  const canShowActions = isModel;
   const feedbackGiven = !!message.feedback;
   const hasPerformance = isModel && message.performance && message.performance.totalTime > 0;
   const canShowCompare = isModel && message.sources && message.sources.length > 0;
@@ -83,22 +83,6 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
           </div>
         </div>
       );
-  }
-
-  // --- RENDER EXECUTING TOOL MESSAGE ---
-  if (message.isExecuting) {
-    const toolName = message.toolCall?.name === 'createDiscountCode' ? 'Tạo mã giảm giá' : 'Thực thi tác vụ';
-    return (
-        <div className="flex flex-row items-start gap-3 animate-message-in">
-            <V64Logo className="w-9 h-9 flex-shrink-0 mt-1" />
-            <div className="flex items-center gap-3 px-4 py-3 bg-slate-100 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 rounded-xl">
-                <CogIcon className="w-5 h-5 text-blue-500 animate-spin" />
-                <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
-                  Đang thực thi: {toolName}...
-                </span>
-            </div>
-        </div>
-    );
   }
 
   // --- RENDER MODEL MESSAGE ---

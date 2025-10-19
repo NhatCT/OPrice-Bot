@@ -39,6 +39,17 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 export const AnalysisChart: React.FC<AnalysisChartProps> = ({ chart, theme }) => {
     const tickColor = theme === 'dark' ? '#94a3b8' : '#64748b';
 
+    // Add a defensive check to ensure chart.data is an array before rendering.
+    if (!Array.isArray(chart.data)) {
+        console.error("Invalid chart data: expected an array but got:", chart.data);
+        return (
+            <div className="my-4 p-4 text-center text-red-600 dark:text-red-400 bg-red-100 dark:bg-red-900/30 rounded-lg">
+                <p className="font-semibold">Lỗi Dữ liệu Biểu đồ</p>
+                <p className="text-sm">Không thể hiển thị biểu đồ do dữ liệu trả về không hợp lệ.</p>
+            </div>
+        );
+    }
+
     if (chart.type === 'bar') {
         const dataKey = Object.keys(chart.data[0] || {}).find(key => key !== 'name') || 'value';
         

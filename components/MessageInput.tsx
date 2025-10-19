@@ -200,7 +200,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
   return (
     <div className="p-4 bg-white/70 dark:bg-slate-800/50 backdrop-blur-md border-t border-slate-200 dark:border-slate-700 shrink-0">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-3">
+        <div className="flex justify-center gap-2 mb-3">
              <button onClick={() => setActiveTool({ task: 'profit-analysis'})} className={quickActionClass} disabled={isLoading}>
                 <ChartBarIcon className="w-4 h-4 text-blue-500" />
                 <span>Phân tích Lợi nhuận</span>
@@ -212,10 +212,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
              <button onClick={() => setActiveTool({ task: 'group-price'})} className={quickActionClass} disabled={isLoading}>
                 <CollectionIcon className="w-4 h-4 text-purple-500" />
                 <span>Phân tích Đồng giá</span>
-            </button>
-             <button onClick={() => setActiveTool({ task: 'create-discount'})} className={quickActionClass} disabled={isLoading}>
-                <ReceiptPercentIcon className="w-4 h-4 text-orange-500" />
-                <span>Tạo mã giảm giá</span>
             </button>
         </div>
 

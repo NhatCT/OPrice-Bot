@@ -22,22 +22,35 @@ const validateNumberField = (value: string, fieldName: string, isPositive = true
 
 const jsonInstruction = `
 
-**YÊU CẦU ĐỊNH DẠNG ĐẦU RA (QUAN TRỌNG):**
-Hãy trả về TOÀN BỘ KẾT QUẢ dưới dạng một khối mã JSON duy nhất (sử dụng \`\`\`json). JSON phải có cấu trúc như sau:
+**YÊU CẦU ĐỊNH DẠNG ĐẦU RA (CỰC KỲ QUAN TRỌNG):**
+Toàn bộ phản hồi của bạn **BẮT BUỘC** phải là một khối mã JSON duy nhất, hợp lệ (sử dụng \`\`\`json). Không được có bất kỳ văn bản nào bên ngoài khối mã này. JSON phải có cấu trúc như sau, bao gồm cả cấu trúc chi tiết cho các biểu đồ:
 {
-  "analysis": "Nội dung phân tích chi tiết bằng văn bản, sử dụng định dạng Markdown.",
+  "analysis": "...",
   "charts": [
     {
       "type": "bar",
-      "title": "Tiêu đề biểu đồ",
+      "title": "Tiêu đề của biểu đồ",
       "data": [
-        { "name": "Tên mục", "value": 12345 },
-        { "name": "Tên mục khác", "value": 67890 }
+        { "name": "Tên cột 1", "value": 12345 },
+        { "name": "Tên cột 2", "value": 67890 }
       ]
     }
   ]
 }
-Trong đó, phần 'analysis' chứa toàn bộ phần văn bản giải thích và lời khuyên. Phần 'charts' chứa dữ liệu để vẽ biểu đồ (ví dụ: biểu đồ cột so sánh Doanh thu, Chi phí, Lợi nhuận).`;
+
+**QUY TẮC CHO TRƯỜNG "charts":**
+1.  "charts" **PHẢI** là một mảng (array) các đối tượng biểu đồ.
+2.  Mỗi đối tượng biểu đồ **PHẢI** có các trường: "type", "title", và "data".
+3.  Trường "data" bên trong mỗi biểu đồ **BẮT BUỘC PHẢI** là một mảng (array) các đối tượng. Mỗi đối tượng trong mảng "data" phải có dạng \`{ "name": "string", "value": number }\`.
+
+**QUY TẮC CHO TRƯỜNG "analysis" (TUYỆT ĐỐI PHẢI TUÂN THỦ):**
+1.  Giá trị của trường "analysis" **PHẢI** là một chuỗi (string) JSON hợp lệ.
+2.  Tất cả các ký tự xuống dòng (newlines) bên trong nội dung phân tích **BẮT BUỘC** phải được thay thế bằng chuỗi ký tự \`\\n\`.
+3.  Tất cả các dấu nháy kép (") bên trong nội dung phân tích **BẮT BUỘC** phải được escape bằng cách thêm dấu \\ đằng trước (ví dụ: \`\\"\`).
+
+**VÍ DỤ VỀ GIÁ TRỊ "analysis" HỢP LỆ:**
+"analysis": "Đây là dòng đầu tiên của phân tích.\\nĐây là dòng thứ hai, với một trích dẫn: \\"tuyệt vời\\".\\n- Gạch đầu dòng 1\\n- Gạch đầu dòng 2"
+`;
 
 
 // --- TASK CONFIGURATION ---
@@ -75,9 +88,7 @@ const taskConfig = {
         
         prompt += `**YÊU CẦU PHÂN TÍCH:**\nDựa vào các dữ liệu trên, hãy cung cấp một bản phân tích chuyên nghiệp bao gồm:\n1.  **Công thức tính toán** rõ ràng từng bước.\n2.  **Kết quả tính toán** cho mục tiêu đã đề ra.\n3.  **Phân tích Điểm hòa vốn** (cả về số lượng và doanh thu).\n4.  **Đánh giá và Lời khuyên chiến lược** dựa trên kết quả.`;
         
-        if (useMarket) {
-            prompt += jsonInstruction;
-        }
+        prompt += jsonInstruction;
 
         return prompt;
     },
@@ -91,9 +102,7 @@ const taskConfig = {
       }
       prompt += `**YÊU CẦU PHÂN TÍCH:**\nHãy so sánh chi tiết 2 kịch bản (Lợi nhuận, Doanh thu, Biên lợi nhuận) và đưa ra kết luận rõ ràng rằng có nên thực hiện chương trình khuyến mãi này hay không dựa trên mục tiêu đã chọn.`;
       
-      if (data.useMarket) {
-          prompt += jsonInstruction;
-      }
+      prompt += jsonInstruction;
       return prompt;
     }
   },
@@ -108,17 +117,8 @@ const taskConfig = {
       }
       prompt += `**YÊU CẦU PHÂN TÍCH:**\nHãy phân tích và so sánh tổng lợi nhuận của toàn bộ nhóm sản phẩm giữa kịch bản hiện tại và kịch bản đồng giá. Liệt kê sản phẩm nào sẽ có lợi nhuận tăng/giảm. Cuối cùng, đưa ra kết luận và lời khuyên có nên thực hiện chiến dịch này không.`;
       
-      if (data.useMarket) {
-          prompt += jsonInstruction;
-      }
+      prompt += jsonInstruction;
       return prompt;
-    },
-  },
-  'create-discount': {
-    title: 'Tạo mã giảm giá',
-    generatePrompt: (data: Record<string, any>) => {
-      const { productName, discountPercentage, codeName } = data;
-      return `Hãy tạo một mã giảm giá ${discountPercentage}% cho sản phẩm "${productName}" với tên mã là "${codeName}".`;
     },
   },
 };
@@ -430,96 +430,6 @@ const GroupPriceForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, initialD
     );
 };
 
-const CreateDiscountForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, initialData }) => {
-    const [formData, setFormData] = useState({
-        productName: 'Áo Thun Thể Thao V64',
-        discountPercentage: '15',
-        codeName: 'HEV64'
-    });
-    const [errors, setErrors] = useState<Record<string, string>>({});
-
-    useEffect(() => {
-        if (initialData) {
-            setFormData(initialData);
-        }
-    }, [initialData]);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-        if (errors[name]) {
-            setErrors(prev => ({ ...prev, [name]: '' }));
-        }
-    };
-
-    const validate = () => {
-        const newErrors: Record<string, string> = {};
-        
-        if (!formData.productName.trim()) {
-            newErrors.productName = 'Tên sản phẩm là bắt buộc.';
-        }
-        
-        newErrors.discountPercentage = validateNumberField(formData.discountPercentage, 'Tỷ lệ giảm giá', true);
-        if (!newErrors.discountPercentage) {
-            const percentage = Number(formData.discountPercentage);
-            if (percentage > 100) {
-                newErrors.discountPercentage = 'Tỷ lệ không được lớn hơn 100.';
-            }
-        }
-
-        if (!formData.codeName.trim()) {
-            newErrors.codeName = 'Tên mã là bắt buộc.';
-        } else if (/\s/.test(formData.codeName.trim())) {
-            newErrors.codeName = 'Tên mã không được chứa khoảng trắng.';
-        }
-        
-        setErrors(newErrors);
-        return Object.values(newErrors).every(err => err === '');
-    };
-
-    const handleSubmit = (e: React.FormEvent) => {
-        e.preventDefault();
-        if (validate()) {
-            const prompt = taskConfig['create-discount'].generatePrompt(formData);
-            onSubmit(prompt, formData);
-        }
-    };
-
-    const commonInputClass = "w-full bg-slate-100 dark:bg-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300 border border-slate-300 dark:border-slate-600";
-    
-    return (
-        <div className="w-full max-w-lg mx-auto">
-            <h3 className="text-lg font-semibold text-center mb-4 text-slate-800 dark:text-slate-100">{taskConfig['create-discount'].title}</h3>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <div>
-                    <label htmlFor="productName" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Tên sản phẩm</label>
-                    <input id="productName" name="productName" type="text" value={formData.productName} onChange={handleChange} placeholder="VD: Áo Thun Cao Cấp V64" disabled={isLoading} className={`${commonInputClass} ${errors.productName ? 'ring-2 ring-red-500 border-red-500' : ''}`} />
-                    {errors.productName && <p className="text-xs text-red-500 mt-1">{errors.productName}</p>}
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label htmlFor="discountPercentage" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Tỷ lệ giảm giá (%)</label>
-                        <input id="discountPercentage" name="discountPercentage" type="number" value={formData.discountPercentage} onChange={handleChange} placeholder="15" disabled={isLoading} className={`${commonInputClass} ${errors.discountPercentage ? 'ring-2 ring-red-500 border-red-500' : ''}`} />
-                        {errors.discountPercentage && <p className="text-xs text-red-500 mt-1">{errors.discountPercentage}</p>}
-                    </div>
-                    <div>
-                        <label htmlFor="codeName" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Tên mã (viết liền)</label>
-                        <input id="codeName" name="codeName" type="text" value={formData.codeName} onChange={handleChange} placeholder="HEV64" disabled={isLoading} className={`${commonInputClass} ${errors.codeName ? 'ring-2 ring-red-500 border-red-500' : ''}`} />
-                        {errors.codeName && <p className="text-xs text-red-500 mt-1">{errors.codeName}</p>}
-                    </div>
-                </div>
-                <div className="flex justify-end space-x-3 pt-2">
-                    <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-600 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors duration-200 disabled:opacity-50">Hủy</button>
-                    <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors duration-200 disabled:bg-slate-400 dark:disabled:bg-slate-600">
-                        {isLoading ? 'Đang xử lý...' : 'Tạo mã'}
-                    </button>
-                </div>
-            </form>
-        </div>
-    );
-};
-
-
 export const GuidedInputForm: React.FC<GuidedInputFormProps> = ({ task, onSubmit, onCancel, isLoading, initialData }) => {
   switch (task) {
     case 'profit-analysis':
@@ -528,8 +438,6 @@ export const GuidedInputForm: React.FC<GuidedInputFormProps> = ({ task, onSubmit
       return <PromoPriceForm onSubmit={onSubmit} onCancel={onCancel} isLoading={isLoading} initialData={initialData} />;
     case 'group-price':
       return <GroupPriceForm onSubmit={onSubmit} onCancel={onCancel} isLoading={isLoading} initialData={initialData} />;
-    case 'create-discount':
-        return <CreateDiscountForm onSubmit={onSubmit} onCancel={onCancel} isLoading={isLoading} initialData={initialData} />;
     default:
       return null;
   }
