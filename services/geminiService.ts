@@ -23,7 +23,10 @@ const SYSTEM_INSTRUCTION = `Bạn là một trợ lý AI chuyên nghiệp của 
 
 // FIX: Replaced custom API key logic with the standard approach from @google/genai guidelines.
 // This resolves the TypeScript error related to 'import.meta.env' and ensures compliance.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+const ai = new GoogleGenAI({
+  apiKey: import.meta.env.VITE_API_KEY
+});
+
 
 // --- Function Calling Definition ---
 const createDiscountCodeTool: FunctionDeclaration = {
