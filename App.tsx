@@ -351,7 +351,17 @@ const App: React.FC = () => {
 
       if (wasPricingTask && generationSuccess && fullText) {
           try {
-            parsedData = JSON.parse(fullText);
+            let jsonString = fullText.trim();
+            // The API is instructed to return a JSON markdown block.
+            // We need to extract the raw JSON string from it.
+            const jsonRegex = /```json\s*([\s\S]*?)\s*```/;
+            const match = jsonString.match(jsonRegex);
+
+            if (match && match[1]) {
+                jsonString = match[1];
+            }
+
+            parsedData = JSON.parse(jsonString);
           } catch (e) {
             console.error("Failed to parse JSON from AI response:", e, "\nResponse was:", fullText);
           }
