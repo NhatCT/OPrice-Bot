@@ -7,17 +7,16 @@ import { ClipboardIcon } from './icons/ClipboardIcon';
 import { CheckIcon } from './icons/CheckIcon';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { V64Logo } from './icons/V54Logo';
+import { V54Logo } from './icons/V54Logo';
 import { LightningBoltIcon } from './icons/LightningBoltIcon';
 import { ClockIcon } from './icons/ClockIcon';
 import { ScaleIcon } from './icons/ScaleIcon';
-import { CogIcon } from './icons/CogIcon';
 import { PencilSquareIcon } from './icons/PencilSquareIcon';
 
 interface ChatMessageProps {
   message: ChatMessage;
   onSuggestionClick: (suggestion: string) => void;
-  onFeedback: (feedback: 'positive' | 'negative') => void;
+  onFeedback: (feedback: 'positive' | 'negative', comment?: string) => void;
   index: number;
   onToggleCompare: (index: number) => void;
   isSelectedForCompare: boolean;
@@ -26,6 +25,10 @@ interface ChatMessageProps {
 
 export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSuggestionClick, onFeedback, index, onToggleCompare, isSelectedForCompare, onEditAnalysis }) => {
   const [isCopied, setIsCopied] = useState(false);
+  const [isFeedbackFormOpen, setIsFeedbackFormOpen] = useState(false);
+  const [feedbackComment, setFeedbackComment] = useState('');
+  const [feedbackSent, setFeedbackSent] = useState(false);
+  
   const isModel = message.role === 'model';
   const hasSuggestions = isModel && message.suggestions && message.suggestions.length > 0;
   const hasSources = isModel && message.sources && message.sources.length > 0;
@@ -43,6 +46,30 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
     }).catch(err => {
         console.error('Failed to copy text: ', err);
     });
+  };
+
+  const handleThumbClick = (feedback: 'positive' | 'negative') => {
+    if (feedback === 'positive') {
+      onFeedback('positive');
+      setFeedbackSent(true);
+      setTimeout(() => setFeedbackSent(false), 3000);
+    } else {
+      setIsFeedbackFormOpen(true);
+    }
+  };
+
+  const handleSendDetailedFeedback = (e: React.FormEvent) => {
+    e.preventDefault();
+    onFeedback('negative', feedbackComment.trim());
+    setIsFeedbackFormOpen(false);
+    setFeedbackComment('');
+    setFeedbackSent(true);
+    setTimeout(() => setFeedbackSent(false), 3000);
+  };
+
+  const handleCancelFeedback = () => {
+    setIsFeedbackFormOpen(false);
+    setFeedbackComment('');
   };
 
   const markdownComponents: any = {
@@ -88,7 +115,7 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
   // --- RENDER MODEL MESSAGE ---
   return (
     <div className="flex flex-row items-start gap-3 animate-message-in">
-        <V64Logo className="w-9 h-9 flex-shrink-0 mt-1" />
+        <V54Logo className="w-9 h-9 flex-shrink-0 mt-1" />
 
         <div className="flex flex-col w-full items-start max-w-xl lg:max-w-3xl">
             <div className="w-full bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700/60 rounded-2xl">
@@ -119,10 +146,10 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                             <button onClick={handleCopy} className={`p-2 rounded-lg transition-all duration-200 ${isCopied ? 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`} aria-label={isCopied ? "Copied" : "Copy"} title={isCopied ? "Đã sao chép!" : "Sao chép"} >
                                 {isCopied ? <CheckIcon className="w-5 h-5" /> : <ClipboardIcon className="w-5 h-5" />}
                             </button>
-                            <button onClick={() => onFeedback('positive')} disabled={feedbackGiven} className={`p-2 rounded-lg transition-colors duration-200 ${message.feedback === 'positive' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Good" title="Phản hồi tốt">
+                            <button onClick={() => handleThumbClick('positive')} disabled={feedbackGiven || isFeedbackFormOpen} className={`p-2 rounded-lg transition-colors duration-200 ${message.feedback === 'positive' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Good" title="Phản hồi tốt">
                                 <ThumbUpIcon className="w-5 h-5" />
                             </button>
-                            <button onClick={() => onFeedback('negative')} disabled={feedbackGiven} className={`p-2 rounded-lg transition-colors duration-200 ${message.feedback === 'negative' ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Bad" title="Phản hồi chưa tốt">
+                            <button onClick={() => handleThumbClick('negative')} disabled={feedbackGiven || isFeedbackFormOpen} className={`p-2 rounded-lg transition-colors duration-200 ${message.feedback === 'negative' ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Bad" title="Phản hồi chưa tốt">
                                 <ThumbDownIcon className="w-5 h-5" />
                             </button>
                         </div>
@@ -182,11 +209,11 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                                 {isCopied ? <CheckIcon className="w-5 h-5" /> : <ClipboardIcon className="w-5 h-5" />}
                                 <span>{isCopied ? "Đã chép" : "Sao chép"}</span>
                             </button>
-                            <button onClick={() => onFeedback('positive')} disabled={feedbackGiven} className={`flex items-center gap-2 text-sm font-medium rounded-lg px-4 py-2.5 transition-colors duration-200 disabled:opacity-50 ${message.feedback === 'positive' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
+                            <button onClick={() => handleThumbClick('positive')} disabled={feedbackGiven || isFeedbackFormOpen} className={`flex items-center gap-2 text-sm font-medium rounded-lg px-4 py-2.5 transition-colors duration-200 disabled:opacity-50 ${message.feedback === 'positive' ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
                                 <ThumbUpIcon className="w-5 h-5" />
                                 <span>Thích</span>
                             </button>
-                            <button onClick={() => onFeedback('negative')} disabled={feedbackGiven} className={`flex items-center gap-2 text-sm font-medium rounded-lg px-4 py-2.5 transition-colors duration-200 disabled:opacity-50 ${message.feedback === 'negative' ? 'bg-red-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
+                            <button onClick={() => handleThumbClick('negative')} disabled={feedbackGiven || isFeedbackFormOpen} className={`flex items-center gap-2 text-sm font-medium rounded-lg px-4 py-2.5 transition-colors duration-200 disabled:opacity-50 ${message.feedback === 'negative' ? 'bg-red-600 text-white' : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600'}`}>
                                 <ThumbDownIcon className="w-5 h-5" />
                                 <span>Không thích</span>
                             </button>
@@ -212,6 +239,34 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                     </div>
                 )}
             </div>
+            
+            {isFeedbackFormOpen && (
+                <div className="w-full mt-2 p-3 bg-slate-100 dark:bg-slate-700/50 rounded-lg border border-slate-200 dark:border-slate-600 animate-slide-down">
+                    <form onSubmit={handleSendDetailedFeedback}>
+                        <label htmlFor={`feedback-comment-${index}`} className="text-sm font-medium text-slate-700 dark:text-slate-200">
+                            Phản hồi của bạn giúp chúng tôi cải thiện.
+                        </label>
+                        <textarea
+                            id={`feedback-comment-${index}`}
+                            value={feedbackComment}
+                            onChange={(e) => setFeedbackComment(e.target.value)}
+                            className="mt-2 w-full bg-white dark:bg-slate-800 text-sm p-2 rounded-md border border-slate-300 dark:border-slate-600 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                            rows={3}
+                            placeholder="Vui lòng cho biết AI đã trả lời sai ở đâu..."
+                        />
+                        <div className="flex justify-end gap-2 mt-2">
+                            <button type="button" onClick={handleCancelFeedback} className="px-3 py-1.5 text-sm font-semibold rounded-md hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors">Hủy</button>
+                            <button type="submit" className="px-3 py-1.5 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-500 transition-colors">Gửi</button>
+                        </div>
+                    </form>
+                </div>
+            )}
+
+            {feedbackSent && !isFeedbackFormOpen && (
+                <div className="w-full mt-2 p-3 text-center text-sm text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 rounded-lg border border-green-200 dark:border-green-700 animate-fade-in-fast">
+                    Cảm ơn bạn đã phản hồi!
+                </div>
+            )}
 
             {hasSuggestions && (
                 <div className="flex flex-wrap gap-2 mt-4 w-full">
@@ -241,6 +296,29 @@ style.innerHTML = `
     }
     .animate-message-in {
         animation: messageIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+    }
+    @keyframes slideDown {
+        from {
+            opacity: 0;
+            transform: translateY(-10px);
+            max-height: 0;
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+            max-height: 500px;
+        }
+    }
+    .animate-slide-down {
+        animation: slideDown 0.3s ease-out forwards;
+        overflow: hidden;
+    }
+    @keyframes fadeInFast {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    .animate-fade-in-fast {
+        animation: fadeInFast 0.3s ease-out forwards;
     }
 `;
 document.head.appendChild(style);

@@ -1,6 +1,8 @@
 import React from 'react';
 
-export const V64Logo: React.FC<{ className?: string }> = ({ className }) => (
+// TODO: The filename and component name (V54Logo) seem to have a typo and should be V64Logo.
+// Renaming component to match filename for consistency and to avoid potential import issues.
+export const V54Logo: React.FC<{ className?: string }> = ({ className }) => (
   <svg
     viewBox="0 0 100 100"
     className={className}

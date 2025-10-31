@@ -14,6 +14,7 @@ export interface UserProfile {
 // This provides better type safety and resolves an inference issue where 'component' was
 // incorrectly treated as a required property for user messages in App.tsx.
 interface BaseChatMessage {
+  id?: number; // Backend sẽ cung cấp ID này
   content: string;
   suggestions?: string[];
   sources?: {
@@ -21,6 +22,7 @@ interface BaseChatMessage {
     title: string;
   }[];
   feedback?: 'positive' | 'negative';
+  feedbackComment?: string;
   performance?: {
     timeToFirstChunk: number;
     totalTime: number;

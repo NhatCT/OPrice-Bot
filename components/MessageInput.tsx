@@ -10,7 +10,6 @@ import { ChartBarIcon } from './icons/ChartBarIcon';
 import { TagIcon } from './icons/TagIcon';
 import { CollectionIcon } from './icons/CollectionIcon';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
-import { ReceiptPercentIcon } from './icons/ReceiptPercentIcon';
 
 
 // TypeScript declarations for the SpeechRecognition API

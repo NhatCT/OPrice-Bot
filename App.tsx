@@ -1,7 +1,14 @@
+// NOTE FOR DEVELOPER:
+// This application runs entirely in the browser and connects directly to the Google Gemini API.
+// To make it work, you need to ensure the Gemini API key is correctly configured in the execution environment.
+// The backend-dependent code has been removed to resolve "Failed to fetch" errors.
+
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { ChatWindow } from './components/ChatWindow';
 import { MessageInput } from './components/MessageInput';
-import { getChatResponseStream, summarizeTitle } from './services/geminiService';
+// FIX: Removed unused 'summarizeTitle' import as it is no longer exported from geminiService.
+import { getChatResponseStream } from './services/geminiService';
+import * as apiService from './services/apiService';
 import type { ChatMessage, UserProfile, Theme, Font, ConversationMeta, Task } from './types';
 import { ConfirmationDialog } from './components/ConfirmationDialog';
 import { SettingsPopover } from './components/SettingsPopover';
@@ -22,13 +29,10 @@ import { toPng } from 'html-to-image';
 import { AnalysisChart } from './components/charts/AnalysisChart';
 
 
-const CONVERSATIONS_KEY = 'conversations';
-const CONVERSATION_MESSAGES_KEY_PREFIX = 'conversation_messages_';
-const ACTIVE_CONVERSATION_ID_KEY = 'activeConversationId';
 const THEME_KEY = 'theme';
 const FONT_KEY = 'font';
-const USER_PROFILE_KEY = 'userProfile';
 const SOUND_ENABLED_KEY = 'soundEnabled';
+const ACTIVE_CONVERSATION_ID_KEY = 'activeConversationId'; // Still needed for session resume
 
 const generateSummaryForTask = (task: Task, params: any): string => {
     switch (task) {
@@ -114,114 +118,98 @@ const App: React.FC = () => {
     localStorage.setItem(SOUND_ENABLED_KEY, JSON.stringify(soundEnabled));
   }, [soundEnabled]);
   
-  useEffect(() => {
-    try {
-      const savedProfile = window.localStorage.getItem(USER_PROFILE_KEY);
-      const profile = savedProfile ? JSON.parse(savedProfile) : null;
-      setUserProfile(profile);
-
-      const savedConversationsRaw = window.localStorage.getItem(CONVERSATIONS_KEY);
-      const savedActiveId = window.localStorage.getItem(ACTIVE_CONVERSATION_ID_KEY);
-
-      let loadedConversations: Record<string, ConversationMeta> | null = null;
-
-      if (savedConversationsRaw) {
-        const savedData = JSON.parse(savedConversationsRaw);
-        const firstConvoId = Object.keys(savedData)[0];
-        
-        if (firstConvoId && savedData[firstConvoId] && typeof savedData[firstConvoId].messages !== 'undefined') {
-          console.log("Migrating old conversation data to new optimized format.");
-          const newMetas: Record<string, ConversationMeta> = {};
-          Object.values(savedData).forEach((convo: any) => {
-            if (convo.id && convo.title && Array.isArray(convo.messages)) {
-              newMetas[convo.id] = { id: convo.id, title: convo.title };
-              const messagesToSave = JSON.parse(JSON.stringify(convo.messages, (key, value) => {
-                  if (key === 'component') return undefined;
-                  return value;
-              }));
-              window.localStorage.setItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${convo.id}`, JSON.stringify(messagesToSave));
-            }
-          });
-          window.localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(newMetas));
-          loadedConversations = newMetas;
-        } else {
-          loadedConversations = savedData;
-        }
-      }
-
-      if (loadedConversations && Object.keys(loadedConversations).length > 0) {
-        setConversations(loadedConversations);
-        setActiveConversationId(savedActiveId && loadedConversations[savedActiveId] ? savedActiveId : Object.keys(loadedConversations)[0] || null);
-      } else {
-        const newId = Date.now().toString();
-        const initialConvo: ConversationMeta = {
-          id: newId,
-          title: "Cuộc trò chuyện mới",
-        };
-        setConversations({ [newId]: initialConvo });
-        setActiveConversationId(newId);
-      }
-    } catch (error) {
-      console.error('Failed to load data from localStorage:', error);
-      const newId = Date.now().toString();
-      const initialConvo: ConversationMeta = {
-        id: newId,
-        title: "Cuộc trò chuyện mới",
-      };
-      setConversations({ [newId]: initialConvo });
-      setActiveConversationId(newId);
+  const handleNewChat = useCallback(async (setSidebarOpen = true) => {
+    const newConversation = await apiService.createNewConversation();
+    if (newConversation) {
+        setConversations(prev => ({...prev, [newConversation.id]: newConversation }));
+        setActiveConversationId(newConversation.id);
     }
+    
+    setIsLoading(false);
+    setActiveTool(null);
+    if (setSidebarOpen) setIsSidebarOpen(false);
   }, []);
 
+  // Load initial data from API service
   useEffect(() => {
-    if (activeConversationId) {
-      try {
-        const savedMessagesRaw = window.localStorage.getItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${activeConversationId}`);
-        setActiveConversationMessages(savedMessagesRaw ? JSON.parse(savedMessagesRaw) : []);
-        setComparisonSelection([]);
-      } catch (error) {
-        console.error(`Failed to load messages for conversation ${activeConversationId}:`, error);
+    const loadInitialData = async () => {
+        try {
+            const [profile, loadedConversations] = await Promise.all([
+                apiService.loadUserProfile(),
+                apiService.loadConversations()
+            ]);
+            
+            setUserProfile(profile);
+
+            if (loadedConversations && Object.keys(loadedConversations).length > 0) {
+                setConversations(loadedConversations);
+                const savedActiveId = window.localStorage.getItem(ACTIVE_CONVERSATION_ID_KEY);
+                const lastId = Object.keys(loadedConversations).sort((a,b) => Number(b) - Number(a))[0];
+                setActiveConversationId(savedActiveId && loadedConversations[savedActiveId] ? savedActiveId : lastId || null);
+            } else {
+                // Create a new conversation if none exist
+                handleNewChat(false); // don't set sidebar open on initial load
+            }
+        } catch (error) {
+            console.error('Failed to load initial data:', error);
+            handleNewChat(false); // fallback to new chat on error
+        }
+    };
+    loadInitialData();
+  }, [handleNewChat]);
+
+  // Load messages when active conversation changes
+  useEffect(() => {
+    const loadMessagesForActiveConvo = async () => {
+      if (activeConversationId) {
+        try {
+          setIsLoading(true);
+          const messages = await apiService.loadMessages(activeConversationId);
+          setActiveConversationMessages(messages);
+          setComparisonSelection([]);
+          window.localStorage.setItem(ACTIVE_CONVERSATION_ID_KEY, activeConversationId);
+        } catch (error) {
+          console.error(`Failed to load messages for conversation ${activeConversationId}:`, error);
+          setActiveConversationMessages([]);
+        } finally {
+          setIsLoading(false);
+        }
+      } else {
         setActiveConversationMessages([]);
       }
-    } else {
-      setActiveConversationMessages([]);
-    }
+    };
+    loadMessagesForActiveConvo();
   }, [activeConversationId]);
-
-  useEffect(() => {
-    try {
-      if (Object.keys(conversations).length > 0) {
-        window.localStorage.setItem(CONVERSATIONS_KEY, JSON.stringify(conversations));
-      }
-      if (activeConversationId) {
-        window.localStorage.setItem(ACTIVE_CONVERSATION_ID_KEY, activeConversationId);
-      }
-    } catch (error) {
-      console.error('Failed to save metadata to localStorage:', error);
-    }
-  }, [conversations, activeConversationId]);
   
+  // Save messages whenever they change
   useEffect(() => {
-    if (activeConversationId) {
-        try {
-            const messagesToSave = JSON.parse(JSON.stringify(activeConversationMessages, (key, value) => {
-                if (key === 'component') return undefined;
-                return value;
-            }));
-            window.localStorage.setItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${activeConversationId}`, JSON.stringify(messagesToSave));
-        } catch (error) {
-            console.error('Failed to save messages to localStorage:', error);
-        }
+    if (activeConversationId && activeConversationMessages.length > 0) {
+        apiService.saveMessages(activeConversationId, activeConversationMessages);
     }
   }, [activeConversationId, activeConversationMessages]);
 
-  const handleRenameConversation = useCallback((id: string, newTitle: string) => {
-      if (!newTitle.trim()) return;
+  const handleRenameConversation = useCallback(async (id: string, newTitle: string) => {
+      if (!newTitle.trim() || !conversations[id]) return;
+      
+      const originalTitle = conversations[id].title;
+      if (originalTitle === newTitle.trim()) return;
+
+      // Optimistic UI update
       setConversations(prev => ({
           ...prev,
           [id]: { ...prev[id], title: newTitle.trim() }
       }));
-  }, []);
+      
+      const { success } = await apiService.saveConversationMeta(id, { title: newTitle.trim() });
+      if (!success) {
+        // Rollback on failure
+        setConversations(prev => ({
+            ...prev,
+            [id]: { ...prev[id], title: originalTitle }
+        }));
+        // Optional: show an error toast to the user
+      }
+  }, [conversations]);
   
   const handleStopGeneration = () => {
     if (abortControllerRef.current) {
@@ -231,7 +219,18 @@ const App: React.FC = () => {
   };
 
   const sendMessage = useCallback(async (userInput: string, analysisPayload?: { params: any; task: Task }) => {
-    if (!activeConversationId) return;
+    let currentConvoId = activeConversationId;
+    if (!currentConvoId) {
+        const newConvo = await apiService.createNewConversation();
+        if (newConvo) {
+            currentConvoId = newConvo.id;
+            setConversations(prev => ({ ...prev, [newConvo.id]: newConvo }));
+            setActiveConversationId(newConvo.id);
+        } else {
+            console.error("Could not create a new conversation.");
+            return;
+        }
+    }
 
     if (analysisPayload) {
         pendingAnalysisParamsRef.current = analysisPayload;
@@ -248,39 +247,32 @@ const App: React.FC = () => {
         }
     }
     
-    let messagesForDisplay = [...initialMessages];
-    // FIX: Removed problematic .map() that was stripping the 'component' property.
-    // This was causing a subtle type inference issue. The geminiService is designed
-    // to handle messages with components gracefully by only selecting needed properties.
-    let historyForApi = [...initialMessages];
-
+    let messagesForApi = [...initialMessages];
     let titleSource = userInput;
 
     if (analysisPayload) {
         const summary = generateSummaryForTask(analysisPayload.task, analysisPayload.params);
-        // FIX: The errors were resolved by updating the ChatMessage type to a discriminated union in types.ts.
-        // No changes are needed here as the object correctly matches the 'user' message type.
-        messagesForDisplay.push({ role: 'user', content: summary });
-        // Use the full prompt for the API
-        historyForApi.push({ role: 'user', content: userInput });
+        messagesForApi.push({ role: 'user', content: summary }); // For display
+        messagesForApi.push({ role: 'user', content: userInput }); // The real prompt for API
         titleSource = summary;
     } else if (userInput) {
-        // FIX: The errors were resolved by updating the ChatMessage type to a discriminated union in types.ts.
-        // No changes are needed here as the object correctly matches the 'user' message type.
-        messagesForDisplay.push({ role: 'user', content: userInput });
-        historyForApi.push({ role: 'user', content: userInput });
+        messagesForApi.push({ role: 'user', content: userInput });
     } else {
         return; // Do nothing if there's no input
     }
     
-    setActiveConversationMessages(messagesForDisplay);
+    const displayMessages = analysisPayload 
+        ? [...initialMessages, { role: 'user' as const, content: generateSummaryForTask(analysisPayload.task, analysisPayload.params) }]
+        : messagesForApi;
+
+    setActiveConversationMessages(displayMessages);
     setComparisonSelection([]);
     setIsLoading(true);
     setActiveTool(null);
     setIsSidebarOpen(false);
     playSound(typingAudio);
 
-    const needsTitle = messagesForDisplay.length === 1;
+    const needsTitle = displayMessages.length === 1 && conversations[currentConvoId]?.title === "Cuộc trò chuyện mới";
     
     // Add placeholder for model's response
     setActiveConversationMessages(prev => [...prev, { role: 'model', content: '' }]);
@@ -290,7 +282,7 @@ const App: React.FC = () => {
     let fullText = '';
 
     try {
-      const stream = getChatResponseStream(historyForApi, abortControllerRef.current.signal);
+      const stream = getChatResponseStream(messagesForApi, abortControllerRef.current.signal);
       for await (const chunk of stream) {
         if (chunk.textChunk) {
           fullText += chunk.textChunk;
@@ -298,7 +290,7 @@ const App: React.FC = () => {
             const newMsgs = [...prev];
             const lastMsg = newMsgs[newMsgs.length - 1];
             if (lastMsg.role === 'model') {
-              newMsgs[newMsgs.length - 1] = { ...lastMsg, content: fullText };
+              newMsgs[newMsgs.length - 1] = { ...lastMsg, role: 'model', content: fullText };
             }
             return newMsgs;
           });
@@ -307,13 +299,18 @@ const App: React.FC = () => {
           generationSuccess = !chunk.error;
           setActiveConversationMessages(prev => {
             const newMsgs = [...prev];
-            const lastMsg = { ...newMsgs[newMsgs.length - 1] };
-            if (chunk.error) lastMsg.content = chunk.error;
-            if (lastMsg.role === 'model') {
-                if (chunk.sources) lastMsg.sources = chunk.sources;
-                if (chunk.performanceMetrics) lastMsg.performance = chunk.performanceMetrics;
+            const originalLastMsg = newMsgs[newMsgs.length - 1];
+            if (originalLastMsg?.role === 'model') {
+              // FIX: Create a new object in a single expression to resolve issues
+              // with type widening from spreading a discriminated union member.
+              newMsgs[newMsgs.length - 1] = {
+                ...originalLastMsg,
+                role: 'model',
+                content: chunk.error || originalLastMsg.content,
+                sources: chunk.sources || originalLastMsg.sources,
+                performance: chunk.performanceMetrics || originalLastMsg.performance,
+              };
             }
-            newMsgs[newMsgs.length - 1] = lastMsg;
             return newMsgs;
           });
           break;
@@ -324,7 +321,10 @@ const App: React.FC = () => {
         console.error("Stream failed:", error);
         setActiveConversationMessages(prev => {
           const newMsgs = [...prev];
-          newMsgs[newMsgs.length - 1] = { ...newMsgs[newMsgs.length - 1], content: "Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại."};
+          const lastMsg = newMsgs[newMsgs.length - 1];
+          if (lastMsg?.role === 'model') {
+            newMsgs[newMsgs.length - 1] = { ...lastMsg, role: 'model', content: "Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại."};
+          }
           return newMsgs;
         });
       }
@@ -339,101 +339,79 @@ const App: React.FC = () => {
 
       const wasPricingTask = !!analysisData;
       let parsedData: any = null;
-      let jsonString = '';
 
       if (wasPricingTask && generationSuccess && fullText) {
-        // For all analysis tasks, the AI is instructed to return data in a single JSON markdown block.
-        // We also handle the case where it might return raw JSON.
-        const jsonRegex = /```json\s*([\s\S]*?)\s*```/;
-        const match = fullText.match(jsonRegex);
-        
-        if (match && match[1]) {
-          jsonString = match[1];
-        } else if (fullText.trim().startsWith('{') && fullText.trim().endsWith('}')) {
-          jsonString = fullText.trim();
-        }
-        
-        if (jsonString) {
           try {
-            parsedData = JSON.parse(jsonString);
+            parsedData = JSON.parse(fullText);
           } catch (e) {
-            console.error("Failed to parse JSON:", e);
-            // Fallback: fullText will be displayed as the message content
+            console.error("Failed to parse JSON from AI response:", e, "\nResponse was:", fullText);
           }
-        }
       }
 
       // Consolidate final message updates
       setActiveConversationMessages(prev => {
         const newMsgs = [...prev];
         if (newMsgs.length > 0) {
-          const lastMsg = { ...newMsgs[newMsgs.length - 1] };
-          
-          if (lastMsg.role === 'model') {
-            if (analysisData) {
-              lastMsg.analysisParams = analysisData.params;
-              lastMsg.task = analysisData.task;
-            }
-  
+          const originalLastMsg = newMsgs[newMsgs.length - 1];
+          if (originalLastMsg.role === 'model') {
+            // FIX: Create a new object in a single expression to resolve issues
+            // with type widening from spreading a discriminated union member.
+            let component: React.ReactNode | undefined = originalLastMsg.component;
             if (parsedData && parsedData.analysis && Array.isArray(parsedData.charts)) {
-              // Success case: we have structured data.
-              lastMsg.content = parsedData.analysis;
-              lastMsg.component = (
+              component = (
                 <div>
                   {parsedData.charts.map((chart: any, index: number) => (
                     <AnalysisChart key={index} chart={chart} theme={effectiveTheme} />
                   ))}
                 </div>
               );
-            } 
-            // If parsing fails or data is missing, the existing `lastMsg.content` (which is fullText) is used by default.
+            }
+            newMsgs[newMsgs.length - 1] = {
+              ...originalLastMsg,
+              role: 'model',
+              ...(analysisData && {
+                analysisParams: analysisData.params,
+                task: analysisData.task,
+              }),
+              ...(parsedData && parsedData.analysis && Array.isArray(parsedData.charts) && {
+                content: parsedData.analysis,
+                component,
+              }),
+            };
           }
-          
-          newMsgs[newMsgs.length - 1] = lastMsg;
         }
         return newMsgs;
       });
 
-      if (needsTitle && generationSuccess && titleSource) {
-          summarizeTitle(titleSource).then(title => {
-              handleRenameConversation(activeConversationId, title);
-          });
+      if (needsTitle && generationSuccess && titleSource && currentConvoId) {
+          const tempTitle = titleSource.length > 30 ? titleSource.substring(0, 30) + "..." : titleSource;
+          handleRenameConversation(currentConvoId, tempTitle);
       }
     }
-  }, [activeConversationId, activeConversationMessages, handleRenameConversation, typingAudio, messageAudio, playSound, effectiveTheme]);
+  }, [activeConversationId, activeConversationMessages, handleRenameConversation, typingAudio, messageAudio, playSound, effectiveTheme, conversations]);
 
-   const handleNewChat = () => {
-    const newId = Date.now().toString();
-    const newConversation: ConversationMeta = {
-      id: newId,
-      title: "Cuộc trò chuyện mới",
-    };
-    setConversations(prev => ({ ...prev, [newId]: newConversation }));
-    setActiveConversationId(newId);
-    setIsLoading(false);
-    setActiveTool(null);
-    setIsSidebarOpen(false);
-  };
-
-  const handleClearChat = (id: string) => {
+  const handleClearChat = async (id: string) => {
     if (id === activeConversationId) {
         setActiveConversationMessages([]);
         setComparisonSelection([]);
     }
-    window.localStorage.removeItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${id}`);
+    await apiService.clearConversationMessages(id);
     setIsConfirmDialogOpen(null);
     setActiveTool(null);
   };
 
-  const handleDeleteConversation = (id: string) => {
+  const handleDeleteConversation = async (id: string) => {
     const oldConversations = conversations;
-    setConversations(prev => {
-        const newConversations = { ...prev };
-        delete newConversations[id];
-        return newConversations;
-    });
     
-    window.localStorage.removeItem(`${CONVERSATION_MESSAGES_KEY_PREFIX}${id}`);
+    // Optimistic UI update
+    const newConversations = { ...oldConversations };
+    delete newConversations[id];
+    setConversations(newConversations);
+
+    const { success } = await apiService.deleteConversation(id);
+    if (!success) {
+        setConversations(oldConversations); // Rollback on failure
+    }
     
     if (activeConversationId === id) {
         const remainingIds = Object.keys(oldConversations)
@@ -443,44 +421,63 @@ const App: React.FC = () => {
         if (remainingIds.length > 0) {
             setActiveConversationId(remainingIds[0]);
         } else {
-            handleNewChat();
+            await handleNewChat();
         }
     }
     setIsConfirmDialogOpen(null);
   };
   
-  const handleFeedback = (messageIndex: number, feedback: 'positive' | 'negative') => {
-    setActiveConversationMessages(prev => {
-      const newMessages = [...prev];
-      if (newMessages[messageIndex]) {
-        newMessages[messageIndex] = { ...newMessages[messageIndex], feedback };
-      }
-      return newMessages;
-    });
-  };
-  
-  const handleProfileUpdate = (profile: UserProfile) => {
-    setUserProfile(profile);
-    window.localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
-  };
-  
-  const handleForgetUser = () => {
-    const keysToRemove = [USER_PROFILE_KEY, CONVERSATIONS_KEY, ACTIVE_CONVERSATION_ID_KEY];
-    Object.keys(window.localStorage).forEach(key => {
-        if (key.startsWith(CONVERSATION_MESSAGES_KEY_PREFIX)) {
-            keysToRemove.push(key);
+  const handleFeedback = async (messageIndex: number, feedback: 'positive' | 'negative', comment?: string) => {
+    const updatedMessages = [...activeConversationMessages];
+    const messageToUpdate = updatedMessages[messageIndex];
+
+    if (messageToUpdate && messageToUpdate.role === 'model' && messageToUpdate.id) {
+        // Optimistically update UI
+        const originalMessage = { ...messageToUpdate };
+        // FIX: Re-specify role to prevent type widening on spread.
+        updatedMessages[messageIndex] = { 
+            ...messageToUpdate,
+            role: 'model',
+            feedback,
+            feedbackComment: comment,
+        };
+        setActiveConversationMessages(updatedMessages);
+
+        // Send feedback to the backend with the message ID
+        const { success } = await apiService.sendFeedback({
+            messageId: messageToUpdate.id,
+            feedback,
+            comment
+        });
+        
+        if (!success) {
+            // Rollback on failure
+            updatedMessages[messageIndex] = originalMessage;
+            setActiveConversationMessages(updatedMessages);
         }
-    });
+    } else {
+        console.error("Feedback cannot be given for this message (missing ID or not a model message).", messageToUpdate);
+    }
+  };
+  
+  const handleProfileUpdate = async (profile: UserProfile) => {
+    setUserProfile(profile);
+    await apiService.saveUserProfile(profile);
+  };
+  
+  const handleForgetUser = async () => {
+    const keysToRemove = [ACTIVE_CONVERSATION_ID_KEY];
     keysToRemove.forEach(key => window.localStorage.removeItem(key));
+    
+    const currentConvos = { ...conversations };
+    for (const id in currentConvos) {
+        await apiService.deleteConversation(id);
+    }
 
     setUserProfile(null);
-    const newId = Date.now().toString();
-    const initialConvo: ConversationMeta = {
-        id: newId,
-        title: "Cuộc trò chuyện mới",
-    };
-    setConversations({ [newId]: initialConvo });
-    setActiveConversationId(newId);
+    setConversations({});
+    setActiveConversationId(null);
+    await handleNewChat(false); // Start a fresh session
   };
   
   const handleToggleCompare = (index: number) => {
@@ -492,7 +489,6 @@ const App: React.FC = () => {
         if (prev.length < 2) {
             return [...prev, index].sort((a, b) => a - b);
         }
-        // Replace the first item in the sorted array when adding a third.
         return [prev[1], index].sort((a, b) => a - b);
     });
   };
@@ -517,12 +513,11 @@ const App: React.FC = () => {
     try {
         const dataUrl = await toPng(chatWindowRef.current, { 
             cacheBust: true, 
-            backgroundColor: effectiveTheme === 'dark' ? '#020617' : '#ffffff', // dark:bg-gray-950
+            backgroundColor: effectiveTheme === 'dark' ? '#020617' : '#ffffff',
             pixelRatio: 2,
         });
         const convoTitle = (activeConversationId && conversations[activeConversationId]?.title) || 'conversation';
         const safeTitle = convoTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        // FIX: Declare the 'link' variable before using it to trigger the download.
         const link = document.createElement('a');
         link.download = `conversation-V64-${safeTitle}.png`;
         link.href = dataUrl;
@@ -578,7 +573,7 @@ const App: React.FC = () => {
         <Sidebar 
             conversations={Object.values(conversations)}
             activeConversationId={activeConversationId}
-            onNewChat={handleNewChat}
+            onNewChat={() => handleNewChat()}
             onSelectConversation={(id) => setActiveConversationId(id)}
             onDeleteConversation={(id) => setIsConfirmDialogOpen({ action: 'delete', id })}
             onRenameConversation={handleRenameConversation}
@@ -637,7 +632,7 @@ const App: React.FC = () => {
             </header>
             
             <div className="flex-1 flex flex-col overflow-hidden">
-                {activeConversationMessages.length === 0 ? (
+                {activeConversationMessages.length === 0 && !isLoading ? (
                     <Welcome onSuggestionClick={(prompt) => sendMessage(prompt)} onToolSelect={(task) => setActiveTool({ task })} />
                 ) : (
                     <ChatWindow 
@@ -665,7 +660,7 @@ const App: React.FC = () => {
                     onSendMessage={(prompt) => sendMessage(prompt)}
                     onSendAnalysis={handleSendAnalysis}
                     isLoading={isLoading}
-                    onNewChat={handleNewChat}
+                    onNewChat={() => handleNewChat()}
                     onClearChat={() => activeConversationId && setIsConfirmDialogOpen({ action: 'clear', id: activeConversationId })}
                     activeTool={activeTool}
                     setActiveTool={setActiveTool}
