@@ -9,7 +9,7 @@ import { MessageInput } from './components/MessageInput';
 // FIX: Removed unused 'summarizeTitle' import as it is no longer exported from geminiService.
 import { getChatResponseStream } from './services/geminiService';
 import * as apiService from './services/apiService';
-import type { ChatMessage, UserProfile, Theme, Font, ConversationMeta, Task } from './types';
+import type { ChatMessage, UserProfile, Theme, Font, ConversationMeta, Task, ConversationGroup } from './types';
 import { ConfirmationDialog } from './components/ConfirmationDialog';
 import { SettingsPopover } from './components/SettingsPopover';
 import { Welcome } from './components/Welcome';
@@ -27,6 +27,7 @@ import { ExportDialog } from './components/ExportDialog';
 import { ArrowDownTrayIcon } from './components/icons/ArrowDownTrayIcon';
 import { toPng } from 'html-to-image';
 import { AnalysisChart } from './components/charts/AnalysisChart';
+import { SourceFilterControl } from './components/SourceFilterControl';
 
 
 const THEME_KEY = 'theme';
@@ -50,10 +51,11 @@ const generateSummaryForTask = (task: Task, params: any): string => {
 
 const App: React.FC = () => {
   const [conversations, setConversations] = useState<Record<string, ConversationMeta>>({});
+  const [conversationGroups, setConversationGroups] = useState<Record<string, ConversationGroup>>({});
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [activeConversationMessages, setActiveConversationMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<{ action: 'clear' | 'delete'; id?: string } | null>(null);
+  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<{ action: 'clear' | 'delete' | 'delete-group'; id?: string } | null>(null);
   const [isWorkflowDialogOpen, setIsWorkflowDialogOpen] = useState(false);
   const [isTestingGuideOpen, setIsTestingGuideOpen] = useState(false);
   const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
@@ -66,6 +68,7 @@ const App: React.FC = () => {
   const [comparisonSelection, setComparisonSelection] = useState<number[]>([]);
   const [isComparisonOpen, setIsComparisonOpen] = useState(false);
   const pendingAnalysisParamsRef = useRef<{ params: any; task: Task } | null>(null);
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
 
 
   const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(THEME_KEY) as Theme) || 'system');
@@ -134,12 +137,14 @@ const App: React.FC = () => {
   useEffect(() => {
     const loadInitialData = async () => {
         try {
-            const [profile, loadedConversations] = await Promise.all([
+            const [profile, loadedConversations, loadedGroups] = await Promise.all([
                 apiService.loadUserProfile(),
-                apiService.loadConversations()
+                apiService.loadConversations(),
+                apiService.loadConversationGroups(),
             ]);
             
             setUserProfile(profile);
+            setConversationGroups(loadedGroups);
 
             if (loadedConversations && Object.keys(loadedConversations).length > 0) {
                 setConversations(loadedConversations);
@@ -167,6 +172,7 @@ const App: React.FC = () => {
           const messages = await apiService.loadMessages(activeConversationId);
           setActiveConversationMessages(messages);
           setComparisonSelection([]);
+          setSourceFilter(null);
           window.localStorage.setItem(ACTIVE_CONVERSATION_ID_KEY, activeConversationId);
         } catch (error) {
           console.error(`Failed to load messages for conversation ${activeConversationId}:`, error);
@@ -207,7 +213,6 @@ const App: React.FC = () => {
             ...prev,
             [id]: { ...prev[id], title: originalTitle }
         }));
-        // Optional: show an error toast to the user
       }
   }, [conversations]);
   
@@ -267,6 +272,7 @@ const App: React.FC = () => {
 
     setActiveConversationMessages(displayMessages);
     setComparisonSelection([]);
+    setSourceFilter(null);
     setIsLoading(true);
     setActiveTool(null);
     setIsSidebarOpen(false);
@@ -289,7 +295,7 @@ const App: React.FC = () => {
           setActiveConversationMessages(prev => {
             const newMsgs = [...prev];
             const lastMsg = newMsgs[newMsgs.length - 1];
-            if (lastMsg.role === 'model') {
+            if (lastMsg?.role === 'model') {
               newMsgs[newMsgs.length - 1] = { ...lastMsg, role: 'model', content: fullText };
             }
             return newMsgs;
@@ -301,8 +307,6 @@ const App: React.FC = () => {
             const newMsgs = [...prev];
             const originalLastMsg = newMsgs[newMsgs.length - 1];
             if (originalLastMsg?.role === 'model') {
-              // FIX: Create a new object in a single expression to resolve issues
-              // with type widening from spreading a discriminated union member.
               newMsgs[newMsgs.length - 1] = {
                 ...originalLastMsg,
                 role: 'model',
@@ -348,14 +352,11 @@ const App: React.FC = () => {
           }
       }
 
-      // Consolidate final message updates
       setActiveConversationMessages(prev => {
         const newMsgs = [...prev];
         if (newMsgs.length > 0) {
           const originalLastMsg = newMsgs[newMsgs.length - 1];
           if (originalLastMsg.role === 'model') {
-            // FIX: Create a new object in a single expression to resolve issues
-            // with type widening from spreading a discriminated union member.
             let component: React.ReactNode | undefined = originalLastMsg.component;
             if (parsedData && parsedData.analysis && Array.isArray(parsedData.charts)) {
               component = (
@@ -394,6 +395,7 @@ const App: React.FC = () => {
     if (id === activeConversationId) {
         setActiveConversationMessages([]);
         setComparisonSelection([]);
+        setSourceFilter(null);
     }
     await apiService.clearConversationMessages(id);
     setIsConfirmDialogOpen(null);
@@ -432,9 +434,7 @@ const App: React.FC = () => {
     const messageToUpdate = updatedMessages[messageIndex];
 
     if (messageToUpdate && messageToUpdate.role === 'model' && messageToUpdate.id) {
-        // Optimistically update UI
         const originalMessage = { ...messageToUpdate };
-        // FIX: Re-specify role to prevent type widening on spread.
         updatedMessages[messageIndex] = { 
             ...messageToUpdate,
             role: 'model',
@@ -443,7 +443,6 @@ const App: React.FC = () => {
         };
         setActiveConversationMessages(updatedMessages);
 
-        // Send feedback to the backend with the message ID
         const { success } = await apiService.sendFeedback({
             messageId: messageToUpdate.id,
             feedback,
@@ -451,7 +450,6 @@ const App: React.FC = () => {
         });
         
         if (!success) {
-            // Rollback on failure
             updatedMessages[messageIndex] = originalMessage;
             setActiveConversationMessages(updatedMessages);
         }
@@ -513,7 +511,7 @@ const App: React.FC = () => {
     try {
         const dataUrl = await toPng(chatWindowRef.current, { 
             cacheBust: true, 
-            backgroundColor: effectiveTheme === 'dark' ? '#020617' : '#ffffff',
+            backgroundColor: effectiveTheme === 'dark' ? '#0d1222' : '#f1f5f9', // slate-100
             pixelRatio: 2,
         });
         const convoTitle = (activeConversationId && conversations[activeConversationId]?.title) || 'conversation';
@@ -567,22 +565,92 @@ const App: React.FC = () => {
   const handleSendAnalysis = (prompt: string, params: Record<string, any>) => {
     sendMessage(prompt, { params, task: activeTool!.task });
   };
+  
+  // --- Group Handlers ---
+  const handleCreateGroup = async (name: string) => {
+    const newGroup = await apiService.createConversationGroup(name);
+    if (newGroup) {
+      setConversationGroups(prev => ({ ...prev, [newGroup.id]: newGroup }));
+    }
+  };
+
+  const handleRenameGroup = async (id: string, newName: string) => {
+    setConversationGroups(prev => ({ ...prev, [id]: { ...prev[id], name: newName } }));
+    await apiService.renameConversationGroup(id, newName);
+  };
+
+  const handleDeleteGroup = async (id: string) => {
+    // Optimistically update UI
+    const newGroups = { ...conversationGroups };
+    delete newGroups[id];
+    setConversationGroups(newGroups);
+    
+    const newConversations = { ...conversations };
+    Object.values(newConversations).forEach(convo => {
+        if (convo.groupId === id) {
+            convo.groupId = null;
+        }
+    });
+    setConversations(newConversations);
+    
+    await apiService.deleteConversationGroup(id);
+    setIsConfirmDialogOpen(null);
+  };
+  
+  const handleAssignConversationToGroup = async (conversationId: string, groupId: string | null) => {
+    setConversations(prev => ({
+        ...prev,
+        [conversationId]: { ...prev[conversationId], groupId: groupId }
+    }));
+    await apiService.assignConversationToGroup(conversationId, groupId);
+  };
+
+  const uniqueSources = useMemo(() => {
+    const sourcesMap = new Map<string, string>();
+    activeConversationMessages.forEach(msg => {
+        if (msg.role === 'model' && msg.sources) {
+            msg.sources.forEach(source => {
+                if (!sourcesMap.has(source.uri)) {
+                    sourcesMap.set(source.uri, source.title);
+                }
+            });
+        }
+    });
+    return Array.from(sourcesMap, ([uri, title]) => ({ uri, title }));
+  }, [activeConversationMessages]);
+
+  const filteredMessages = useMemo(() => {
+    if (!sourceFilter) {
+        return activeConversationMessages;
+    }
+    return activeConversationMessages.filter(msg => {
+        if (msg.role === 'user') {
+            return true;
+        }
+        return msg.sources?.some(source => source.uri === sourceFilter) ?? false;
+    });
+  }, [activeConversationMessages, sourceFilter]);
 
   return (
-    <div className={`flex h-dvh bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 transition-colors duration-300`}>
+    <div className={`flex h-dvh bg-slate-100 dark:bg-slate-900/80 dark:backdrop-blur-sm text-slate-800 dark:text-slate-200 transition-colors duration-300`}>
         <Sidebar 
             conversations={Object.values(conversations)}
+            conversationGroups={conversationGroups}
             activeConversationId={activeConversationId}
             onNewChat={() => handleNewChat()}
             onSelectConversation={(id) => setActiveConversationId(id)}
             onDeleteConversation={(id) => setIsConfirmDialogOpen({ action: 'delete', id })}
             onRenameConversation={handleRenameConversation}
+            onCreateGroup={handleCreateGroup}
+            onRenameGroup={handleRenameGroup}
+            onDeleteGroup={(id) => setIsConfirmDialogOpen({ action: 'delete-group', id })}
+            onAssignConversationToGroup={handleAssignConversationToGroup}
             isOpen={isSidebarOpen}
             setIsOpen={setIsSidebarOpen}
         />
         
         <main className="flex flex-col flex-1 h-dvh relative">
-            <header className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-gray-950/80 backdrop-blur-sm shrink-0 z-10">
+            <header className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/50 backdrop-blur-sm shrink-0 z-10">
                  <div className="flex items-center gap-2">
                     <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-500 dark:text-slate-400 md:hidden">
                         <MenuIcon className="w-6 h-6" />
@@ -593,6 +661,13 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="flex items-center gap-1">
+                    {uniqueSources.length > 0 && (
+                        <SourceFilterControl
+                            sources={uniqueSources}
+                            activeFilter={sourceFilter}
+                            onFilterChange={setSourceFilter}
+                        />
+                    )}
                     <button
                         onClick={() => setIsExportDialogOpen(true)}
                         disabled={activeConversationMessages.length === 0}
@@ -637,13 +712,14 @@ const App: React.FC = () => {
                 ) : (
                     <ChatWindow 
                         ref={chatWindowRef}
-                        messages={activeConversationMessages}
+                        messages={filteredMessages}
                         isLoading={isLoading && !activeTool}
                         onSuggestionClick={(prompt) => sendMessage(prompt)}
                         onFeedback={handleFeedback}
                         comparisonSelection={comparisonSelection}
                         onToggleCompare={handleToggleCompare}
                         onEditAnalysis={handleEditAnalysis}
+                        sourceFilter={sourceFilter}
                     />
                 )}
 
@@ -711,13 +787,21 @@ const App: React.FC = () => {
                         handleClearChat(isConfirmDialogOpen.id);
                     } else if (isConfirmDialogOpen.action === 'delete' && isConfirmDialogOpen.id) {
                         handleDeleteConversation(isConfirmDialogOpen.id);
+                    } else if (isConfirmDialogOpen.action === 'delete-group' && isConfirmDialogOpen.id) {
+                        handleDeleteGroup(isConfirmDialogOpen.id);
                     }
                 }}
-                title={isConfirmDialogOpen.action === 'clear' ? "Xóa cuộc trò chuyện?" : "Xóa vĩnh viễn?"}
+                title={
+                    isConfirmDialogOpen.action === 'clear' ? "Xóa cuộc trò chuyện?" :
+                    isConfirmDialogOpen.action === 'delete' ? "Xóa vĩnh viễn?" :
+                    "Xóa nhóm này?"
+                }
                 message={
                     isConfirmDialogOpen.action === 'clear' 
                     ? "Bạn có chắc chắn muốn xóa tất cả tin nhắn trong cuộc trò chuyện này không? Hành động này không thể hoàn tác."
-                    : "Bạn có chắc chắn muốn xóa vĩnh viễn cuộc trò chuyện này không? Hành động này không thể hoàn tác."
+                    : isConfirmDialogOpen.action === 'delete'
+                    ? "Bạn có chắc chắn muốn xóa vĩnh viễn cuộc trò chuyện này không? Hành động này không thể hoàn tác."
+                    : "Bạn có chắc chắn muốn xóa nhóm này không? Các cuộc trò chuyện bên trong sẽ không bị xóa."
                 }
             />
         )}

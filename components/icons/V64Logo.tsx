@@ -1,6 +1,5 @@
 import React from 'react';
 
-// NOTE: Filename contains a typo due to project constraints. The component is correctly named V64Logo.
 export const V64Logo: React.FC<{ className?: string }> = ({ className }) => (
   <svg
     viewBox="0 0 67 32"

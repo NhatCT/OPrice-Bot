@@ -13,7 +13,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({ isOpen, 
 
   return (
     <div 
-        className="fixed inset-0 bg-black bg-opacity-60 backdrop-blur-sm z-50 flex justify-center items-center"
+        className="fixed inset-0 bg-black/50 backdrop-blur-md z-50 flex justify-center items-center"
         aria-modal="true"
         role="dialog"
     >
@@ -23,7 +23,7 @@ export const ConfirmationDialog: React.FC<ConfirmationDialogProps> = ({ isOpen, 
         <div className="flex justify-end space-x-3">
           <button 
             onClick={onClose} 
-            className="px-5 py-2.5 rounded-lg font-semibold bg-slate-200 dark:bg-slate-600 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800"
+            className="px-5 py-2.5 rounded-lg font-semibold bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-slate-500 focus:ring-offset-2 focus:ring-offset-white dark:focus:ring-offset-slate-800"
           >
             Hủy
           </button>

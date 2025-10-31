@@ -1,5 +1,3 @@
-
-
 import React from 'react';
 // FIX: The Task type should be imported from the central types file.
 import type { Task } from '../types';
@@ -23,7 +21,7 @@ const StarterPromptCard: React.FC<{
 }> = ({ icon, title, description, onClick }) => (
     <button
         onClick={onClick}
-        className="text-left p-4 bg-white dark:bg-slate-800/50 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 border border-slate-200 dark:border-slate-700/50 transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
+        className="text-left p-4 bg-white/50 dark:bg-slate-800/50 rounded-xl hover:bg-slate-50 dark:hover:bg-slate-700/50 border border-slate-200/80 dark:border-slate-700/50 transition-all duration-300 hover:shadow-lg hover:-translate-y-1 hover:border-blue-500/30"
     >
         <div className="flex items-center space-x-3">
             <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center text-blue-500">{icon}</div>
@@ -35,11 +33,15 @@ const StarterPromptCard: React.FC<{
 
 export const Welcome: React.FC<WelcomeProps> = ({ onSuggestionClick, onToolSelect }) => {
     return (
-        <div className="flex-1 flex flex-col justify-center items-center p-6 overflow-y-auto">
-            <div className="text-center mb-8">
+        <div className="flex-1 flex flex-col justify-center items-center p-6 overflow-y-auto relative">
+            <div className="absolute inset-0 -z-10 bg-white dark:bg-transparent">
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.3),rgba(255,255,255,0))] dark:bg-[radial-gradient(ellipse_80%_80%_at_50%_-20%,rgba(120,119,198,0.15),rgba(255,255,255,0))]"></div>
+            </div>
+
+            <div className="text-center mb-10">
                 <SparklesIcon className="w-16 h-16 mx-auto text-blue-500 mb-4" />
-                <h1 className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100">Chào mừng đến với Trợ lý Kinh doanh V64</h1>
-                <p className="mt-2 text-slate-600 dark:text-slate-300 max-w-xl mx-auto">
+                <h1 className="text-2xl sm:text-4xl font-bold text-slate-800 dark:text-slate-100 tracking-tight">Trợ lý Kinh doanh V64</h1>
+                <p className="mt-3 text-slate-600 dark:text-slate-300 max-w-xl mx-auto">
                     Tôi có thể giúp bạn phân tích chiến lược giá hoặc trả lời các câu hỏi về V64. Hãy chọn một gợi ý bên dưới để bắt đầu!
                 </p>
             </div>

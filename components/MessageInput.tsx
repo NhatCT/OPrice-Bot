@@ -177,11 +177,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const quickActionClass = "flex items-center space-x-2 text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-700/50 rounded-full px-3 py-1.5 transition-colors duration-200 border border-slate-200 dark:border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed";
+  const quickActionClass = "flex items-center space-x-2 text-sm text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-lg px-3 py-2 transition-colors duration-200 border border-slate-200 dark:border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed";
   
-  const baseInputClass = "flex-1 w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 rounded-full px-5 py-2.5 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300 shadow-sm pr-12";
+  const baseInputClass = "flex-1 w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 rounded-full px-5 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300 shadow-sm pr-12";
   const recordingInputClass = "border-2 border-blue-500 animate-listening";
-  const defaultInputClass = "border border-slate-200 dark:border-slate-700";
+  const defaultInputClass = "border border-slate-300 dark:border-slate-700";
 
   if (activeTool) {
     return (
@@ -269,8 +269,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 <button
                     type="submit"
                     disabled={!input.trim() || isLoading}
-                    className="bg-blue-600 text-white rounded-full p-3 hover:bg-blue-500 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 hover:scale-105 active:scale-95"
+                    className="text-white rounded-full p-3 hover:opacity-90 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 hover:scale-105 active:scale-95"
                     aria-label="Send message"
+                    style={{ background: 'var(--brand-gradient)' }}
                 >
                     <PaperAirplaneIcon className="w-6 h-6" />
                 </button>

@@ -7,7 +7,7 @@ import { ClipboardIcon } from './icons/ClipboardIcon';
 import { CheckIcon } from './icons/CheckIcon';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { V54Logo } from './icons/V54Logo';
+import { V64Logo } from './icons/V64Logo';
 import { LightningBoltIcon } from './icons/LightningBoltIcon';
 import { ClockIcon } from './icons/ClockIcon';
 import { ScaleIcon } from './icons/ScaleIcon';
@@ -21,9 +21,10 @@ interface ChatMessageProps {
   onToggleCompare: (index: number) => void;
   isSelectedForCompare: boolean;
   onEditAnalysis: (message: ChatMessage) => void;
+  sourceFilter?: string;
 }
 
-export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSuggestionClick, onFeedback, index, onToggleCompare, isSelectedForCompare, onEditAnalysis }) => {
+export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSuggestionClick, onFeedback, index, onToggleCompare, isSelectedForCompare, onEditAnalysis, sourceFilter }) => {
   const [isCopied, setIsCopied] = useState(false);
   const [isFeedbackFormOpen, setIsFeedbackFormOpen] = useState(false);
   const [feedbackComment, setFeedbackComment] = useState('');
@@ -100,7 +101,7 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
       return (
         <div className="flex flex-col items-end animate-message-in">
           <div className="flex items-end gap-2 flex-row-reverse">
-            <div className="max-w-xl lg:max-w-3xl px-5 py-4 rounded-2xl rounded-br-md bg-blue-600 dark:bg-blue-500 text-white shadow-md">
+            <div className="max-w-xl lg:max-w-3xl px-5 py-4 rounded-2xl rounded-br-md text-white shadow-md" style={{ background: 'var(--brand-gradient)' }}>
               <div className="prose prose-sm prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none text-white leading-relaxed">
                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={{...markdownComponents, a: ({node, ...props}: any) => <a className="text-blue-200 hover:underline" target="_blank" rel="noopener noreferrer" {...props} /> }}>
                   {message.content}
@@ -115,18 +116,18 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
   // --- RENDER MODEL MESSAGE ---
   return (
     <div className="flex flex-row items-start gap-3 animate-message-in">
-        <V54Logo className="w-9 h-9 flex-shrink-0 mt-1" />
+        <V64Logo className="w-[67px] h-8 flex-shrink-0 mt-1" />
 
         <div className="flex flex-col w-full items-start max-w-xl lg:max-w-3xl">
-            <div className="w-full bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700/60 rounded-2xl">
+            <div className="w-full bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700/60 rounded-2xl shadow-sm">
                  <div className="flex justify-between items-center px-5 py-2.5 border-b border-slate-200/90 dark:border-slate-700/60">
-                    <h3 className="font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">Phản hồi từ AI</h3>
+                    <h3 className="font-semibold text-slate-500 dark:text-slate-400 text-xs uppercase tracking-wider">AI Response</h3>
                     {canShowActions && (
                         <div className="hidden md:flex gap-1">
                             {canEditAnalysis && (
                                 <button
                                     onClick={() => onEditAnalysis(message)}
-                                    className='p-2 rounded-lg transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'
+                                    className='p-2 rounded-lg transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'
                                     aria-label="Edit and Recalculate"
                                     title="Chỉnh sửa & Tính lại"
                                 >
@@ -136,20 +137,20 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                             {canShowCompare && (
                                 <button
                                     onClick={() => onToggleCompare(index)}
-                                    className={`p-2 rounded-lg transition-colors duration-200 ${isSelectedForCompare ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`}
+                                    className={`p-2 rounded-lg transition-colors duration-200 ${isSelectedForCompare ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'}`}
                                     aria-label="Compare Sources"
                                     title="Chọn để so sánh nguồn"
                                 >
                                     <ScaleIcon className="w-5 h-5" />
                                 </button>
                             )}
-                            <button onClick={handleCopy} className={`p-2 rounded-lg transition-all duration-200 ${isCopied ? 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700'}`} aria-label={isCopied ? "Copied" : "Copy"} title={isCopied ? "Đã sao chép!" : "Sao chép"} >
+                            <button onClick={handleCopy} className={`p-2 rounded-lg transition-all duration-200 ${isCopied ? 'bg-green-100 dark:bg-green-900/50 text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60'}`} aria-label={isCopied ? "Copied" : "Copy"} title={isCopied ? "Đã sao chép!" : "Sao chép"} >
                                 {isCopied ? <CheckIcon className="w-5 h-5" /> : <ClipboardIcon className="w-5 h-5" />}
                             </button>
-                            <button onClick={() => handleThumbClick('positive')} disabled={feedbackGiven || isFeedbackFormOpen} className={`p-2 rounded-lg transition-colors duration-200 ${message.feedback === 'positive' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Good" title="Phản hồi tốt">
+                            <button onClick={() => handleThumbClick('positive')} disabled={feedbackGiven || isFeedbackFormOpen} className={`p-2 rounded-lg transition-colors duration-200 ${message.feedback === 'positive' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Good" title="Phản hồi tốt">
                                 <ThumbUpIcon className="w-5 h-5" />
                             </button>
-                            <button onClick={() => handleThumbClick('negative')} disabled={feedbackGiven || isFeedbackFormOpen} className={`p-2 rounded-lg transition-colors duration-200 ${message.feedback === 'negative' ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Bad" title="Phản hồi chưa tốt">
+                            <button onClick={() => handleThumbClick('negative')} disabled={feedbackGiven || isFeedbackFormOpen} className={`p-2 rounded-lg transition-colors duration-200 ${message.feedback === 'negative' ? 'bg-red-100 dark:bg-red-900/50 text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-700/60 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Bad" title="Phản hồi chưa tốt">
                                 <ThumbDownIcon className="w-5 h-5" />
                             </button>
                         </div>
@@ -225,16 +226,26 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                     <div className="w-full border-t border-slate-200/90 dark:border-slate-700/60 p-5 bg-slate-50 dark:bg-slate-800/40 rounded-b-2xl">
                         <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">Nguồn tham khảo</h4>
                         <div className="flex flex-col space-y-2.5">
-                            {message.sources!.map((source, i) => (
-                                <a key={i} href={source.uri} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 text-sm group" title={source.uri}>
-                                    <div className="flex items-center space-x-2">
+                            {message.sources!.map((source, i) => {
+                                const isHighlighted = source.uri === sourceFilter;
+                                return (
+                                <a 
+                                    key={i} 
+                                    href={source.uri} 
+                                    target="_blank" 
+                                    rel="noopener noreferrer" 
+                                    className={`text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 text-sm group transition-colors duration-200 rounded-md ${isHighlighted ? 'bg-blue-100 dark:bg-blue-900/50' : ''}`} 
+                                    title={source.uri}
+                                >
+                                    <div className={`flex items-center space-x-2 ${isHighlighted ? 'p-1.5' : ''}`}>
                                         <span className="flex-shrink-0 w-4 h-4 text-slate-500 dark:text-slate-400 group-hover:text-blue-500 dark:group-hover:text-blue-300">
                                             <ExternalLinkIcon />
                                         </span>
                                         <span className="truncate group-hover:underline">{source.title || source.uri}</span>
                                     </div>
                                 </a>
-                            ))}
+                                )
+                            })}
                         </div>
                     </div>
                 )}

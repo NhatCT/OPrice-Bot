@@ -1,8 +1,9 @@
-import type { UserProfile, ConversationMeta, ChatMessage } from '../types';
+import type { UserProfile, ConversationMeta, ChatMessage, ConversationGroup } from '../types';
 
 // Client-side implementation using localStorage
 const USER_PROFILE_KEY = 'v64_chat_user_profile';
 const CONVERSATIONS_META_KEY = 'v64_conversations_meta';
+const CONVERSATION_GROUPS_KEY = 'v64_conversation_groups';
 const getConvoMessagesKey = (id: string) => `v64_convo_messages_${id}`;
 
 // Helper to get all conversations from localStorage
@@ -60,7 +61,7 @@ export const createNewConversation = async (): Promise<ConversationMeta | null> 
     try {
         const conversations = getAllConversations();
         const id = (Date.now()).toString();
-        const newConversationMeta: ConversationMeta = { id, title: 'Cuộc trò chuyện mới' };
+        const newConversationMeta: ConversationMeta = { id, title: 'Cuộc trò chuyện mới', groupId: null };
         conversations[id] = { meta: newConversationMeta, messages: [] };
         saveAllConversations(conversations);
         return newConversationMeta;
@@ -158,6 +159,105 @@ export const sendFeedback = async (feedbackData: { messageId: number; feedback: 
         return { success: false };
     } catch (error) {
         console.error("Error sending feedback:", error);
+        return { success: false };
+    }
+};
+
+// --- Conversation Group Functions ---
+
+export const loadConversationGroups = async (): Promise<Record<string, ConversationGroup>> => {
+    try {
+        return JSON.parse(localStorage.getItem(CONVERSATION_GROUPS_KEY) || '{}');
+    } catch (error) {
+        console.error("Error loading conversation groups:", error);
+        return {};
+    }
+};
+
+export const saveConversationGroups = async (groups: Record<string, ConversationGroup>): Promise<{ success: boolean }> => {
+    try {
+        localStorage.setItem(CONVERSATION_GROUPS_KEY, JSON.stringify(groups));
+        return { success: true };
+    } catch (error) {
+        console.error("Error saving conversation groups:", error);
+        return { success: false };
+    }
+};
+
+export const createConversationGroup = async (name: string): Promise<ConversationGroup | null> => {
+    try {
+        const groups = await loadConversationGroups();
+        const id = `group_${Date.now()}`;
+        const newGroup: ConversationGroup = { id, name };
+        groups[id] = newGroup;
+        await saveConversationGroups(groups);
+        return newGroup;
+    } catch (error) {
+        console.error("Error creating new group:", error);
+        return null;
+    }
+};
+
+export const renameConversationGroup = async (id: string, newName: string): Promise<{ success: boolean }> => {
+    try {
+        const groups = await loadConversationGroups();
+        if (groups[id]) {
+            groups[id].name = newName;
+            await saveConversationGroups(groups);
+            return { success: true };
+        }
+        return { success: false };
+    } catch (error) {
+        console.error("Error renaming group:", error);
+        return { success: false };
+    }
+};
+
+export const deleteConversationGroup = async (id: string): Promise<{ success: boolean }> => {
+    try {
+        // First, remove the group itself
+        const groups = await loadConversationGroups();
+        if (!groups[id]) return { success: false }; // Group doesn't exist
+        delete groups[id];
+        await saveConversationGroups(groups);
+
+        // Then, unassign conversations from the deleted group
+        const conversationsMeta = await loadConversations();
+        Object.values(conversationsMeta).forEach(convo => {
+            if (convo.groupId === id) {
+                convo.groupId = null;
+            }
+        });
+        // This is a bit inefficient as it re-reads/re-writes messages, but it's safe
+        const fullConversations = getAllConversations();
+        Object.keys(fullConversations).forEach(convoId => {
+            if (fullConversations[convoId].meta.groupId === id) {
+                fullConversations[convoId].meta.groupId = null;
+            }
+        });
+        saveAllConversations(fullConversations);
+
+        return { success: true };
+    } catch (error) {
+        console.error("Error deleting group:", error);
+        return { success: false };
+    }
+};
+
+
+export const assignConversationToGroup = async (conversationId: string, groupId: string | null): Promise<{ success: boolean }> => {
+    try {
+        // This is simpler - we just need to update the conversation's meta
+        const convos = await loadConversations();
+        if (convos[conversationId]) {
+            convos[conversationId].groupId = groupId;
+            // Directly save the meta file
+            localStorage.setItem(CONVERSATIONS_META_KEY, JSON.stringify(convos));
+            return { success: true };
+        }
+        return { success: false };
+    } catch (error) {
+        console.error("Error assigning conversation to group:", error);
         return { success: false };
     }
 };

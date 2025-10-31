@@ -15,6 +15,17 @@
         document.documentElement.classList.remove('dark');
       }
     </script>
+    <style>
+      :root {
+        --brand-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
+      }
+      body.dark {
+        background-image:
+            linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
+            linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        background-size: 2rem 2rem;
+      }
+    </style>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       // Configure Tailwind CDN to use class-based dark mode
@@ -44,7 +55,7 @@
 }
 </script>
 </head>
-  <body class="bg-gray-50 dark:bg-gray-950 text-gray-800 dark:text-gray-200 overflow-hidden">
+  <body class="bg-slate-100 dark:bg-[#0d1222] text-gray-800 dark:text-gray-200 overflow-hidden">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

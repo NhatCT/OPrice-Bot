@@ -2,7 +2,7 @@ import React, { useEffect, useRef, forwardRef } from 'react';
 import type { ChatMessage } from '../types';
 import { ChatMessageComponent } from './ChatMessage';
 import { TypingIndicator } from './TypingIndicator';
-import { V54Logo } from './icons/V54Logo';
+import { V64Logo } from './icons/V64Logo';
 
 interface ChatWindowProps {
   messages: ChatMessage[];
@@ -12,10 +12,11 @@ interface ChatWindowProps {
   comparisonSelection: number[];
   onToggleCompare: (index: number) => void;
   onEditAnalysis: (message: ChatMessage) => void;
+  sourceFilter: string | null;
 }
 
 export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
-  ({ messages, isLoading, onSuggestionClick, onFeedback, comparisonSelection, onToggleCompare, onEditAnalysis }, ref) => {
+  ({ messages, isLoading, onSuggestionClick, onFeedback, comparisonSelection, onToggleCompare, onEditAnalysis, sourceFilter }, ref) => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -34,12 +35,13 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
               onToggleCompare={onToggleCompare}
               isSelectedForCompare={comparisonSelection.includes(index)}
               onEditAnalysis={onEditAnalysis}
+              sourceFilter={sourceFilter}
           />
         ))}
         {isLoading && messages.length > 0 && messages[messages.length - 1].role === 'model' && messages[messages.length - 1].content === '' && (
           <div className="flex items-start gap-3 animate-message-in">
-               <V54Logo
-                  className="w-9 h-9 flex-shrink-0 mt-1"
+               <V64Logo
+                  className="w-[67px] h-8 flex-shrink-0 mt-1"
               />
               <div className="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-2xl rounded-bl-none">
                    <TypingIndicator />

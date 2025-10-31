@@ -62,7 +62,7 @@ export const AnalysisChart: React.FC<AnalysisChartProps> = ({ chart, theme }) =>
                             <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} />
                             <XAxis dataKey="name" stroke={tickColor} fontSize={12} tickLine={false} axisLine={false} />
                             <YAxis stroke={tickColor} fontSize={12} tickLine={false} axisLine={false} tickFormatter={formatValue} />
-                            <Tooltip content={<CustomTooltip />} cursor={{ fill: theme === 'dark' ? 'rgba(148, 163, 184, 0.1)' : 'rgba(100, 116, 139, 0.1)' }} />
+                            <Tooltip content={CustomTooltip} cursor={{ fill: theme === 'dark' ? 'rgba(148, 163, 184, 0.1)' : 'rgba(100, 116, 139, 0.1)' }} />
                             <Bar dataKey={dataKey} name="Giá trị" barSize={40} radius={[4, 4, 0, 0]}>
                                  {chart.data.map((entry, idx) => (
                                     <Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />

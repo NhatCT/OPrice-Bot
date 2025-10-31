@@ -47,8 +47,14 @@ export interface Conversation {
   messages: ChatMessage[];
 }
 
+export interface ConversationGroup {
+    id: string;
+    name: string;
+}
+
 // Add ConversationMeta for optimized loading
 export interface ConversationMeta {
   id:string;
   title: string;
+  groupId?: string | null;
 }
