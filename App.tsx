@@ -28,6 +28,7 @@ import { ArrowDownTrayIcon } from './components/icons/ArrowDownTrayIcon';
 import { toPng } from 'html-to-image';
 import { AnalysisChart } from './components/charts/AnalysisChart';
 import { SourceFilterControl } from './components/SourceFilterControl';
+import { GuidedInputForm } from './components/GuidedInputForm';
 
 
 const THEME_KEY = 'theme';
@@ -221,6 +222,10 @@ const App: React.FC = () => {
         abortControllerRef.current.abort();
     }
     setIsLoading(false);
+  };
+
+  const handleSendAnalysis = (prompt: string, params: Record<string, any>) => {
+    sendMessage(prompt, { params, task: activeTool!.task });
   };
 
   const sendMessage = useCallback(async (userInput: string, analysisPayload?: { params: any; task: Task }) => {
@@ -561,10 +566,6 @@ const App: React.FC = () => {
     setIsExporting(false);
     setIsExportDialogOpen(false);
   }, [activeConversationId, conversations, activeConversationMessages]);
-
-  const handleSendAnalysis = (prompt: string, params: Record<string, any>) => {
-    sendMessage(prompt, { params, task: activeTool!.task });
-  };
   
   // --- Group Handlers ---
   const handleCreateGroup = async (name: string) => {
@@ -707,13 +708,23 @@ const App: React.FC = () => {
             </header>
             
             <div className="flex-1 flex flex-col overflow-hidden">
-                {activeConversationMessages.length === 0 && !isLoading ? (
+                {activeTool ? (
+                    <div className="flex-1 overflow-y-auto p-6">
+                        <GuidedInputForm 
+                            task={activeTool.task}
+                            initialData={activeTool.initialData}
+                            onSubmit={handleSendAnalysis}
+                            onCancel={() => setActiveTool(null)}
+                            isLoading={isLoading}
+                        />
+                    </div>
+                ) : activeConversationMessages.length === 0 && !isLoading ? (
                     <Welcome onSuggestionClick={(prompt) => sendMessage(prompt)} onToolSelect={(task) => setActiveTool({ task })} />
                 ) : (
                     <ChatWindow 
                         ref={chatWindowRef}
                         messages={filteredMessages}
-                        isLoading={isLoading && !activeTool}
+                        isLoading={isLoading}
                         onSuggestionClick={(prompt) => sendMessage(prompt)}
                         onFeedback={handleFeedback}
                         comparisonSelection={comparisonSelection}
@@ -732,16 +743,16 @@ const App: React.FC = () => {
                     />
                 )}
 
-                <MessageInput 
-                    onSendMessage={(prompt) => sendMessage(prompt)}
-                    onSendAnalysis={handleSendAnalysis}
-                    isLoading={isLoading}
-                    onNewChat={() => handleNewChat()}
-                    onClearChat={() => activeConversationId && setIsConfirmDialogOpen({ action: 'clear', id: activeConversationId })}
-                    activeTool={activeTool}
-                    setActiveTool={setActiveTool}
-                    onStopGeneration={handleStopGeneration}
-                />
+                {!activeTool && (
+                    <MessageInput 
+                        onSendMessage={(prompt) => sendMessage(prompt)}
+                        isLoading={isLoading}
+                        onNewChat={() => handleNewChat()}
+                        onClearChat={() => activeConversationId && setIsConfirmDialogOpen({ action: 'clear', id: activeConversationId })}
+                        setActiveTool={setActiveTool}
+                        onStopGeneration={handleStopGeneration}
+                    />
+                )}
             </div>
         </main>
 

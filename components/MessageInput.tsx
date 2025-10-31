@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { PaperAirplaneIcon } from './icons/PaperAirplaneIcon';
 import { PlusIcon } from './icons/PlusIcon';
 import { TrashIcon } from './icons/TrashIcon';
-import { GuidedInputForm } from './GuidedInputForm';
 import type { Task } from '../types';
 import { DotsVerticalIcon } from './icons/DotsVerticalIcon';
 import { StopIcon } from './icons/StopIcon';
@@ -64,22 +63,18 @@ declare global {
 
 interface MessageInputProps {
   onSendMessage: (message: string) => void;
-  onSendAnalysis: (prompt: string, params: Record<string, any>) => void;
   isLoading: boolean;
   onNewChat: () => void;
   onClearChat: () => void;
-  activeTool: { task: Task; initialData?: Record<string, any> } | null;
   setActiveTool: (tool: { task: Task; initialData?: Record<string, any> } | null) => void;
   onStopGeneration: () => void;
 }
 
 export const MessageInput: React.FC<MessageInputProps> = ({ 
   onSendMessage,
-  onSendAnalysis,
   isLoading, 
   onNewChat, 
   onClearChat, 
-  activeTool, 
   setActiveTool,
   onStopGeneration,
 }) => {
@@ -163,10 +158,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   };
   
-  const handleQuickAction = (prompt: string) => {
-    setInput(prompt);
-  };
-
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
@@ -182,20 +173,6 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   const baseInputClass = "flex-1 w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 rounded-full px-5 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300 shadow-sm pr-12";
   const recordingInputClass = "border-2 border-blue-500 animate-listening";
   const defaultInputClass = "border border-slate-300 dark:border-slate-700";
-
-  if (activeTool) {
-    return (
-        <div className="p-4 bg-white/70 dark:bg-slate-800/50 backdrop-blur-md border-t border-slate-200 dark:border-slate-700">
-            <GuidedInputForm 
-                task={activeTool.task}
-                initialData={activeTool.initialData}
-                onSubmit={onSendAnalysis}
-                onCancel={() => setActiveTool(null)}
-                isLoading={isLoading}
-            />
-        </div>
-    );
-  }
 
   return (
     <div className="p-4 bg-white/70 dark:bg-slate-800/50 backdrop-blur-md border-t border-slate-200 dark:border-slate-700 shrink-0">

@@ -61,6 +61,8 @@ Toàn bộ phản hồi của bạn **BẮT BUỘC** phải là một khối mã
 const taskConfig = {
   'profit-analysis': {
     title: 'Phân tích Lợi nhuận & Lập kế hoạch Kinh doanh',
+    subtitle: 'Nhập các thông tin bạn đã có, chatbot sẽ tính toán yếu tố còn lại.',
+    gradient: 'from-blue-500 to-sky-500',
     generatePrompt: (data: Record<string, any>) => {
         const {
             calculationTarget, period, productName, cost, variableCost, fixedCost, 
@@ -99,6 +101,8 @@ const taskConfig = {
   },
   'promo-price': {
     title: 'Phân tích Hiệu quả Khuyến mãi',
+    subtitle: 'So sánh kịch bản trước và sau khuyến mãi để đưa ra quyết định tối ưu.',
+    gradient: 'from-green-500 to-emerald-500',
      generatePrompt: (data: Record<string, any>) => {
       let prompt = `Hãy phân tích hiệu quả cho chương trình khuyến mãi của sản phẩm "${data.productName}" với các thông số sau:\n\n**KỊCH BẢN HIỆN TẠI:**\n- Giá bán gốc: ${data.originalPrice} VND\n- Giá vốn: ${data.cost} VND\n- Doanh số trung bình/tháng: ${data.currentSales} sản phẩm\n\n**KỊCH BẢN KHUYẾN MÃI:**\n- Tỉ lệ giảm giá: ${data.discount}% (Giá bán mới sẽ là ${Number(data.originalPrice) * (1 - Number(data.discount)/100)} VND)\n- Doanh số kỳ vọng/tháng: ${data.expectedSales} sản phẩm\n- Mục tiêu chiến dịch: **${data.promoGoal === 'profit' ? 'Tối đa hóa Lợi nhuận' : 'Tối đa hóa Doanh thu'}**\n\n`;
       if (data.useMarket) {
@@ -112,6 +116,8 @@ const taskConfig = {
   },
   'group-price': {
     title: 'Phân tích Chiến dịch Đồng giá',
+    subtitle: 'Đánh giá hiệu quả của việc áp dụng một mức giá chung cho nhiều sản phẩm.',
+    gradient: 'from-purple-500 to-violet-500',
     generatePrompt: (data: Record<string, any>) => {
       let prompt = `Tôi có một nhóm sản phẩm và muốn phân tích hiệu quả của việc áp dụng chính sách bán đồng giá. Dưới đây là dữ liệu:\n\n**DANH SÁCH SẢN PHẨM:**\n(Tên sản phẩm | Giá vốn | Giá bán hiện tại | Doanh số/tháng)\n${data.products}\n\n`;
       prompt += `**KỊCH BẢN ĐỒNG GIÁ:**\n- Mức giá đồng giá mục tiêu: ${data.flatPrice} VND\n- Doanh số kỳ vọng của mỗi sản phẩm sẽ tăng: ${data.salesIncrease}% so với hiện tại.\n\n`;
@@ -152,6 +158,7 @@ const ProfitAnalysisForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, init
     const [calculationTarget, setCalculationTarget] = useState<CalculationTarget>('sellingPrice');
     const [period, setPeriod] = useState<Period>('monthly');
     const [useMarket, setUseMarket] = useState(true);
+    const config = taskConfig['profit-analysis'];
 
     useEffect(() => {
         if (initialData) {
@@ -202,7 +209,7 @@ const ProfitAnalysisForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, init
         e.preventDefault();
         if (validate()) {
             const fullParams = { ...formData, calculationTarget, period, useMarket };
-            const prompt = taskConfig['profit-analysis'].generatePrompt(fullParams);
+            const prompt = config.generatePrompt(fullParams);
             onSubmit(prompt, fullParams);
         }
     };
@@ -221,8 +228,8 @@ const ProfitAnalysisForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, init
     
     return (
       <div className="w-full max-w-2xl mx-auto">
-        <h3 className="text-xl font-bold text-center mb-1 text-slate-800 dark:text-slate-100 bg-clip-text text-transparent bg-gradient-to-r from-blue-500 to-sky-500">{initialData ? 'Chỉnh sửa Phân tích Lợi nhuận' : taskConfig['profit-analysis'].title}</h3>
-        <p className="text-center text-sm text-slate-500 dark:text-slate-400 mb-6">Nhập các thông tin bạn đã có, chatbot sẽ tính toán yếu tố còn lại.</p>
+        <h3 className={`text-xl font-bold text-center mb-1 bg-clip-text text-transparent bg-gradient-to-r ${config.gradient}`}>{initialData ? 'Chỉnh sửa Phân tích' : config.title}</h3>
+        <p className="text-center text-sm text-slate-500 dark:text-slate-400 mb-6">{config.subtitle}</p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
             <FormSection title="1. Thiết lập Kế hoạch" icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-slate-500"><path fillRule="evenodd" d="M2 3.5A1.5 1.5 0 0 1 3.5 2h1.148a1.5 1.5 0 0 1 1.465 1.175l.716 3.223a1.5 1.5 0 0 1-1.052 1.767l-.933.267c-.41.117-.643.555-.48.95a11.542 11.542 0 0 0 6.254 6.254c.395.163.833-.07.95-.48l.267-.933a1.5 1.5 0 0 1 1.767-1.052l3.223.716A1.5 1.5 0 0 1 18 15.352V16.5a1.5 1.5 0 0 1-1.5 1.5h-1.5A13.5 13.5 0 0 1 2 3.5Z" clipRule="evenodd" /></svg>}>
@@ -297,6 +304,7 @@ const PromoPriceForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, initialD
     const [errors, setErrors] = useState<Record<string, string>>({});
     const [useMarket, setUseMarket] = useState(true);
     const [newPrice, setNewPrice] = useState<number | null>(null);
+    const config = taskConfig['promo-price'];
 
     useEffect(() => {
         if (initialData) {
@@ -344,7 +352,7 @@ const PromoPriceForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, initialD
         e.preventDefault();
         if (validate()) {
             const fullParams = { ...formData, useMarket };
-            const prompt = taskConfig['promo-price'].generatePrompt(fullParams);
+            const prompt = config.generatePrompt(fullParams);
             onSubmit(prompt, fullParams);
         }
     };
@@ -353,7 +361,8 @@ const PromoPriceForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, initialD
 
     return (
         <div className="w-full max-w-2xl mx-auto">
-            <h3 className="text-xl font-bold text-center mb-6 text-slate-800 dark:text-slate-100 bg-clip-text text-transparent bg-gradient-to-r from-green-500 to-emerald-500">{initialData ? 'Chỉnh sửa Phân tích Khuyến mãi' : taskConfig['promo-price'].title}</h3>
+            <h3 className={`text-xl font-bold text-center mb-1 bg-clip-text text-transparent bg-gradient-to-r ${config.gradient}`}>{initialData ? 'Chỉnh sửa Phân tích' : config.title}</h3>
+            <p className="text-center text-sm text-slate-500 dark:text-slate-400 mb-6">{config.subtitle}</p>
             <form onSubmit={handleSubmit} className="space-y-4">
                  <FormSection title="Kịch bản Hiện tại" icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-slate-500"><path d="M10 3a.75.75 0 0 1 .75.75v1.5h4.5a.75.75 0 0 1 0 1.5h-4.5v1.5a.75.75 0 0 1-1.5 0v-1.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-1.5A.75.75 0 0 1 10 3ZM5.25 7.5A.75.75 0 0 1 6 8.25v1.5h8.25a.75.75 0 0 1 0 1.5H6v1.5a.75.75 0 0 1-1.5 0v-1.5H3.75a.75.75 0 0 1 0-1.5h.75v-1.5A.75.75 0 0 1 5.25 7.5Z" /></svg>}>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
@@ -468,6 +477,7 @@ const GroupPriceForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, initialD
     const [flatPriceError, setFlatPriceError] = useState('');
     const [salesIncreaseError, setSalesIncreaseError] = useState('');
     const [useMarket, setUseMarket] = useState(true);
+    const config = taskConfig['group-price'];
 
     useEffect(() => {
         if (initialData) {
@@ -544,7 +554,7 @@ const GroupPriceForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, initialD
         if (validate()) {
             const productsString = formatProductsArray(products);
             const fullParams = { products: productsString, flatPrice, salesIncrease, useMarket };
-            const prompt = taskConfig['group-price'].generatePrompt(fullParams);
+            const prompt = config.generatePrompt(fullParams);
             onSubmit(prompt, fullParams);
         }
     };
@@ -554,7 +564,8 @@ const GroupPriceForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, initialD
 
     return (
         <div className="w-full max-w-3xl mx-auto">
-            <h3 className="text-xl font-bold text-center mb-6 text-slate-800 dark:text-slate-100 bg-clip-text text-transparent bg-gradient-to-r from-purple-500 to-violet-500">{initialData ? 'Chỉnh sửa Phân tích Đồng giá' : taskConfig['group-price'].title}</h3>
+            <h3 className={`text-xl font-bold text-center mb-1 bg-clip-text text-transparent bg-gradient-to-r ${config.gradient}`}>{initialData ? 'Chỉnh sửa Phân tích' : config.title}</h3>
+            <p className="text-center text-sm text-slate-500 dark:text-slate-400 mb-6">{config.subtitle}</p>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <FormSection title="1. Danh sách sản phẩm" icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-slate-500"><path d="M3 4.25A2.25 2.25 0 0 1 5.25 2h9.5A2.25 2.25 0 0 1 17 4.25v11.5A2.25 2.25 0 0 1 14.75 18h-9.5A2.25 2.25 0 0 1 3 15.75V4.25ZM5.25 3.5a.75.75 0 0 0-.75.75v11.5c0 .414.336.75.75.75h9.5a.75.75 0 0 0 .75-.75V4.25a.75.75 0 0 0-.75-.75h-9.5Z" /><path d="M9 6.5a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 9 6.5Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 9 9.5Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75ZM6 6.5a.75.75 0 0 1 .75-.75h.008a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 6.5ZM6 9.5a.75.75 0 0 1 .75-.75h.008a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 9.5ZM6 12.5a.75.75 0 0 1 .75-.75h.008a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 12.5Z" /></svg>}>
                     <div className="space-y-3">
