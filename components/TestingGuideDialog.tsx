@@ -6,7 +6,7 @@ import { BeakerIcon } from './icons/BeakerIcon';
 import { toPng } from 'html-to-image';
 import { PhotoIcon } from './icons/PhotoIcon';
 import { DocumentTextIcon } from './icons/DocumentTextIcon';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Label } from 'recharts';
 
 
 interface TestingGuideDialogProps {
@@ -47,10 +47,14 @@ const PerformanceChart: React.FC<{ data: any[] }> = ({ data }) => {
   return (
     <div className="mt-4 h-64">
       <ResponsiveContainer width="100%" height="100%">
-        <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+        <LineChart data={data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.2} />
-          <XAxis dataKey="request" label={{ value: 'Yêu cầu', position: 'insideBottom', offset: -5 }} stroke="rgb(100 116 139)" />
-          <YAxis label={{ value: 'Time (ms)', angle: -90, position: 'insideLeft' }} stroke="rgb(100 116 139)" />
+          <XAxis dataKey="request" stroke="rgb(100 116 139)">
+            <Label value="Yêu cầu" position="insideBottom" offset={-5} fill="rgb(100 116 139)" />
+          </XAxis>
+          <YAxis stroke="rgb(100 116 139)">
+            <Label value="Time (ms)" angle={-90} position="insideLeft" style={{ textAnchor: 'middle' }} fill="rgb(100 116 139)" />
+          </YAxis>
           <Tooltip
             contentStyle={{
               backgroundColor: 'rgba(255, 255, 255, 0.8)',
@@ -216,7 +220,7 @@ export const TestingGuideDialog: React.FC<TestingGuideDialogProps> = ({ isOpen, 
                 <CheckBadgeIcon className="w-7 h-7 text-blue-500"/>
                 <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Hướng dẫn Kiểm thử Chatbot</h2>
              </div>
-             <button onClick={onClose} className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Close dialog">
+             <button onClick={onClose} className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Đóng hộp thoại">
                 <XIcon className="w-6 h-6" />
              </button>
         </header>

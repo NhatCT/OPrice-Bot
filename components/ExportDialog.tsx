@@ -50,7 +50,7 @@ export const ExportDialog: React.FC<ExportDialogProps> = ({ isOpen, onClose, onE
       >
         <header className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Xuất cuộc trò chuyện</h2>
-             <button onClick={onClose} disabled={isExporting} className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50" aria-label="Close dialog">
+             <button onClick={onClose} disabled={isExporting} className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors disabled:opacity-50" aria-label="Đóng hộp thoại">
                 <XIcon className="w-6 h-6" />
              </button>
         </header>

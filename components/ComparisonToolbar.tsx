@@ -32,12 +32,12 @@ export const ComparisonToolbar: React.FC<ComparisonToolbarProps> = ({ selection,
           <ScaleIcon className="w-6 h-6 text-purple-500 flex-shrink-0" />
           <div className="min-w-0">
             <p className="font-semibold text-sm text-slate-800 dark:text-slate-100">
-              {canCompare ? 'Sẵn sàng so sánh' : `Đã chọn ${selectionCount}/2 phản hồi`}
+              {canCompare ? 'Sẵn sàng so sánh nguồn' : `Đã chọn ${selectionCount}/2 phản hồi`}
             </p>
             <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
               {canCompare
-                ? `So sánh phản hồi ${getMessageTitle(selection[0])} và ${getMessageTitle(selection[1])}`
-                : 'Chọn một phản hồi khác để so sánh nguồn.'}
+                ? `So sánh các nguồn được sử dụng trong 2 phản hồi đã chọn.`
+                : 'Chọn một phản hồi khác để so sánh nguồn tham khảo.'}
             </p>
           </div>
         </div>
@@ -52,7 +52,7 @@ export const ComparisonToolbar: React.FC<ComparisonToolbarProps> = ({ selection,
           <button
             onClick={onClear}
             className="p-2 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
-            aria-label="Clear selection"
+            aria-label="Bỏ chọn"
             title="Bỏ chọn"
           >
             <XIcon className="w-5 h-5" />

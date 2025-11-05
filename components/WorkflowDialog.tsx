@@ -1,5 +1,6 @@
 import React from 'react';
 import { XIcon } from './icons/XIcon';
+import { WorkflowInfo } from './WorkflowInfo';
 
 interface WorkflowDialogProps {
   isOpen: boolean;
@@ -34,70 +35,38 @@ export const WorkflowDialog: React.FC<WorkflowDialogProps> = ({ isOpen, onClose 
       >
         <header className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
              <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Quy trình làm việc</h2>
-             <button onClick={onClose} className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Close dialog">
+             <button onClick={onClose} className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Đóng hộp thoại">
                 <XIcon className="w-6 h-6" />
              </button>
         </header>
 
         <div className="p-6 max-h-[70vh] overflow-y-auto space-y-8">
-            <section>
-                <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-4">Hỗ trợ tính giá chuyên sâu</h3>
-                <ul className="space-y-4">
-                    <li className="flex items-start space-x-4">
-                        <StepIcon><SelectIcon /></StepIcon>
-                        <div>
-                            <h4 className="font-semibold text-slate-700 dark:text-slate-200">1. Chọn công cụ</h4>
-                            <p className="text-slate-600 dark:text-slate-300 text-sm">Chọn một trong các công cụ chuyên dụng: Phân tích Lợi nhuận, Phân tích Khuyến mãi, hoặc Phân tích Đồng giá.</p>
-                        </div>
-                    </li>
-                    <li className="flex items-start space-x-4">
-                        <StepIcon><FormIcon /></StepIcon>
-                        <div>
-                            <h4 className="font-semibold text-slate-700 dark:text-slate-200">2. Nhập thông tin</h4>
-                            <p className="text-slate-600 dark:text-slate-300 text-sm">Điền các thông số cần thiết như giá vốn, chi phí, doanh số... vào biểu mẫu hướng dẫn chi tiết.</p>
-                        </div>
-                    </li>
-                    <li className="flex items-start space-x-4">
-                        <StepIcon><AnalysisIcon /></StepIcon>
-                        <div>
-                            <h4 className="font-semibold text-slate-700 dark:text-slate-200">3. AI Phân tích</h4>
-                            <p className="text-slate-600 dark:text-slate-300 text-sm">Trợ lý AI sẽ tiếp nhận dữ liệu, áp dụng các mô hình kinh doanh để thực hiện phân tích chuyên sâu.</p>
-                        </div>
-                    </li>
-                    <li className="flex items-start space-x-4">
-                        <StepIcon><ResultIcon /></StepIcon>
-                        <div>
-                            <h4 className="font-semibold text-slate-700 dark:text-slate-200">4. Nhận kết quả</h4>
-                            <p className="text-slate-600 dark:text-slate-300 text-sm">Nhận ngay câu trả lời chi tiết bao gồm công thức, giá bán đề xuất, điểm hòa vốn và lời khuyên chiến lược.</p>
-                        </div>
-                    </li>
-                </ul>
-            </section>
+            <WorkflowInfo />
 
-             <div className="border-t border-slate-200 dark:border-slate-600/70"></div>
-
+             <div className="border-t border-slate-200 dark:border-slate-600/70 pt-8"></div>
+            
             <section>
-                <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-4">Hỏi đáp thông tin V64.VN</h3>
+                <h3 className="text-lg font-semibold text-blue-600 dark:text-blue-400 mb-4">Hỗ trợ tính giá & Hỏi đáp V64</h3>
                  <ul className="space-y-4">
                     <li className="flex items-start space-x-4">
                         <StepIcon><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg></StepIcon>
                         <div>
-                            <h4 className="font-semibold text-slate-700 dark:text-slate-200">1. Đặt câu hỏi</h4>
-                            <p className="text-slate-600 dark:text-slate-300 text-sm">Nhập câu hỏi của bạn về công ty, giải pháp hoặc các dự án của V64 vào ô chat.</p>
+                            <h4 className="font-semibold text-slate-700 dark:text-slate-200">1. Chọn công cụ hoặc Đặt câu hỏi</h4>
+                            <p className="text-slate-600 dark:text-slate-300 text-sm">Sử dụng các công cụ phân tích chuyên sâu (Lợi nhuận, Khuyến mãi...) hoặc nhập câu hỏi về V64 vào ô chat.</p>
                         </div>
                     </li>
                     <li className="flex items-start space-x-4">
                         <StepIcon><SearchIcon /></StepIcon>
                         <div>
-                            <h4 className="font-semibold text-slate-700 dark:text-slate-200">2. AI Tìm kiếm</h4>
-                            <p className="text-slate-600 dark:text-slate-300 text-sm">AI sẽ tự động tìm kiếm và tổng hợp thông tin chính xác nhất từ toàn bộ website v64.vn.</p>
+                            <h4 className="font-semibold text-slate-700 dark:text-slate-200">2. AI Phân tích & Tìm kiếm</h4>
+                            <p className="text-slate-600 dark:text-slate-300 text-sm">AI sẽ áp dụng mô hình kinh doanh hoặc tìm kiếm thông tin chính xác từ toàn bộ website v64.vn.</p>
                         </div>
                     </li>
                      <li className="flex items-start space-x-4">
                         <StepIcon><svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M17 8h2a2 2 0 012 2v6a2 2 0 01-2 2h-2v4l-4-4H9a2 2 0 01-2-2V7a2 2 0 012-2h2.586a1 1 0 01.707.293l2.414 2.414a1 1 0 00.707.293H17z" /></svg></StepIcon>
                         <div>
                             <h4 className="font-semibold text-slate-700 dark:text-slate-200">3. Nhận câu trả lời</h4>
-                            <p className="text-slate-600 dark:text-slate-300 text-sm">Nhận câu trả lời ngắn gọn, đáng tin cậy kèm theo các nguồn tham khảo trực tiếp để bạn có thể xác minh.</p>
+                            <p className="text-slate-600 dark:text-slate-300 text-sm">Nhận phân tích chi tiết, biểu đồ trực quan, hoặc câu trả lời ngắn gọn kèm nguồn tham khảo đáng tin cậy.</p>
                         </div>
                     </li>
                 </ul>

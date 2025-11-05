@@ -1,17 +1,120 @@
-import React, { useState, useEffect } from 'react';
-import type { Task } from '../types';
+import React, { useState, useEffect, useRef } from 'react';
+import type { Task, BusinessProfile, Product } from '../types';
 import { PlusIcon } from './icons/PlusIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { CalculatorIcon } from './icons/CalculatorIcon';
 import { TagIcon } from './icons/TagIcon';
+import { InformationCircleIcon } from './icons/InformationCircleIcon';
+import { DocumentArrowUpIcon } from './icons/DocumentArrowUpIcon';
+import { GlobeAltIcon } from './icons/GlobeAltIcon';
+import { ArrowDownTrayIcon } from './icons/ArrowDownTrayIcon';
+import { ScaleIcon } from './icons/ScaleIcon';
+import { ChevronDownIcon } from './icons/ChevronDownIcon';
+import { TagInput } from './TagInput';
+
 
 interface GuidedInputFormProps {
   task: Task;
-  onSubmit: (prompt: string, params: Record<string, any>) => void;
+  onSubmit: (task: Task, params: Record<string, any>) => void;
   onCancel: () => void;
   isLoading: boolean;
   initialData?: Record<string, any>;
+  businessProfile: BusinessProfile | null;
 }
+
+// --- PRODUCT SELECTOR COMPONENT ---
+interface ProductSelectorProps {
+    id?: string;
+    products: Product[];
+    onSelect: (product: Product) => void;
+    value: string;
+    onChange: (value: string) => void;
+    placeholder?: string;
+    className?: string;
+    disabled?: boolean;
+}
+
+const ProductSelector: React.FC<ProductSelectorProps> = ({ id, products, onSelect, value, onChange, placeholder, className, disabled }) => {
+    const [isOpen, setIsOpen] = useState(false);
+    const [searchTerm, setSearchTerm] = useState('');
+    const containerRef = useRef<HTMLDivElement>(null);
+    const inputRef = useRef<HTMLInputElement>(null);
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+            if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+                setIsOpen(false);
+            }
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const filteredProducts = products.filter(p =>
+        p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        p.sku.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    const handleSelect = (product: Product) => {
+        onSelect(product);
+        setIsOpen(false);
+        setSearchTerm('');
+    };
+
+    const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        onChange(e.target.value);
+        setSearchTerm(e.target.value);
+        setIsOpen(true);
+    };
+    
+    const handleFocus = () => {
+        setIsOpen(true);
+        setSearchTerm(value); // Start search with current value
+    }
+
+    return (
+        <div className="relative" ref={containerRef}>
+            <div className="relative">
+                 <input
+                    id={id}
+                    ref={inputRef}
+                    type="text"
+                    value={value}
+                    onChange={handleInputChange}
+                    onFocus={handleFocus}
+                    placeholder={placeholder}
+                    className={className}
+                    autoComplete="off"
+                    disabled={disabled}
+                />
+                 <ChevronDownIcon className="absolute right-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+            </div>
+            {isOpen && (
+                <div className="absolute top-full mt-1 w-full max-h-60 overflow-y-auto bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md shadow-lg z-10">
+                    {filteredProducts.length > 0 ? (
+                        <ul>
+                            {filteredProducts.map(product => (
+                                <li key={product.id}>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleSelect(product)}
+                                        className="w-full text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600"
+                                    >
+                                        <p className="font-semibold">{product.name}</p>
+                                        <p className="text-xs text-slate-500 dark:text-slate-400">SKU: {product.sku} | Vốn: {Number(product.cost).toLocaleString('vi-VN')}đ | Giá: {Number(product.price).toLocaleString('vi-VN')}đ</p>
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
+                        <p className="p-3 text-sm text-slate-500 dark:text-slate-400 text-center">Không tìm thấy sản phẩm.</p>
+                    )}
+                </div>
+            )}
+        </div>
+    );
+};
+
 
 // --- VALIDATION HELPER ---
 const validateNumberField = (value: string, fieldName: string, isPositive = true, isRequired = true) => {
@@ -24,149 +127,63 @@ const validateNumberField = (value: string, fieldName: string, isPositive = true
     return '';
 };
 
-const jsonInstruction = `
-
-**YÊU CẦU ĐỊNH DẠNG ĐẦU RA (CỰC KỲ QUAN TRỌNG):**
-Toàn bộ phản hồi của bạn **BẮT BUỘC** phải là một khối mã JSON duy nhất, hợp lệ (sử dụng \`\`\`json). Không được có bất kỳ văn bản nào bên ngoài khối mã này. JSON phải có cấu trúc như sau, bao gồm cả cấu trúc chi tiết cho các biểu đồ:
-{
-  "analysis": "...",
-  "charts": [
-    {
-      "type": "bar",
-      "title": "Tiêu đề của biểu đồ",
-      "data": [
-        { "name": "Tên cột 1", "value": 12345 },
-        { "name": "Tên cột 2", "value": 67890 }
-      ]
-    }
-  ]
-}
-
-**QUY TẮC CHO TRƯỜỜNG "charts":**
-1.  "charts" **PHẢI** là một mảng (array) các đối tượng biểu đồ.
-2.  Mỗi đối tượng biểu đồ **PHẢI** có các trường: "type", "title", và "data".
-3.  Trường "data" bên trong mỗi biểu đồ **BẮT BUỘC PHẢI** là một mảng (array) các đối tượng. Mỗi đối tượng trong mảng "data" phải có dạng \`{ "name": "string", "value": number }\`.
-
-**QUY TẮC CHO TRƯỜNG "analysis" (TUYỆT ĐỐI PHẢI TUÂN THỦ):**
-1.  Giá trị của trường "analysis" **PHẢI** là một chuỗi (string) JSON hợp lệ.
-2.  Tất cả các ký tự xuống dòng (newlines) bên trong nội dung phân tích **BẮT BUỘC** phải được thay thế bằng chuỗi ký tự \`\\n\`.
-3.  Tất cả các dấu nháy kép (") bên trong nội dung phân tích **BẮT BUỘC** phải được escape bằng cách thêm dấu \\ đằng trước (ví dụ: \`\\"\`).
-
-**VÍ DỤ VỀ GIÁ TRỊ "analysis" HỢP LỆ:**
-"analysis": "Đây là dòng đầu tiên của phân tích.\\nĐây là dòng thứ hai, với một trích dẫn: \\"tuyệt vời\\".\\n- Gạch đầu dòng 1\\n- Gạch đầu dòng 2"
-`;
-
-
-// --- TASK CONFIGURATION ---
-const taskConfig = {
-  'profit-analysis': {
-    title: 'Phân tích Lợi nhuận & Lập kế hoạch Kinh doanh',
-    subtitle: 'Nhập các thông tin bạn đã có, chatbot sẽ tính toán yếu tố còn lại.',
-    gradient: 'from-blue-500 to-sky-500',
-    generatePrompt: (data: Record<string, any>) => {
-        const {
-            calculationTarget, period, productName, cost, variableCost, fixedCost, 
-            sellingPrice, salesVolume, targetProfit, useMarket
-        } = data;
-
-        const periodText = period === 'monthly' ? 'THÁNG' : 'NĂM';
-        let targetText = '';
-        switch (calculationTarget) {
-            case 'sellingPrice': targetText = 'GIÁ BÁN CẦN THIẾT cho mỗi sản phẩm'; break;
-            case 'salesVolume': targetText = 'DOANH SỐ CẦN THIẾT (số lượng sản phẩm cần bán)'; break;
-            case 'profit': targetText = 'LỢI NHUẬN TIỀM NĂNG'; break;
-        }
-
-        let prompt = `Hãy đóng vai trò là một chuyên gia kinh doanh và thực hiện phân tích lợi nhuận chi tiết cho sản phẩm "${productName}".\n\n`;
-        prompt += `**BỐI CẢNH KẾ HOẠCH:**\n- Kỳ kế hoạch: ${periodText}\n- Mục tiêu tính toán: **${targetText}**\n\n`;
-        prompt += `**DỮ LIỆU ĐẦU VÀO:**\n`;
-        prompt += `- Giá vốn mỗi sản phẩm: ${cost} VND\n`;
-        prompt += `- Chi phí biến đổi mỗi sản phẩm: ${variableCost} VND\n`;
-        prompt += `- Tổng chi phí cố định cho kỳ kế hoạch: ${fixedCost} VND\n`;
-
-        if (calculationTarget !== 'sellingPrice') prompt += `- Giá bán dự kiến mỗi sản phẩm: ${sellingPrice} VND\n`;
-        if (calculationTarget !== 'salesVolume') prompt += `- Doanh số dự kiến trong kỳ: ${salesVolume} sản phẩm\n`;
-        if (calculationTarget !== 'profit') prompt += `- Lợi nhuận mục tiêu trong kỳ: ${targetProfit} VND\n`;
-        
-        if (useMarket) {
-            prompt += `\n**YÊU CẦU ĐẶC BIỆT:**\nHãy **tham khảo giá thị trường** của sản phẩm "${productName}" để so sánh và đưa ra những nhận định sâu sắc hơn trong phần phân tích của bạn.\n\n`;
-        }
-        
-        prompt += `**YÊU CẦU PHÂN TÍCH:**\nDựa vào các dữ liệu trên, hãy cung cấp một bản phân tích chuyên nghiệp bao gồm:\n1.  **Công thức tính toán** rõ ràng từng bước.\n2.  **Kết quả tính toán** cho mục tiêu đã đề ra.\n3.  **Phân tích Điểm hòa vốn** (cả về số lượng và doanh thu).\n4.  **Đánh giá và Lời khuyên chiến lược** dựa trên kết quả.`;
-        
-        prompt += jsonInstruction;
-
-        return prompt;
-    },
-  },
-  'promo-price': {
-    title: 'Phân tích Hiệu quả Khuyến mãi',
-    subtitle: 'So sánh kịch bản trước và sau khuyến mãi để đưa ra quyết định tối ưu.',
-    gradient: 'from-green-500 to-emerald-500',
-     generatePrompt: (data: Record<string, any>) => {
-      let prompt = `Hãy phân tích hiệu quả cho chương trình khuyến mãi của sản phẩm "${data.productName}" với các thông số sau:\n\n**KỊCH BẢN HIỆN TẠI:**\n- Giá bán gốc: ${data.originalPrice} VND\n- Giá vốn: ${data.cost} VND\n- Doanh số trung bình/tháng: ${data.currentSales} sản phẩm\n\n**KỊCH BẢN KHUYẾN MÃI:**\n- Tỉ lệ giảm giá: ${data.discount}% (Giá bán mới sẽ là ${Number(data.originalPrice) * (1 - Number(data.discount)/100)} VND)\n- Doanh số kỳ vọng/tháng: ${data.expectedSales} sản phẩm\n- Mục tiêu chiến dịch: **${data.promoGoal === 'profit' ? 'Tối đa hóa Lợi nhuận' : 'Tối đa hóa Doanh thu'}**\n\n`;
-      if (data.useMarket) {
-        prompt += `**YÊU CẦU ĐẶC BIỆT:**\nHãy **tham khảo giá thị trường** của sản phẩm "${data.productName}" để xem mức giá khuyến mãi có cạnh tranh không.\n\n`;
-      }
-      prompt += `**YÊU CẦU PHÂN TÍCH:**\nHãy so sánh chi tiết 2 kịch bản (Lợi nhuận, Doanh thu, Biên lợi nhuận) và đưa ra kết luận rõ ràng rằng có nên thực hiện chương trình khuyến mãi này hay không dựa trên mục tiêu đã chọn.`;
-      
-      prompt += jsonInstruction;
-      return prompt;
-    }
-  },
-  'group-price': {
-    title: 'Phân tích Chiến dịch Đồng giá',
-    subtitle: 'Đánh giá hiệu quả của việc áp dụng một mức giá chung cho nhiều sản phẩm.',
-    gradient: 'from-purple-500 to-violet-500',
-    generatePrompt: (data: Record<string, any>) => {
-      let prompt = `Tôi có một nhóm sản phẩm và muốn phân tích hiệu quả của việc áp dụng chính sách bán đồng giá. Dưới đây là dữ liệu:\n\n**DANH SÁCH SẢN PHẨM:**\n(Tên sản phẩm | Giá vốn | Giá bán hiện tại | Doanh số/tháng)\n${data.products}\n\n`;
-      prompt += `**KỊCH BẢN ĐỒNG GIÁ:**\n- Mức giá đồng giá mục tiêu: ${data.flatPrice} VND\n- Doanh số kỳ vọng của mỗi sản phẩm sẽ tăng: ${data.salesIncrease}% so với hiện tại.\n\n`;
-       if (data.useMarket) {
-        const productNames = data.products.split('\n').map((line: string) => line.split('|')[0]?.trim()).filter(Boolean);
-        prompt += `**YÊU CẦU ĐẶC BIỆT:**\nHãy **tham khảo giá thị trường** của các sản phẩm sau: ${productNames.join(', ')} để đánh giá tính cạnh tranh của mức giá đồng giá.\n\n`;
-      }
-      prompt += `**YÊU CẦU PHÂN TÍCH:**\nHãy phân tích và so sánh tổng lợi nhuận của toàn bộ nhóm sản phẩm giữa kịch bản hiện tại và kịch bản đồng giá. Liệt kê sản phẩm nào sẽ có lợi nhuận tăng/giảm. Cuối cùng, đưa ra kết luận và lời khuyên có nên thực hiện chiến dịch này không.`;
-      
-      prompt += jsonInstruction;
-      return prompt;
-    },
-  },
+const taskTitles = {
+  'profit-analysis': 'Phân tích Lợi nhuận & Lập kế hoạch Kinh doanh',
+  'promo-price': 'Phân tích & Dự báo Hiệu quả Khuyến mãi',
+  'group-price': 'Phân tích Chiến dịch Đồng giá',
+  'market-research': 'Nghiên cứu Xu hướng & Lên ý tưởng Bộ sưu tập',
 };
 
-// --- FORM COMPONENTS ---
 
-type CalculationTarget = 'sellingPrice' | 'salesVolume' | 'profit';
-type Period = 'monthly' | 'annually';
-
-const FormSection: React.FC<{ title: string, icon: React.ReactNode, children: React.ReactNode }> = ({ title, icon, children }) => (
-    <div className="p-4 bg-slate-100 dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-700">
-        <div className="flex items-center gap-2 mb-3">
-            {icon}
-            <h4 className="font-semibold text-slate-700 dark:text-slate-200">{title}</h4>
+const FormWrapper = ({ children, title, onCancel, currentStep, totalSteps, setStep }: any) => (
+    <div className="w-full max-w-2xl mx-auto animate-form-step-in">
+        <h3 className="text-xl font-bold text-center text-slate-800 dark:text-slate-100">{title}</h3>
+        <div className="flex items-center justify-center gap-2 my-4">
+            {Array.from({ length: totalSteps }).map((_, index) => (
+                 <div
+                    key={index}
+                    onClick={() => setStep(index + 1)}
+                    className={`h-2 rounded-full cursor-pointer transition-all duration-300 ${index < currentStep ? 'bg-blue-500' : 'bg-slate-300 dark:bg-slate-600'}`}
+                    style={{width: `${100 / totalSteps}%`}}
+                 />
+            ))}
         </div>
-        <div className="space-y-3">
+        <div className="mt-6">
             {children}
         </div>
     </div>
 );
 
-const ProfitAnalysisForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, initialData }) => {
+
+// --- FORM COMPONENTS ---
+
+type CalculationTarget = 'sellingPrice' | 'salesVolume' | 'profit';
+type Period = 'monthly' | 'annually';
+type ProfitTargetType = 'amount' | 'percent';
+
+const ProfitAnalysisForm: React.FC<{
+    onSubmit: (params: Record<string, any>) => void;
+    onCancel: () => void;
+    isLoading: boolean;
+    initialData?: Record<string, any>;
+    businessProfile: BusinessProfile | null;
+}> = ({ onSubmit, onCancel, isLoading, initialData, businessProfile }) => {
+    const [currentStep, setCurrentStep] = useState(1);
     const [formData, setFormData] = useState({
-        productName: 'Áo Thun Thể Thao V64', cost: '80000', variableCost: '15000', fixedCost: '20000000', sellingPrice: '', salesVolume: '500', targetProfit: '50000000'
+        productName: 'Áo Sơ mi Lụa Công sở', cost: '250000', variableCost: '20000', fixedCost: businessProfile?.defaultCosts?.fixedCostMonthly || '50000000', sellingPrice: '750000', salesVolume: '400', targetProfit: '100000000', targetProfitPercent: '25', competitors: 'Massimo Dutti\nCOS'
     });
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [calculationTarget, setCalculationTarget] = useState<CalculationTarget>('sellingPrice');
+    const [calculationTarget, setCalculationTarget] = useState<CalculationTarget>('profit');
     const [period, setPeriod] = useState<Period>('monthly');
-    const [useMarket, setUseMarket] = useState(true);
-    const config = taskConfig['profit-analysis'];
+    const [profitTargetType, setProfitTargetType] = useState<ProfitTargetType>('amount');
 
     useEffect(() => {
         if (initialData) {
-            const { calculationTarget, period, useMarket, ...initialFormData } = initialData;
-            setFormData(initialFormData);
+            const { calculationTarget, period, profitTargetType, ...initialFormData } = initialData;
+            setFormData(prev => ({...prev, ...initialFormData}));
             if (calculationTarget) setCalculationTarget(calculationTarget);
             if (period) setPeriod(period);
-            if (typeof useMarket === 'boolean') setUseMarket(useMarket);
+            if (profitTargetType) setProfitTargetType(profitTargetType);
         }
     }, [initialData]);
 
@@ -174,476 +191,623 @@ const ProfitAnalysisForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, init
         const newFormData = { ...formData };
         if (calculationTarget === 'sellingPrice') newFormData.sellingPrice = '';
         if (calculationTarget === 'salesVolume') newFormData.salesVolume = '';
-        if (calculationTarget === 'profit') newFormData.targetProfit = '';
+        if (calculationTarget === 'profit') {
+            newFormData.targetProfit = '';
+            newFormData.targetProfitPercent = '';
+        }
         setFormData(newFormData);
         setErrors({});
     }, [calculationTarget]);
 
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
         if (errors[name]) {
             setErrors(prev => ({ ...prev, [name]: '' }));
         }
     };
+    
+    const handleProductSelect = (product: Product) => {
+        setFormData(prev => ({
+            ...prev,
+            productName: product.name,
+            cost: product.cost,
+            sellingPrice: product.price,
+        }));
+    }
 
-    const validate = () => {
+    const validateStep = (step: number) => {
         const newErrors: Record<string, string> = {};
-        const isPositive = true;
-        const isNotNegative = false;
-
-        newErrors.productName = formData.productName.trim() ? '' : 'Tên sản phẩm là bắt buộc.';
-        newErrors.cost = validateNumberField(formData.cost, 'Giá vốn', isPositive);
-        newErrors.variableCost = validateNumberField(formData.variableCost, 'Chi phí biến đổi', isNotNegative);
-        newErrors.fixedCost = validateNumberField(formData.fixedCost, 'Chi phí cố định', isNotNegative);
-
-        if (calculationTarget !== 'sellingPrice') newErrors.sellingPrice = validateNumberField(formData.sellingPrice, 'Giá bán', isPositive);
-        if (calculationTarget !== 'salesVolume') newErrors.salesVolume = validateNumberField(formData.salesVolume, 'Doanh số', isPositive);
-        if (calculationTarget !== 'profit') newErrors.targetProfit = validateNumberField(formData.targetProfit, 'Lợi nhuận', isNotNegative);
-        
+        if (step === 2) {
+            newErrors.productName = formData.productName.trim() ? '' : 'Tên sản phẩm là bắt buộc.';
+            newErrors.cost = validateNumberField(formData.cost, 'Giá vốn', true);
+            newErrors.variableCost = validateNumberField(formData.variableCost, 'Chi phí biến đổi', false);
+            newErrors.fixedCost = validateNumberField(formData.fixedCost, 'Chi phí cố định', false);
+            if (calculationTarget !== 'sellingPrice') newErrors.sellingPrice = validateNumberField(formData.sellingPrice, 'Giá bán', true);
+            if (calculationTarget !== 'salesVolume') newErrors.salesVolume = validateNumberField(formData.salesVolume, 'Doanh số', true);
+            if (calculationTarget !== 'profit') {
+                if (profitTargetType === 'amount') {
+                    newErrors.targetProfit = validateNumberField(formData.targetProfit, 'Lợi nhuận', false);
+                } else {
+                    newErrors.targetProfitPercent = validateNumberField(formData.targetProfitPercent, 'Tỷ lệ lợi nhuận', false);
+                }
+            }
+        }
         setErrors(newErrors);
         return Object.values(newErrors).every(err => err === '');
     };
+    
+    const handleNext = () => {
+        if (validateStep(currentStep)) {
+            setCurrentStep(s => Math.min(s + 1, 3));
+        }
+    }
+    const handleBack = () => setCurrentStep(s => Math.max(s - 1, 1));
 
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (validate()) {
-            const fullParams = { ...formData, calculationTarget, period, useMarket };
-            const prompt = config.generatePrompt(fullParams);
-            onSubmit(prompt, fullParams);
+        if (validateStep(1) && validateStep(2)) {
+            const fullParams = { ...formData, calculationTarget, period, profitTargetType, competitors: formData.competitors.trim() };
+            onSubmit(fullParams);
         }
     };
     
-    const fields = [
-        { name: 'productName', label: 'Tên sản phẩm', type: 'text', placeholder: 'VD: Áo Thun Cao Cấp V64' },
-        { name: 'cost', label: 'Giá vốn / đơn vị (VND)', type: 'number', placeholder: '80000' },
-        { name: 'variableCost', label: 'Chi phí biến đổi / đơn vị (VND)', type: 'number', placeholder: '15000' },
-        { name: 'fixedCost', label: `Tổng chi phí cố định / ${period === 'monthly' ? 'Tháng' : 'Năm'} (VND)`, type: 'number', placeholder: '20000000' },
-        { name: 'sellingPrice', label: 'Giá bán / đơn vị (VND)', type: 'number', placeholder: '250000' },
-        { name: 'salesVolume', label: `Doanh số / ${period === 'monthly' ? 'Tháng' : 'Năm'} (sản phẩm)`, type: 'number', placeholder: '500' },
-        { name: 'targetProfit', label: `Lợi nhuận mục tiêu / ${period === 'monthly' ? 'Tháng' : 'Năm'} (VND)`, type: 'number', placeholder: '50000000' },
-    ];
-    
     const commonInputClass = "w-full bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300 border border-slate-300 dark:border-slate-600 disabled:opacity-60 disabled:bg-slate-200 dark:disabled:bg-slate-600/50";
-    
+    const segmentButtonClass = (isActive: boolean) => `flex-1 text-sm font-semibold py-2 rounded-md transition-colors duration-200 ${isActive ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300/50 dark:hover:bg-slate-800/40'}`;
+
     return (
-      <div className="w-full max-w-2xl mx-auto">
-        <h3 className={`text-xl font-bold text-center mb-1 bg-clip-text text-transparent bg-gradient-to-r ${config.gradient}`}>{initialData ? 'Chỉnh sửa Phân tích' : config.title}</h3>
-        <p className="text-center text-sm text-slate-500 dark:text-slate-400 mb-6">{config.subtitle}</p>
-
-        <form onSubmit={handleSubmit} className="space-y-4">
-            <FormSection title="1. Thiết lập Kế hoạch" icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-slate-500"><path fillRule="evenodd" d="M2 3.5A1.5 1.5 0 0 1 3.5 2h1.148a1.5 1.5 0 0 1 1.465 1.175l.716 3.223a1.5 1.5 0 0 1-1.052 1.767l-.933.267c-.41.117-.643.555-.48.95a11.542 11.542 0 0 0 6.254 6.254c.395.163.833-.07.95-.48l.267-.933a1.5 1.5 0 0 1 1.767-1.052l3.223.716A1.5 1.5 0 0 1 18 15.352V16.5a1.5 1.5 0 0 1-1.5 1.5h-1.5A13.5 13.5 0 0 1 2 3.5Z" clipRule="evenodd" /></svg>}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Mục tiêu cần tính</label>
-                        <div className="flex bg-slate-200 dark:bg-slate-900/50 p-1 rounded-lg">
-                            {(['sellingPrice', 'salesVolume', 'profit'] as CalculationTarget[]).map(target => (
-                                <button type="button" key={target} onClick={() => setCalculationTarget(target)} className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition-colors duration-200 ${calculationTarget === target ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300/50 dark:hover:bg-slate-800/40'}`}>
-                                    {target === 'sellingPrice' ? 'Giá Bán' : target === 'salesVolume' ? 'Doanh Số' : 'Lợi Nhuận'}
-                                </button>
-                            ))}
+        <FormWrapper title={initialData ? 'Chỉnh sửa Phân tích' : taskTitles['profit-analysis']} onCancel={onCancel} currentStep={currentStep} totalSteps={3} setStep={setCurrentStep}>
+            <form onSubmit={handleSubmit}>
+                {currentStep === 1 && (
+                    <div className="space-y-4 animate-form-step-in">
+                        <p className="text-center text-sm text-slate-500 dark:text-slate-400 -mt-2 mb-6">Đầu tiên, hãy thiết lập mục tiêu và kỳ kế hoạch của bạn.</p>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Mục tiêu cần tính</label>
+                            <div className="flex bg-slate-200 dark:bg-slate-900/50 p-1 rounded-lg">
+                                {(['profit', 'sellingPrice', 'salesVolume'] as CalculationTarget[]).map(target => (
+                                    <button type="button" key={target} onClick={() => setCalculationTarget(target)} className={segmentButtonClass(calculationTarget === target)}>
+                                        {target === 'sellingPrice' ? 'Giá Bán' : target === 'salesVolume' ? 'Doanh Số' : 'Lợi Nhuận'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Kỳ kế hoạch</label>
+                            <div className="flex bg-slate-200 dark:bg-slate-900/50 p-1 rounded-lg">
+                                {(['monthly', 'annually'] as Period[]).map(p => (
+                                    <button type="button" key={p} onClick={() => setPeriod(p)} className={segmentButtonClass(period === p)}>
+                                        {p === 'monthly' ? 'Theo Tháng' : 'Theo Năm'}
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </div>
-                     <div>
-                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Kỳ kế hoạch</label>
-                        <div className="flex bg-slate-200 dark:bg-slate-900/50 p-1 rounded-lg">
-                            {(['monthly', 'annually'] as Period[]).map(p => (
-                                <button type="button" key={p} onClick={() => setPeriod(p)} className={`flex-1 text-xs font-semibold py-1.5 rounded-md transition-colors duration-200 ${period === p ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300/50 dark:hover:bg-slate-800/40'}`}>
-                                    {p === 'monthly' ? 'Theo Tháng' : 'Theo Năm'}
-                                </button>
-                            ))}
+                )}
+                 {currentStep === 2 && (
+                    <div className="space-y-4 animate-form-step-in">
+                         <p className="text-center text-sm text-slate-500 dark:text-slate-400 -mt-2 mb-6">Tiếp theo, nhập các thông số bạn có. AI sẽ tính toán mục tiêu còn lại.</p>
+                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
+                            <div className="md:col-span-2">
+                                <label htmlFor="profit-analysis-productName" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Tên sản phẩm</label>
+                                <ProductSelector 
+                                    id="profit-analysis-productName"
+                                    products={businessProfile?.products || []}
+                                    onSelect={handleProductSelect}
+                                    value={formData.productName}
+                                    onChange={(value) => setFormData(p => ({ ...p, productName: value }))}
+                                    className={`${commonInputClass} ${errors.productName ? 'ring-2 ring-red-500 border-red-500' : ''}`}
+                                    placeholder="Tìm kiếm hoặc nhập tên sản phẩm..."
+                                />
+                                {errors.productName && <p className="text-xs text-red-500 mt-1">{errors.productName}</p>}
+                            </div>
+                            <div>
+                                <label htmlFor="cost" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Giá vốn / đơn vị (VND)</label>
+                                <input id="cost" name="cost" type="number" min="0" value={formData.cost} onChange={handleChange} className={`${commonInputClass} ${errors.cost ? 'ring-2 ring-red-500 border-red-500' : ''}`} />
+                                {errors.cost && <p className="text-xs text-red-500 mt-1">{errors.cost}</p>}
+                            </div>
+                             <div>
+                                <label htmlFor="variableCost" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Chi phí biến đổi / đơn vị (VND)</label>
+                                <input id="variableCost" name="variableCost" type="number" min="0" value={formData.variableCost} onChange={handleChange} className={`${commonInputClass} ${errors.variableCost ? 'ring-2 ring-red-500 border-red-500' : ''}`} />
+                                {errors.variableCost && <p className="text-xs text-red-500 mt-1">{errors.variableCost}</p>}
+                            </div>
+                             <div className="md:col-span-2">
+                                <label htmlFor="fixedCost" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">{`Tổng chi phí cố định / ${period === 'monthly' ? 'Tháng' : 'Năm'} (VND)`}</label>
+                                <input id="fixedCost" name="fixedCost" type="number" min="0" value={formData.fixedCost} onChange={handleChange} className={`${commonInputClass} ${errors.fixedCost ? 'ring-2 ring-red-500 border-red-500' : ''}`} />
+                                {errors.fixedCost && <p className="text-xs text-red-500 mt-1">{errors.fixedCost}</p>}
+                            </div>
+                            <div>
+                                <label htmlFor="sellingPrice" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Giá bán / đơn vị (VND)</label>
+                                <input id="sellingPrice" name="sellingPrice" type="number" min="0" value={formData.sellingPrice} onChange={handleChange} disabled={isLoading || calculationTarget === 'sellingPrice'} placeholder={calculationTarget === 'sellingPrice' ? 'AI sẽ tính toán...' : ''} className={`${commonInputClass} ${errors.sellingPrice ? 'ring-2 ring-red-500 border-red-500' : ''}`} />
+                                {errors.sellingPrice && <p className="text-xs text-red-500 mt-1">{errors.sellingPrice}</p>}
+                            </div>
+                            <div>
+                                <label htmlFor="salesVolume" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">{`Doanh số / ${period === 'monthly' ? 'Tháng' : 'Năm'}`}</label>
+                                <input id="salesVolume" name="salesVolume" type="number" min="0" value={formData.salesVolume} onChange={handleChange} disabled={isLoading || calculationTarget === 'salesVolume'} placeholder={calculationTarget === 'salesVolume' ? 'AI sẽ tính toán...' : ''} className={`${commonInputClass} ${errors.salesVolume ? 'ring-2 ring-red-500 border-red-500' : ''}`} />
+                                {errors.salesVolume && <p className="text-xs text-red-500 mt-1">{errors.salesVolume}</p>}
+                            </div>
+                            <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">{`Lợi nhuận mục tiêu / ${period === 'monthly' ? 'Tháng' : 'Năm'}`}</label>
+                                <div className="flex items-center gap-2">
+                                    <div className="flex bg-slate-200 dark:bg-slate-900/50 p-1 rounded-lg">
+                                        <button type="button" onClick={() => setProfitTargetType('amount')} className={segmentButtonClass(profitTargetType === 'amount')} disabled={calculationTarget === 'profit'}>VND</button>
+                                        <button type="button" onClick={() => setProfitTargetType('percent')} className={segmentButtonClass(profitTargetType === 'percent')} disabled={calculationTarget === 'profit'}>%</button>
+                                    </div>
+                                    {profitTargetType === 'amount' ? (
+                                        <input id="targetProfit" name="targetProfit" type="number" value={formData.targetProfit} onChange={handleChange} disabled={isLoading || calculationTarget === 'profit'} placeholder={calculationTarget === 'profit' ? 'AI sẽ tính toán...' : ''} className={`${commonInputClass} ${errors.targetProfit ? 'ring-2 ring-red-500 border-red-500' : ''}`} />
+                                    ) : (
+                                        <div className="relative flex-grow">
+                                            <input id="targetProfitPercent" name="targetProfitPercent" type="number" value={formData.targetProfitPercent} onChange={handleChange} disabled={isLoading || calculationTarget === 'profit'} placeholder={calculationTarget === 'profit' ? 'AI sẽ tính...' : 'VD: 25'} className={`${commonInputClass} pr-12 ${errors.targetProfitPercent ? 'ring-2 ring-red-500 border-red-500' : ''}`} />
+                                            <span className="absolute inset-y-0 right-3 flex items-center text-sm text-slate-500 dark:text-slate-400">%</span>
+                                        </div>
+                                    )}
+                                </div>
+                                {errors.targetProfit && <p className="text-xs text-red-500 mt-1">{errors.targetProfit}</p>}
+                                {errors.targetProfitPercent && <p className="text-xs text-red-500 mt-1">{errors.targetProfitPercent}</p>}
+                            </div>
+                         </div>
+                    </div>
+                )}
+                 {currentStep === 3 && (
+                     <div className="space-y-4 animate-form-step-in">
+                        <p className="text-center text-sm text-slate-500 dark:text-slate-400 -mt-2 mb-6">Cuối cùng, thêm đối thủ để AI so sánh với giá thị trường.</p>
+                        <div>
+                            <label htmlFor="competitors" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Đối thủ cạnh tranh (Tùy chọn)</label>
+                            <textarea id="competitors" name="competitors" rows={4} value={formData.competitors} onChange={handleChange} placeholder="Massimo Dutti&#10;COS&#10;Zara&#10;Uniqlo" className={commonInputClass} />
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Nhập mỗi đối thủ trên một dòng. Để trống nếu bạn muốn AI tự động tìm kiếm.</p>
                         </div>
                     </div>
+                 )}
+                <div className="flex justify-between items-center pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-transparent rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors duration-200 disabled:opacity-50">Hủy</button>
+                    <div className="flex items-center gap-3">
+                        {currentStep > 1 && (
+                            <button type="button" onClick={handleBack} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-600 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors duration-200 disabled:opacity-50">Quay lại</button>
+                        )}
+                        {currentStep < 3 ? (
+                             <button type="button" onClick={handleNext} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors duration-200">Tiếp theo</button>
+                        ) : (
+                             <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors duration-200 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed">
+                                {isLoading ? 'Đang xử lý...' : 'Gửi yêu cầu'}
+                             </button>
+                        )}
+                    </div>
                 </div>
-            </FormSection>
-
-            <FormSection title="2. Nhập Dữ liệu" icon={<CalculatorIcon className="w-5 h-5 text-slate-500" />}>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
-                {fields.map(field => {
-                  const isTarget = calculationTarget === field.name;
-                  return (
-                      <div key={field.name} className={field.name === 'productName' ? 'md:col-span-2' : ''}>
-                        <label htmlFor={field.name} className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">
-                          {field.label}
-                        </label>
-                        <input
-                          id={field.name}
-                          name={field.name}
-                          type={field.type}
-                          min={field.type === 'number' ? '0' : undefined}
-                          value={formData[field.name as keyof typeof formData]}
-                          onChange={handleChange}
-                          placeholder={isTarget ? "AI sẽ tính toán..." : field.placeholder}
-                          disabled={isLoading || isTarget}
-                          className={`${commonInputClass} ${errors[field.name] ? 'ring-2 ring-red-500 border-red-500' : ''} ${isTarget ? 'ai-calculation-field animate-field-glow' : ''}`}
-                        />
-                         {errors[field.name] && <p className="text-xs text-red-500 mt-1">{errors[field.name]}</p>}
-                      </div>
-                  )
-                })}
-                </div>
-                 <div className="flex items-center pt-2">
-                    <input id="useMarket" name="useMarket" type="checkbox" checked={useMarket} onChange={(e) => setUseMarket(e.target.checked)} disabled={isLoading} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"/>
-                    <label htmlFor="useMarket" className="ml-2 block text-sm text-slate-700 dark:text-slate-300">Tham khảo giá thị trường</label>
-                </div>
-            </FormSection>
-
-            <div className="flex justify-end space-x-3 pt-2">
-              <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-600 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors duration-200 disabled:opacity-50">Hủy</button>
-              <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed">
-                {isLoading ? 'Đang xử lý...' : 'Gửi yêu cầu'}
-              </button>
-            </div>
-        </form>
-      </div>
+            </form>
+        </FormWrapper>
     );
 };
 
-const PromoPriceForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, initialData }) => {
-    const [formData, setFormData] = useState({ productName: 'Áo Khoác Dù V64', cost: '150000', originalPrice: '350000', currentSales: '200', discount: '20', expectedSales: '350', promoGoal: 'profit' });
+const PromoPriceForm: React.FC<{
+    onSubmit: (params: Record<string, any>) => void;
+    onCancel: () => void;
+    isLoading: boolean;
+    initialData?: Record<string, any>;
+    businessProfile: BusinessProfile | null;
+}> = ({ onSubmit, onCancel, isLoading, initialData, businessProfile }) => {
+    const [currentStep, setCurrentStep] = useState(1);
+    const [formData, setFormData] = useState({
+        productName: 'Quần Jeans V64-JD01', originalPrice: '899000', cost: '350000', currentSales: '300', discount: '15', promoGoal: 'profit', competitors: 'Levi\'s\nCK Jeans\nZara'
+    });
     const [errors, setErrors] = useState<Record<string, string>>({});
-    const [useMarket, setUseMarket] = useState(true);
-    const [newPrice, setNewPrice] = useState<number | null>(null);
-    const config = taskConfig['promo-price'];
 
     useEffect(() => {
         if (initialData) {
-            const { useMarket, ...initialFormData } = initialData;
-            setFormData(initialFormData);
-            if (typeof useMarket === 'boolean') setUseMarket(useMarket);
+            setFormData(prev => ({ ...prev, ...initialData }));
         }
     }, [initialData]);
 
-    useEffect(() => {
-        const originalPrice = parseFloat(formData.originalPrice);
-        const discount = parseFloat(formData.discount);
-        if (!isNaN(originalPrice) && !isNaN(discount) && discount >= 0 && discount <= 100) {
-            setNewPrice(originalPrice * (1 - discount / 100));
-        } else {
-            setNewPrice(null);
-        }
-    }, [formData.originalPrice, formData.discount]);
-
-    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
         const { name, value } = e.target;
         setFormData(prev => ({ ...prev, [name]: value }));
         if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
     };
 
-    const validate = () => {
+    const handleProductSelect = (product: Product) => {
+        setFormData(prev => ({
+            ...prev,
+            productName: product.name,
+            cost: product.cost,
+            originalPrice: product.price,
+        }));
+    }
+
+    const validateStep = (step: number) => {
         const newErrors: Record<string, string> = {};
-        const isPositive = true;
-        newErrors.productName = formData.productName.trim() ? '' : 'Tên sản phẩm là bắt buộc.';
-        newErrors.cost = validateNumberField(formData.cost, 'Giá vốn', isPositive);
-        newErrors.originalPrice = validateNumberField(formData.originalPrice, 'Giá bán gốc', isPositive);
-        newErrors.currentSales = validateNumberField(formData.currentSales, 'Doanh số hiện tại', isPositive);
-        const discountError = validateNumberField(formData.discount, 'Tỉ lệ giảm giá', true);
-        if (discountError) {
-            newErrors.discount = discountError;
-        } else if (Number(formData.discount) > 100) {
-            newErrors.discount = 'Giảm giá không thể lớn hơn 100%.';
+        if (step === 1) {
+            newErrors.productName = formData.productName.trim() ? '' : 'Tên sản phẩm là bắt buộc.';
+            newErrors.originalPrice = validateNumberField(formData.originalPrice, 'Giá bán gốc');
+            newErrors.cost = validateNumberField(formData.cost, 'Giá vốn');
+            newErrors.currentSales = validateNumberField(formData.currentSales, 'Doanh số hiện tại');
         }
-        newErrors.expectedSales = validateNumberField(formData.expectedSales, 'Doanh số kỳ vọng', isPositive);
+        if (step === 2) {
+            newErrors.discount = validateNumberField(formData.discount, 'Tỉ lệ giảm giá', false);
+            const discountNum = Number(formData.discount);
+            if (!isNaN(discountNum) && (discountNum <= 0 || discountNum >= 100)) {
+                newErrors.discount = 'Tỉ lệ giảm giá phải lớn hơn 0 và nhỏ hơn 100.';
+            }
+        }
         setErrors(newErrors);
         return Object.values(newErrors).every(err => err === '');
     };
 
+    const handleNext = () => {
+        if (validateStep(currentStep)) setCurrentStep(s => Math.min(s + 1, 3));
+    }
+    const handleBack = () => setCurrentStep(s => Math.max(s - 1, 1));
+
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (validate()) {
-            const fullParams = { ...formData, useMarket };
-            const prompt = config.generatePrompt(fullParams);
-            onSubmit(prompt, fullParams);
+        if (validateStep(1) && validateStep(2)) {
+            onSubmit(formData);
         }
     };
-    
+
     const commonInputClass = "w-full bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300 border border-slate-300 dark:border-slate-600";
+    const segmentButtonClass = (isActive: boolean) => `flex-1 text-sm font-semibold py-2 rounded-md transition-colors duration-200 ${isActive ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300/50 dark:hover:bg-slate-800/40'}`;
 
     return (
-        <div className="w-full max-w-2xl mx-auto">
-            <h3 className={`text-xl font-bold text-center mb-1 bg-clip-text text-transparent bg-gradient-to-r ${config.gradient}`}>{initialData ? 'Chỉnh sửa Phân tích' : config.title}</h3>
-            <p className="text-center text-sm text-slate-500 dark:text-slate-400 mb-6">{config.subtitle}</p>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                 <FormSection title="Kịch bản Hiện tại" icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-slate-500"><path d="M10 3a.75.75 0 0 1 .75.75v1.5h4.5a.75.75 0 0 1 0 1.5h-4.5v1.5a.75.75 0 0 1-1.5 0v-1.5h-4.5a.75.75 0 0 1 0-1.5h4.5v-1.5A.75.75 0 0 1 10 3ZM5.25 7.5A.75.75 0 0 1 6 8.25v1.5h8.25a.75.75 0 0 1 0 1.5H6v1.5a.75.75 0 0 1-1.5 0v-1.5H3.75a.75.75 0 0 1 0-1.5h.75v-1.5A.75.75 0 0 1 5.25 7.5Z" /></svg>}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
-                         <div>
-                             <label htmlFor="productName" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Tên sản phẩm</label>
-                             <input id="productName" name="productName" type="text" value={formData.productName} onChange={handleChange} placeholder="VD: Áo Khoác Dù V64" disabled={isLoading} className={`${commonInputClass} ${errors.productName ? 'ring-2 ring-red-500 border-red-500' : ''}`}/>
-                             {errors.productName && <p className="text-xs text-red-500 mt-1">{errors.productName}</p>}
+        <FormWrapper title={initialData ? 'Chỉnh sửa Phân tích' : taskTitles['promo-price']} onCancel={onCancel} currentStep={currentStep} totalSteps={3} setStep={setCurrentStep}>
+            <form onSubmit={handleSubmit}>
+                {currentStep === 1 && (
+                    <div className="space-y-4 animate-form-step-in">
+                        <p className="text-center text-sm text-slate-500 dark:text-slate-400 -mt-2 mb-6">Nhập thông tin sản phẩm và doanh số hiện tại.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div className="md:col-span-2">
+                                <label htmlFor="promo-price-productName">Tên sản phẩm</label>
+                                <ProductSelector
+                                    id="promo-price-productName"
+                                    products={businessProfile?.products || []}
+                                    onSelect={handleProductSelect}
+                                    value={formData.productName}
+                                    onChange={(value) => setFormData(p => ({ ...p, productName: value }))}
+                                    className={`${commonInputClass} ${errors.productName ? 'ring-2 ring-red-500' : ''}`}
+                                    placeholder="Tìm hoặc nhập tên sản phẩm..."
+                                />
+                                {errors.productName && <p className="text-xs text-red-500 mt-1">{errors.productName}</p>}
+                            </div>
+                            <div>
+                                <label htmlFor="originalPrice">Giá bán gốc (VND)</label>
+                                <input id="originalPrice" name="originalPrice" type="number" value={formData.originalPrice} onChange={handleChange} className={`${commonInputClass} ${errors.originalPrice ? 'ring-2 ring-red-500' : ''}`} />
+                                {errors.originalPrice && <p className="text-xs text-red-500 mt-1">{errors.originalPrice}</p>}
+                            </div>
+                            <div>
+                                <label htmlFor="cost">Giá vốn (VND)</label>
+                                <input id="cost" name="cost" type="number" value={formData.cost} onChange={handleChange} className={`${commonInputClass} ${errors.cost ? 'ring-2 ring-red-500' : ''}`} />
+                                {errors.cost && <p className="text-xs text-red-500 mt-1">{errors.cost}</p>}
+                            </div>
+                             <div className="md:col-span-2">
+                                <label htmlFor="currentSales">Doanh số hiện tại / tháng</label>
+                                <input id="currentSales" name="currentSales" type="number" value={formData.currentSales} onChange={handleChange} className={`${commonInputClass} ${errors.currentSales ? 'ring-2 ring-red-500' : ''}`} />
+                                {errors.currentSales && <p className="text-xs text-red-500 mt-1">{errors.currentSales}</p>}
+                            </div>
+                        </div>
+                    </div>
+                )}
+                {currentStep === 2 && (
+                    <div className="space-y-4 animate-form-step-in">
+                        <p className="text-center text-sm text-slate-500 dark:text-slate-400 -mt-2 mb-6">Thiết lập chi tiết chương trình khuyến mãi.</p>
+                        <div>
+                            <label htmlFor="discount">Tỉ lệ giảm giá (%)</label>
+                            <input id="discount" name="discount" type="number" value={formData.discount} onChange={handleChange} className={`${commonInputClass} ${errors.discount ? 'ring-2 ring-red-500' : ''}`} />
+                            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">AI sẽ tự dự báo mức tăng trưởng doanh số dựa trên con số này.</p>
+                            {errors.discount && <p className="text-xs text-red-500 mt-1">{errors.discount}</p>}
                         </div>
                         <div>
-                             <label htmlFor="cost" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Giá vốn / đơn vị (VND)</label>
-                             <input id="cost" name="cost" type="number" min="0" value={formData.cost} onChange={handleChange} placeholder="150000" disabled={isLoading} className={`${commonInputClass} ${errors.cost ? 'ring-2 ring-red-500 border-red-500' : ''}`}/>
-                             {errors.cost && <p className="text-xs text-red-500 mt-1">{errors.cost}</p>}
+                            <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Mục tiêu chiến dịch</label>
+                            <div className="flex bg-slate-200 dark:bg-slate-900/50 p-1 rounded-lg">
+                                <button type="button" onClick={() => setFormData(p => ({...p, promoGoal: 'profit'}))} className={segmentButtonClass(formData.promoGoal === 'profit')}>Tối đa hóa Lợi nhuận</button>
+                                <button type="button" onClick={() => setFormData(p => ({...p, promoGoal: 'revenue'}))} className={segmentButtonClass(formData.promoGoal === 'revenue')}>Tối đa hóa Doanh thu</button>
+                            </div>
                         </div>
+                    </div>
+                )}
+                 {currentStep === 3 && (
+                     <div className="space-y-4 animate-form-step-in">
+                        <p className="text-center text-sm text-slate-500 dark:text-slate-400 -mt-2 mb-6">Thêm đối thủ để so sánh giá khuyến mãi với thị trường.</p>
                         <div>
-                             <label htmlFor="originalPrice" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Giá bán gốc (VND)</label>
-                             <input id="originalPrice" name="originalPrice" type="number" min="0" value={formData.originalPrice} onChange={handleChange} placeholder="350000" disabled={isLoading} className={`${commonInputClass} ${errors.originalPrice ? 'ring-2 ring-red-500 border-red-500' : ''}`}/>
-                             {errors.originalPrice && <p className="text-xs text-red-500 mt-1">{errors.originalPrice}</p>}
-                        </div>
-                         <div>
-                             <label htmlFor="currentSales" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Doanh số/tháng hiện tại</label>
-                             <input id="currentSales" name="currentSales" type="number" min="0" value={formData.currentSales} onChange={handleChange} placeholder="200" disabled={isLoading} className={`${commonInputClass} ${errors.currentSales ? 'ring-2 ring-red-500 border-red-500' : ''}`}/>
-                             {errors.currentSales && <p className="text-xs text-red-500 mt-1">{errors.currentSales}</p>}
+                            <label htmlFor="competitors">Đối thủ cạnh tranh (Tùy chọn)</label>
+                            <textarea id="competitors" name="competitors" rows={4} value={formData.competitors} onChange={handleChange} placeholder="Levi's&#10;CK Jeans&#10;Zara" className={commonInputClass} />
                         </div>
                     </div>
-                </FormSection>
-                <FormSection title="Kịch bản Khuyến mãi" icon={<TagIcon className="w-5 h-5 text-slate-500" />}>
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-4 gap-y-3">
-                         <div className="relative">
-                             <label htmlFor="discount" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Tỉ lệ giảm giá (%)</label>
-                             <input id="discount" name="discount" type="number" min="0" value={formData.discount} onChange={handleChange} placeholder="20" disabled={isLoading} className={`${commonInputClass} ${errors.discount ? 'ring-2 ring-red-500 border-red-500' : ''}`}/>
-                             {errors.discount && <p className="text-xs text-red-500 mt-1">{errors.discount}</p>}
-                             {newPrice !== null && !errors.discount && !errors.originalPrice && (
-                                <p className="absolute -bottom-5 right-0 text-xs text-slate-500 dark:text-slate-400">
-                                    Giá mới: <span className="font-semibold text-green-600 dark:text-green-400">{newPrice.toLocaleString('vi-VN')} VND</span>
-                                </p>
-                             )}
-                         </div>
-                         <div>
-                             <label htmlFor="expectedSales" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Doanh số kỳ vọng/tháng</label>
-                             <input id="expectedSales" name="expectedSales" type="number" min="0" value={formData.expectedSales} onChange={handleChange} placeholder="350" disabled={isLoading} className={`${commonInputClass} ${errors.expectedSales ? 'ring-2 ring-red-500 border-red-500' : ''}`}/>
-                             {errors.expectedSales && <p className="text-xs text-red-500 mt-1">{errors.expectedSales}</p>}
-                        </div>
-                     </div>
-                      <div>
-                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Mục tiêu chiến dịch</label>
-                        <select name="promoGoal" value={formData.promoGoal} onChange={handleChange} className={commonInputClass}>
-                            <option value="profit">Tối đa hóa Lợi nhuận</option>
-                            <option value="revenue">Tối đa hóa Doanh thu</option>
-                        </select>
+                 )}
+                <div className="flex justify-between items-center pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-transparent rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700">Hủy</button>
+                    <div className="flex items-center gap-3">
+                        {currentStep > 1 && <button type="button" onClick={handleBack} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-600 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500">Quay lại</button>}
+                        {currentStep < 3 ? <button type="button" onClick={handleNext} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500">Tiếp theo</button> : <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 disabled:bg-slate-400">{isLoading ? 'Đang xử lý...' : 'Gửi yêu cầu'}</button>}
                     </div>
-                    <div className="flex items-center pt-2">
-                        <input id="useMarket" name="useMarket" type="checkbox" checked={useMarket} onChange={(e) => setUseMarket(e.target.checked)} disabled={isLoading} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"/>
-                        <label htmlFor="useMarket" className="ml-2 block text-sm text-slate-700 dark:text-slate-300">Tham khảo giá thị trường</label>
-                    </div>
-                </FormSection>
-                <div className="flex justify-end space-x-3 pt-2">
-                    <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-600 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors duration-200 disabled:opacity-50">Hủy</button>
-                    <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors duration-200 disabled:bg-slate-400 dark:disabled:bg-slate-600">
-                        {isLoading ? 'Đang xử lý...' : 'Gửi yêu cầu'}
-                    </button>
                 </div>
             </form>
-        </div>
+        </FormWrapper>
     );
 };
 
-// --- GroupPriceForm: REFACTORED ---
-interface Product {
-    id: number;
-    name: string;
-    cost: string;
-    price: string;
-    sales: string;
-}
-interface ProductErrors {
-    name?: string;
-    cost?: string;
-    price?: string;
-    sales?: string;
-}
-
-const initialProducts: Product[] = [
-    { id: 1, name: 'Áo Thun V64', cost: '80000', price: '150000', sales: '200' },
-    { id: 2, name: 'Quần Short Kaki', cost: '120000', price: '250000', sales: '150' },
-    { id: 3, name: 'Nón V64', cost: '50000', price: '120000', sales: '300' },
-];
-
-const parseProductsString = (productsString: string): Product[] => {
-    if (!productsString || typeof productsString !== 'string') return initialProducts;
-    const parsed = productsString.split('\n').map((line, index) => {
-        const [name, cost, price, sales] = line.split('|').map(s => s.trim());
-        return {
-            id: Date.now() + index,
-            name: name || '', cost: cost || '', price: price || '', sales: sales || ''
-        };
-    }).filter(p => p.name || p.cost || p.price || p.sales);
-    return parsed.length > 0 ? parsed : initialProducts;
-};
-
-const formatProductsArray = (products: Product[]): string => {
-    return products
-        .map(p => `${p.name.trim()} | ${p.cost.trim()} | ${p.price.trim()} | ${p.sales.trim()}`)
-        .join('\n');
-};
-
-
-const GroupPriceForm: React.FC<any> = ({ onSubmit, onCancel, isLoading, initialData }) => {
-    const [products, setProducts] = useState<Product[]>(initialProducts);
-    const [productErrors, setProductErrors] = useState<ProductErrors[]>([]);
-    const [flatPrice, setFlatPrice] = useState('99000');
-    const [salesIncrease, setSalesIncrease] = useState('30');
-    const [flatPriceError, setFlatPriceError] = useState('');
-    const [salesIncreaseError, setSalesIncreaseError] = useState('');
-    const [useMarket, setUseMarket] = useState(true);
-    const config = taskConfig['group-price'];
+const GroupPriceForm: React.FC<{
+    onSubmit: (params: Record<string, any>) => void;
+    onCancel: () => void;
+    isLoading: boolean;
+    initialData?: Record<string, any>;
+    businessProfile: BusinessProfile | null;
+}> = ({ onSubmit, onCancel, isLoading, initialData, businessProfile }) => {
+    const [currentStep, setCurrentStep] = useState(1);
+    const [products, setProducts] = useState([
+        { id: '1', name: 'Áo Sơ mi Oxford', cost: '180000', originalPrice: '450000', currentSales: '150' },
+        { id: '2', name: 'Quần Kaki Slimfit', cost: '220000', originalPrice: '550000', currentSales: '120' }
+    ]);
+    const [formData, setFormData] = useState({
+        flatPrice: '399000', salesIncrease: '25', competitors: 'Uniqlo\nZara\nRoutine'
+    });
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
     useEffect(() => {
         if (initialData) {
-            setProducts(parseProductsString(initialData.products));
-            setFlatPrice(initialData.flatPrice || '99000');
-            setSalesIncrease(initialData.salesIncrease || '30');
-            if (typeof initialData.useMarket === 'boolean') {
-                setUseMarket(initialData.useMarket);
-            }
+            if (initialData.products) setProducts(initialData.products);
+            setFormData(prev => ({ ...prev, ...initialData }));
         }
     }, [initialData]);
 
-    const handleProductChange = (index: number, field: keyof Omit<Product, 'id'>, value: string) => {
-        const newProducts = [...products];
-        newProducts[index] = { ...newProducts[index], [field]: value };
-        setProducts(newProducts);
-
-        if (productErrors[index]?.[field]) {
-            const newErrors = [...productErrors];
-            if (!newErrors[index]) newErrors[index] = {};
-            delete newErrors[index][field];
-            setProductErrors(newErrors);
-        }
-    };
-
-    const handleAddProduct = () => {
-        setProducts([...products, { id: Date.now(), name: '', cost: '', price: '', sales: '' }]);
-    };
-
-    const handleRemoveProduct = (index: number) => {
-        setProducts(products.filter((_, i) => i !== index));
-        setProductErrors(productErrors.filter((_, i) => i !== index));
+    const handleProductChange = (id: string, field: string, value: string) => {
+        setProducts(prods => prods.map(p => p.id === id ? { ...p, [field]: value } : p));
     };
     
-    const validate = () => {
-        let isValid = true;
-        const newProductErrors: ProductErrors[] = [];
-        
-        products.forEach(p => {
-            const errors: ProductErrors = {};
-            if (!p.name.trim()) errors.name = 'Tên là bắt buộc.';
-            errors.cost = validateNumberField(p.cost, 'Giá vốn', true);
-            errors.price = validateNumberField(p.price, 'Giá bán', true);
-            errors.sales = validateNumberField(p.sales, 'Doanh số', true);
+    const handleProductSelect = (id: string, product: Product) => {
+        setProducts(prods => prods.map(p => p.id === id ? { ...p, name: product.name, cost: product.cost, originalPrice: product.price } : p));
+    };
+    
+    const addProduct = () => setProducts(prods => [...prods, { id: Date.now().toString(), name: '', cost: '', originalPrice: '', currentSales: '' }]);
+    const removeProduct = (id: string) => setProducts(prods => prods.filter(p => p.id !== id));
 
-            if (Object.values(errors).some(e => e)) {
-                isValid = false;
-            }
-            newProductErrors.push(errors);
-        });
-
-        const flatPriceErr = validateNumberField(flatPrice, 'Mức giá đồng giá', true);
-        if (flatPriceErr) {
-            isValid = false;
-            setFlatPriceError(flatPriceErr);
-        } else {
-            setFlatPriceError('');
-        }
-
-        const salesIncreaseErr = validateNumberField(salesIncrease, 'Doanh số kỳ vọng tăng', false);
-        if (salesIncreaseErr) {
-            isValid = false;
-            setSalesIncreaseError(salesIncreaseErr);
-        } else {
-            setSalesIncreaseError('');
-        }
-
-        setProductErrors(newProductErrors);
-        return isValid;
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+        if (errors[name]) setErrors(prev => ({ ...prev, [name]: '' }));
     };
 
+    const validateStep = (step: number) => {
+        const newErrors: Record<string, string> = {};
+        if (step === 1) {
+            newErrors.flatPrice = validateNumberField(formData.flatPrice, 'Mức giá đồng giá');
+            newErrors.salesIncrease = validateNumberField(formData.salesIncrease, 'Tăng trưởng doanh số', false);
+        }
+        if (step === 2) {
+           products.forEach((p, i) => {
+               if (!p.name.trim()) newErrors[`p_name_${i}`] = 'Tên là bắt buộc';
+               if (validateNumberField(p.cost, 'Giá vốn')) newErrors[`p_cost_${i}`] = 'Giá vốn phải là số dương';
+               if (validateNumberField(p.originalPrice, 'Giá gốc')) newErrors[`p_oprice_${i}`] = 'Giá gốc phải là số dương';
+               if (validateNumberField(p.currentSales, 'Doanh số')) newErrors[`p_sales_${i}`] = 'Doanh số phải là số dương';
+           });
+        }
+        setErrors(newErrors);
+        return Object.values(newErrors).every(err => err === '');
+    };
+    
+    const handleNext = () => {
+        if (validateStep(currentStep)) setCurrentStep(s => Math.min(s + 1, 3));
+    }
+    const handleBack = () => setCurrentStep(s => Math.max(s - 1, 1));
+    
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
-        if (validate()) {
-            const productsString = formatProductsArray(products);
-            const fullParams = { products: productsString, flatPrice, salesIncrease, useMarket };
-            const prompt = config.generatePrompt(fullParams);
-            onSubmit(prompt, fullParams);
+        if(products.length === 0) {
+            alert("Vui lòng thêm ít nhất một sản phẩm.");
+            return;
+        }
+        if (validateStep(1) && validateStep(2)) {
+            const fullParams = { ...formData, products };
+            onSubmit(fullParams);
         }
     };
     
     const commonInputClass = "w-full bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300 border border-slate-300 dark:border-slate-600";
-    const errorInputClass = "ring-2 ring-red-500 border-red-500";
+    const tableInputClass = "w-full bg-transparent text-slate-800 dark:text-slate-200 rounded-md px-2 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-blue-500";
 
     return (
-        <div className="w-full max-w-3xl mx-auto">
-            <h3 className={`text-xl font-bold text-center mb-1 bg-clip-text text-transparent bg-gradient-to-r ${config.gradient}`}>{initialData ? 'Chỉnh sửa Phân tích' : config.title}</h3>
-            <p className="text-center text-sm text-slate-500 dark:text-slate-400 mb-6">{config.subtitle}</p>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <FormSection title="1. Danh sách sản phẩm" icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-slate-500"><path d="M3 4.25A2.25 2.25 0 0 1 5.25 2h9.5A2.25 2.25 0 0 1 17 4.25v11.5A2.25 2.25 0 0 1 14.75 18h-9.5A2.25 2.25 0 0 1 3 15.75V4.25ZM5.25 3.5a.75.75 0 0 0-.75.75v11.5c0 .414.336.75.75.75h9.5a.75.75 0 0 0 .75-.75V4.25a.75.75 0 0 0-.75-.75h-9.5Z" /><path d="M9 6.5a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 9 6.5Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5A.75.75 0 0 1 9 9.5Zm0 3a.75.75 0 0 1 .75-.75h4.5a.75.75 0 0 1 0 1.5h-4.5a.75.75 0 0 1-.75-.75ZM6 6.5a.75.75 0 0 1 .75-.75h.008a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 6.5ZM6 9.5a.75.75 0 0 1 .75-.75h.008a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 9.5ZM6 12.5a.75.75 0 0 1 .75-.75h.008a.75.75 0 0 1 0 1.5H6.75A.75.75 0 0 1 6 12.5Z" /></svg>}>
-                    <div className="space-y-3">
-                        <div className="hidden sm:grid grid-cols-5 gap-2 items-center px-2 pb-1">
-                            <div className="sm:col-span-2"><label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Tên sản phẩm</label></div>
-                            <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Giá vốn (VND)</label></div>
-                            <div><label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Giá bán (VND)</label></div>
-                            <div className="flex-grow"><label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Doanh số/tháng</label></div>
+        <FormWrapper title={initialData ? 'Chỉnh sửa Phân tích' : taskTitles['group-price']} onCancel={onCancel} currentStep={currentStep} totalSteps={3} setStep={setCurrentStep}>
+            <form onSubmit={handleSubmit}>
+                {currentStep === 1 && (
+                    <div className="space-y-4 animate-form-step-in">
+                        <p className="text-center text-sm text-slate-500 dark:text-slate-400 -mt-2 mb-6">Thiết lập kịch bản bán đồng giá.</p>
+                        <div>
+                            <label htmlFor="flatPrice">Mức giá đồng giá mục tiêu (VND)</label>
+                            <input id="flatPrice" name="flatPrice" type="number" value={formData.flatPrice} onChange={handleChange} className={`${commonInputClass} ${errors.flatPrice ? 'ring-2 ring-red-500' : ''}`} />
+                            {errors.flatPrice && <p className="text-xs text-red-500 mt-1">{errors.flatPrice}</p>}
                         </div>
-                        {products.map((product, index) => (
-                            <div key={product.id} className="grid grid-cols-1 sm:grid-cols-5 gap-2 items-start p-2 bg-white dark:bg-slate-800/50 rounded-md animate-new-row">
-                                <div className="sm:col-span-2">
-                                    <input type="text" placeholder="Tên sản phẩm" value={product.name} onChange={(e) => handleProductChange(index, 'name', e.target.value)} className={`${commonInputClass} ${productErrors[index]?.name ? errorInputClass : ''}`} />
-                                    {productErrors[index]?.name && <p className="text-xs text-red-500 mt-1">{productErrors[index]?.name}</p>}
-                                </div>
-                                <div>
-                                    <input type="number" min="0" placeholder="Giá vốn" value={product.cost} onChange={(e) => handleProductChange(index, 'cost', e.target.value)} className={`${commonInputClass} ${productErrors[index]?.cost ? errorInputClass : ''}`} />
-                                    {productErrors[index]?.cost && <p className="text-xs text-red-500 mt-1">{productErrors[index]?.cost}</p>}
-                                </div>
-                                <div>
-                                    <input type="number" min="0" placeholder="Giá bán" value={product.price} onChange={(e) => handleProductChange(index, 'price', e.target.value)} className={`${commonInputClass} ${productErrors[index]?.price ? errorInputClass : ''}`} />
-                                    {productErrors[index]?.price && <p className="text-xs text-red-500 mt-1">{productErrors[index]?.price}</p>}
-                                </div>
-                                <div className="flex items-center gap-2">
-                                    <div className="flex-grow">
-                                        <input type="number" min="0" placeholder="Doanh số" value={product.sales} onChange={(e) => handleProductChange(index, 'sales', e.target.value)} className={`${commonInputClass} ${productErrors[index]?.sales ? errorInputClass : ''}`} />
-                                        {productErrors[index]?.sales && <p className="text-xs text-red-500 mt-1">{productErrors[index]?.sales}</p>}
-                                    </div>
-                                    <button type="button" onClick={() => handleRemoveProduct(index)} className="p-2 text-red-500 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300 transition-colors rounded-full hover:bg-red-500/10" title="Xóa sản phẩm">
-                                        <TrashIcon className="w-5 h-5" />
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                         <button type="button" onClick={handleAddProduct} className="flex items-center gap-2 text-sm font-semibold text-blue-600 dark:text-blue-400 hover:bg-blue-500/10 px-3 py-2 rounded-lg transition-colors w-full justify-center mt-2 border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-blue-500 hover:text-blue-700">
-                            <PlusIcon className="w-4 h-4" />
-                            Thêm sản phẩm
+                        <div>
+                            <label htmlFor="salesIncrease">Tăng trưởng doanh số kỳ vọng cho mỗi sản phẩm (%)</label>
+                            <input id="salesIncrease" name="salesIncrease" type="number" value={formData.salesIncrease} onChange={handleChange} className={`${commonInputClass} ${errors.salesIncrease ? 'ring-2 ring-red-500' : ''}`} />
+                            {errors.salesIncrease && <p className="text-xs text-red-500 mt-1">{errors.salesIncrease}</p>}
+                        </div>
+                    </div>
+                )}
+                {currentStep === 2 && (
+                    <div className="animate-form-step-in">
+                        <p className="text-center text-sm text-slate-500 dark:text-slate-400 -mt-2 mb-6">Nhập danh sách các sản phẩm áp dụng.</p>
+                        <div className="space-y-3">
+                           {products.map((p, index) => (
+                               <div key={p.id} className="grid grid-cols-1 md:grid-cols-5 gap-3 p-3 bg-slate-100 dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-700">
+                                   <div className="md:col-span-2">
+                                       <label className="text-xs font-medium text-slate-500">Tên sản phẩm</label>
+                                       <ProductSelector
+                                            products={businessProfile?.products || []}
+                                            onSelect={(product) => handleProductSelect(p.id, product)}
+                                            value={p.name}
+                                            onChange={(value) => handleProductChange(p.id, 'name', value)}
+                                            className={tableInputClass}
+                                            placeholder="Chọn hoặc nhập..."
+                                       />
+                                   </div>
+                                   <div>
+                                       <label className="text-xs font-medium text-slate-500">Giá vốn</label>
+                                       <input type="number" value={p.cost} onChange={e => handleProductChange(p.id, 'cost', e.target.value)} className={tableInputClass} />
+                                   </div>
+                                    <div>
+                                       <label className="text-xs font-medium text-slate-500">Giá gốc</label>
+                                       <input type="number" value={p.originalPrice} onChange={e => handleProductChange(p.id, 'originalPrice', e.target.value)} className={tableInputClass} />
+                                   </div>
+                                   <div className="flex items-end gap-2">
+                                       <div className="flex-grow">
+                                           <label className="text-xs font-medium text-slate-500">Doanh số</label>
+                                           <input type="number" value={p.currentSales} onChange={e => handleProductChange(p.id, 'currentSales', e.target.value)} className={tableInputClass} />
+                                       </div>
+                                       <button type="button" onClick={() => removeProduct(p.id)} className="p-2 text-red-500 hover:bg-red-500/10 rounded-full"><TrashIcon className="w-4 h-4" /></button>
+                                   </div>
+                               </div>
+                           ))}
+                        </div>
+                        <button type="button" onClick={addProduct} className="w-full flex items-center justify-center gap-2 mt-3 p-2 text-sm font-semibold text-blue-600 dark:text-blue-400 border-2 border-dashed border-slate-300 dark:border-slate-600 rounded-lg hover:bg-blue-500/10 hover:border-blue-500">
+                            <PlusIcon className="w-4 h-4" /> Thêm sản phẩm
                         </button>
                     </div>
-                </FormSection>
-                <FormSection title="2. Kịch bản Đồng giá" icon={<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5 text-slate-500"><path d="M10 1a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 1Zm3.25 3.25a.75.75 0 0 1 0 1.06l-1.06 1.06a.75.75 0 0 1-1.06-1.06l1.06-1.06a.75.75 0 0 1 1.06 0ZM19 10a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 19 10Zm-3.25 3.25a.75.75 0 0 1 1.06 0l1.06 1.06a.75.75 0 0 1-1.06 1.06l-1.06-1.06a.75.75 0 0 1 0-1.06ZM10 19a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 10 19Zm-3.25-3.25a.75.75 0 0 1 0-1.06l1.06-1.06a.75.75 0 1 1 1.06 1.06l-1.06 1.06a.75.75 0 0 1-1.06 0ZM1 10a.75.75 0 0 1 .75.75v1.5a.75.75 0 0 1-1.5 0v-1.5A.75.75 0 0 1 1 10Zm3.25-3.25a.75.75 0 0 1 1.06 0L6.37 7.81a.75.75 0 0 1-1.06 1.06L4.25 7.81a.75.75 0 0 1 0-1.06ZM10 6a4 4 0 1 1 0 8 4 4 0 0 1 0-8Z" /></svg>}>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                )}
+                {currentStep === 3 && (
+                    <div className="space-y-4 animate-form-step-in">
+                        <p className="text-center text-sm text-slate-500 dark:text-slate-400 -mt-2 mb-6">Thêm đối thủ để so sánh với thị trường.</p>
                         <div>
-                             <label htmlFor="flatPrice" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Giá đồng giá mục tiêu (VND)</label>
-                             <input id="flatPrice" name="flatPrice" type="number" min="0" value={flatPrice} onChange={(e) => { setFlatPrice(e.target.value); setFlatPriceError(''); }} placeholder="99000" disabled={isLoading} className={`${commonInputClass} ${flatPriceError ? errorInputClass : ''}`} />
-                             {flatPriceError && <p className="text-xs text-red-500 mt-1">{flatPriceError}</p>}
-                        </div>
-                         <div>
-                             <label htmlFor="salesIncrease" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Doanh số kỳ vọng tăng (%)</label>
-                             <input id="salesIncrease" name="salesIncrease" type="number" min="0" value={salesIncrease} onChange={(e) => { setSalesIncrease(e.target.value); setSalesIncreaseError(''); }} placeholder="30" disabled={isLoading} className={`${commonInputClass} ${salesIncreaseError ? errorInputClass : ''}`} />
-                             {salesIncreaseError && <p className="text-xs text-red-500 mt-1">{salesIncreaseError}</p>}
+                            <label htmlFor="competitors">Đối thủ cạnh tranh (Tùy chọn)</label>
+                            <textarea id="competitors" name="competitors" rows={4} value={formData.competitors} onChange={handleChange} placeholder="Uniqlo&#10;Zara&#10;Routine" className={commonInputClass} />
                         </div>
                     </div>
-                     <div className="flex items-center pt-2">
-                        <input id="useMarket" name="useMarket" type="checkbox" checked={useMarket} onChange={(e) => setUseMarket(e.target.checked)} disabled={isLoading} className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"/>
-                        <label htmlFor="useMarket" className="ml-2 block text-sm text-slate-700 dark:text-slate-300">Tham khảo giá thị trường</label>
+                )}
+                <div className="flex justify-between items-center pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-transparent rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700">Hủy</button>
+                    <div className="flex items-center gap-3">
+                         {currentStep > 1 && <button type="button" onClick={handleBack} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-600 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500">Quay lại</button>}
+                        {currentStep < 3 ? <button type="button" onClick={handleNext} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500">Tiếp theo</button> : <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 disabled:bg-slate-400">{isLoading ? 'Đang xử lý...' : 'Gửi yêu cầu'}</button>}
                     </div>
-                </FormSection>
-                 <div className="flex justify-end space-x-3 pt-2">
-                    <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-slate-200 dark:bg-slate-600 rounded-lg hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors duration-200 disabled:opacity-50">Hủy</button>
-                    <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors duration-200 disabled:bg-slate-400 dark:disabled:bg-slate-600">
-                        {isLoading ? 'Đang xử lý...' : 'Gửi yêu cầu'}
-                    </button>
                 </div>
             </form>
-        </div>
+        </FormWrapper>
     );
 };
 
+const MarketResearchForm: React.FC<{
+    onSubmit: (params: Record<string, any>) => void;
+    onCancel: () => void;
+    isLoading: boolean;
+    initialData?: Record<string, any>;
+}> = ({ onSubmit, onCancel, isLoading, initialData }) => {
+    const [formData, setFormData] = useState({
+        season: 'spring-summer', // 'spring-summer', 'fall-winter', 'resort'
+        year: (new Date().getFullYear() + 1).toString(),
+        style_keywords: 'Denim, Office-casual, Tối giản, Hiện đại',
+        target_audience: 'Nam & Nữ văn phòng Việt Nam, 20-35 tuổi, ưa chuộng phong cách thanh lịch, năng động.',
+        markets: ['Seoul', 'Milan', 'Paris', 'Tokyo'],
+        competitors: ['Routine', 'Uniqlo', 'COS', 'Massimo Dutti'],
+    });
+    const [errors, setErrors] = useState<Record<string, string>>({});
 
-export const GuidedInputForm: React.FC<GuidedInputFormProps> = ({ task, onSubmit, onCancel, isLoading, initialData }) => {
+    useEffect(() => {
+        if (initialData) {
+            const initialMarkets = typeof initialData.markets === 'string' ? initialData.markets.split(',').map((s:string) => s.trim()) : initialData.markets || [];
+            const initialCompetitors = typeof initialData.competitors === 'string' ? initialData.competitors.split(',').map((s:string) => s.trim()) : initialData.competitors || [];
+            setFormData(prev => ({...prev, ...initialData, markets: initialMarkets, competitors: initialCompetitors}));
+        }
+    }, [initialData]);
+
+    const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+        if (errors[name]) {
+            setErrors(prev => ({ ...prev, [name]: '' }));
+        }
+    };
+    
+    const handleTagChange = (name: 'markets' | 'competitors', value: string[]) => {
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        const newErrors: Record<string, string> = {};
+        if (!formData.year.trim()) newErrors.year = 'Năm là bắt buộc.';
+        if (!formData.style_keywords.trim()) newErrors.style_keywords = 'Từ khóa phong cách là bắt buộc.';
+        if (!formData.target_audience.trim()) newErrors.target_audience = 'Đối tượng khách hàng là bắt buộc.';
+        if (formData.markets.length === 0) newErrors.markets = 'Cần ít nhất một thị trường tham chiếu.';
+        
+        setErrors(newErrors);
+        if (Object.keys(newErrors).length > 0) return;
+
+        onSubmit(formData);
+    };
+
+    const commonInputClass = "w-full bg-slate-50 dark:bg-slate-700 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300 border border-slate-300 dark:border-slate-600";
+    const segmentButtonClass = (isActive: boolean) => `flex-1 text-sm font-semibold py-2 rounded-md transition-colors duration-200 ${isActive ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'text-slate-600 dark:text-slate-300 hover:bg-slate-300/50 dark:hover:bg-slate-800/40'}`;
+
+    return (
+         <FormWrapper title={initialData ? 'Chỉnh sửa Nghiên cứu' : taskTitles['market-research']} onCancel={onCancel} currentStep={1} totalSteps={1} setStep={() => {}}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Mùa</label>
+                         <div className="flex bg-slate-200 dark:bg-slate-900/50 p-1 rounded-lg">
+                            <button type="button" onClick={() => setFormData(p => ({...p, season: 'spring-summer'}))} className={segmentButtonClass(formData.season === 'spring-summer')}>Xuân/Hè</button>
+                            <button type="button" onClick={() => setFormData(p => ({...p, season: 'fall-winter'}))} className={segmentButtonClass(formData.season === 'fall-winter')}>Thu/Đông</button>
+                            <button type="button" onClick={() => setFormData(p => ({...p, season: 'resort'}))} className={segmentButtonClass(formData.season === 'resort')}>Resort</button>
+                        </div>
+                    </div>
+                     <div>
+                        <label htmlFor="year" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Năm</label>
+                        <input id="year" name="year" type="number" value={formData.year} onChange={handleChange} placeholder="VD: 2025" className={`${commonInputClass} ${errors.year ? 'ring-2 ring-red-500' : ''}`} />
+                        {errors.year && <p className="text-xs text-red-500 mt-1">{errors.year}</p>}
+                    </div>
+                </div>
+                 <div>
+                    <label htmlFor="style_keywords" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Từ khóa Phong cách</label>
+                    <textarea id="style_keywords" name="style_keywords" rows={2} value={formData.style_keywords} onChange={handleChange} placeholder="VD: Minimalism, Sang trọng thầm lặng, Công sở..." className={`${commonInputClass} ${errors.style_keywords ? 'ring-2 ring-red-500' : ''}`} />
+                    {errors.style_keywords && <p className="text-xs text-red-500 mt-1">{errors.style_keywords}</p>}
+                </div>
+                 <div>
+                    <label htmlFor="target_audience" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Đối tượng Khách hàng</label>
+                    <textarea id="target_audience" name="target_audience" rows={2} value={formData.target_audience} onChange={handleChange} placeholder="Mô tả đối tượng khách hàng của bạn: độ tuổi, giới tính, nghề nghiệp, phong cách sống..." className={`${commonInputClass} ${errors.target_audience ? 'ring-2 ring-red-500' : ''}`} />
+                    {errors.target_audience && <p className="text-xs text-red-500 mt-1">{errors.target_audience}</p>}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                     <div>
+                        <label htmlFor="markets" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Thị trường Tham chiếu</label>
+                        <TagInput
+                            value={formData.markets}
+                            onChange={(value) => handleTagChange('markets', value)}
+                            placeholder="Thêm thị trường..."
+                            suggestions={['New York', 'London', 'Việt Nam']}
+                        />
+                         {errors.markets && <p className="text-xs text-red-500 mt-1">{errors.markets}</p>}
+                    </div>
+                    <div>
+                        <label htmlFor="competitors" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Đối thủ Cạnh tranh (Tùy chọn)</label>
+                        <TagInput
+                            value={formData.competitors}
+                            onChange={(value) => handleTagChange('competitors', value)}
+                            placeholder="Thêm đối thủ..."
+                            suggestions={["Levi's", 'Everlane', 'DirtyCoins', 'Coolmate']}
+                        />
+                    </div>
+                </div>
+
+                <div className="flex justify-between items-center pt-4 mt-4 border-t border-slate-200 dark:border-slate-700">
+                    <button type="button" onClick={onCancel} disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-slate-700 dark:text-slate-200 bg-transparent rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors duration-200 disabled:opacity-50">Hủy</button>
+                    <button type="submit" disabled={isLoading} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 transition-colors duration-200 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed">
+                        {isLoading ? 'Đang nghiên cứu...' : 'Bắt đầu Nghiên cứu'}
+                    </button>
+                </div>
+            </form>
+         </FormWrapper>
+    );
+};
+
+export const GuidedInputForm: React.FC<GuidedInputFormProps> = ({ task, onSubmit, onCancel, isLoading, initialData, businessProfile }) => {
+  const handleSubmit = (params: Record<string, any>) => {
+    onSubmit(task, params);
+  };
+  
   switch (task) {
     case 'profit-analysis':
-      return <ProfitAnalysisForm onSubmit={onSubmit} onCancel={onCancel} isLoading={isLoading} initialData={initialData} />;
+      return <ProfitAnalysisForm onSubmit={handleSubmit} onCancel={onCancel} isLoading={isLoading} initialData={initialData} businessProfile={businessProfile} />;
+    case 'market-research':
+      return <MarketResearchForm onSubmit={handleSubmit} onCancel={onCancel} isLoading={isLoading} initialData={initialData} />;
     case 'promo-price':
-      return <PromoPriceForm onSubmit={onSubmit} onCancel={onCancel} isLoading={isLoading} initialData={initialData} />;
+      return <PromoPriceForm onSubmit={handleSubmit} onCancel={onCancel} isLoading={isLoading} initialData={initialData} businessProfile={businessProfile} />;
     case 'group-price':
-      return <GroupPriceForm onSubmit={onSubmit} onCancel={onCancel} isLoading={isLoading} initialData={initialData} />;
+      return <GroupPriceForm onSubmit={handleSubmit} onCancel={onCancel} isLoading={isLoading} initialData={initialData} businessProfile={businessProfile} />;
     default:
       return null;
   }
@@ -651,39 +815,12 @@ export const GuidedInputForm: React.FC<GuidedInputFormProps> = ({ task, onSubmit
 
 const style = document.createElement('style');
 style.innerHTML = `
-    @keyframes field-glow {
-        0% { box-shadow: 0 0 0 0px theme(colors.blue.500/20%); }
-        100% { box-shadow: 0 0 0 4px theme(colors.blue.500/0%); }
+    @keyframes formStepIn {
+        from { opacity: 0; transform: translateX(20px); }
+        to { opacity: 1; transform: translateX(0); }
     }
-    .animate-field-glow {
-        animation: field-glow 1.5s infinite;
-    }
-    .ai-calculation-field {
-        background-image: repeating-linear-gradient(
-            -45deg,
-            theme(colors.slate.200/50%),
-            theme(colors.slate.200/50%) 5px,
-            transparent 5px,
-            transparent 10px
-        );
-        background-color: theme(colors.slate.100);
-    }
-    .dark .ai-calculation-field {
-        background-image: repeating-linear-gradient(
-            -45deg,
-            theme(colors.slate.700/50%),
-            theme(colors.slate.700/50%) 5px,
-            transparent 5px,
-            transparent 10px
-        );
-        background-color: theme(colors.slate.900/40%);
-    }
-    @keyframes new-row-anim {
-        from { opacity: 0; transform: translateY(-10px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .animate-new-row {
-        animation: new-row-anim 0.3s ease-out forwards;
+    .animate-form-step-in {
+        animation: formStepIn 0.3s ease-out forwards;
     }
 `;
 document.head.appendChild(style);

@@ -69,7 +69,7 @@ export const SourceComparisonDialog: React.FC<SourceComparisonDialogProps> = ({ 
       <div className="bg-white dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-3xl m-4 transform transition-all animate-dialog-in" onClick={e => e.stopPropagation()}>
         <header className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
           <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">So sánh Nguồn Tham khảo</h2>
-          <button onClick={onClose} className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Close">
+          <button onClick={onClose} className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Đóng">
             <XIcon className="w-6 h-6" />
           </button>
         </header>

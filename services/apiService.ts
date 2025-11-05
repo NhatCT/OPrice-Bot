@@ -1,9 +1,11 @@
-import type { UserProfile, ConversationMeta, ChatMessage, ConversationGroup } from '../types';
+import type { UserProfile, ConversationMeta, ChatMessage, ConversationGroup, BusinessProfile, FineTuningExample } from '../types';
 
 // Client-side implementation using localStorage
 const USER_PROFILE_KEY = 'v64_chat_user_profile';
 const CONVERSATIONS_META_KEY = 'v64_conversations_meta';
 const CONVERSATION_GROUPS_KEY = 'v64_conversation_groups';
+const BUSINESS_PROFILE_KEY = 'v64_business_profile';
+const FINE_TUNING_EXAMPLES_KEY = 'v64_fine_tuning_examples';
 const getConvoMessagesKey = (id: string) => `v64_convo_messages_${id}`;
 
 // Helper to get all conversations from localStorage
@@ -123,12 +125,33 @@ export const saveMessages = async (id: string, messages: ChatMessage[]): Promise
             nextMessageId = Math.max(...existingIds as number[]) + 1;
         }
 
-        const messagesWithIds = messages.map(msg => ({
-            ...msg,
-            id: msg.id ?? (msg.role === 'model' ? nextMessageId++ : undefined)
-        }));
+        const messagesWithIds = messages.map(msg => {
+            // Strip non-serializable React component before saving.
+            const { component, ...restOfMsg } = msg as any;
+
+            // Strip large image data before saving to localStorage to avoid quota errors.
+            let finalMsg: Partial<ChatMessage> = {
+                ...restOfMsg,
+                id: msg.id ?? (msg.role ==='model' ? nextMessageId++ : undefined)
+            };
+
+            if (finalMsg.marketResearchData && finalMsg.marketResearchData.key_items) {
+                finalMsg = {
+                    ...finalMsg,
+                    marketResearchData: {
+                        ...finalMsg.marketResearchData,
+                        key_items: finalMsg.marketResearchData.key_items.map((item: any) => {
+                            const { image_base64, ...restOfItem } = item; // Remove image_base64
+                            return restOfItem;
+                        })
+                    }
+                };
+            }
+
+            return finalMsg;
+        });
         
-        conversations[id].messages = messagesWithIds;
+        conversations[id].messages = messagesWithIds as ChatMessage[];
         saveAllConversations(conversations);
         return { success: true };
     } catch (error) {
@@ -139,28 +162,6 @@ export const saveMessages = async (id: string, messages: ChatMessage[]): Promise
 
 export const clearConversationMessages = async (id: string): Promise<{ success: boolean }> => {
     return saveMessages(id, []);
-};
-
-export const sendFeedback = async (feedbackData: { messageId: number; feedback: 'positive' | 'negative'; comment?: string }): Promise<{ success: boolean }> => {
-    try {
-        const { messageId, feedback, comment } = feedbackData;
-        const conversations = getAllConversations();
-        for (const convoId in conversations) {
-            const convo = conversations[convoId];
-            const messageIndex = convo.messages.findIndex(m => m.id === messageId);
-            if (messageIndex !== -1) {
-                convo.messages[messageIndex].feedback = feedback;
-                convo.messages[messageIndex].feedbackComment = comment;
-                saveAllConversations(conversations);
-                return { success: true };
-            }
-        }
-        console.error(`Message with ID ${messageId} not found for feedback`);
-        return { success: false };
-    } catch (error) {
-        console.error("Error sending feedback:", error);
-        return { success: false };
-    }
 };
 
 // --- Conversation Group Functions ---
@@ -260,4 +261,97 @@ export const assignConversationToGroup = async (conversationId: string, groupId:
         console.error("Error assigning conversation to group:", error);
         return { success: false };
     }
+};
+
+// --- Business Profile Functions ---
+
+// FIX: The BusinessProfile type uses 'products', not 'frequentProducts'.
+// This function is updated to use the correct property name and handle
+// backward compatibility for data stored with the old name. It also ensures
+// that loaded product objects have all the required fields from the Product type.
+export const loadBusinessProfile = async (): Promise<BusinessProfile> => {
+    const defaultProfile: BusinessProfile = {
+        defaultCosts: {},
+        products: [],
+    };
+    try {
+        const data = localStorage.getItem(BUSINESS_PROFILE_KEY);
+        if (!data) return defaultProfile;
+        
+        const profile = JSON.parse(data);
+        
+        // Handle backward compatibility from 'frequentProducts' to 'products'
+        const productList = profile.products || profile.frequentProducts || [];
+        
+        // Ensure backward compatibility for products that might not have all fields
+        profile.products = productList.map((p: any, index: number) => ({
+            id: p.id || `${Date.now()}-${index}`,
+            sku: p.sku || '',
+            name: p.name || '',
+            cost: p.cost || '',
+            price: p.price || '',
+        }));
+
+        // Clean up old property if it exists
+        if (profile.frequentProducts) {
+            delete profile.frequentProducts;
+        }
+
+        return { ...defaultProfile, ...profile };
+    } catch (e) {
+        console.error("Failed to load business profile from localStorage", e);
+        return defaultProfile;
+    }
+};
+
+export const saveBusinessProfile = async (profile: BusinessProfile): Promise<{ success: boolean }> => {
+     try {
+        localStorage.setItem(BUSINESS_PROFILE_KEY, JSON.stringify(profile));
+        return { success: true };
+    } catch (e) {
+        console.error("Failed to save business profile to localStorage", e);
+        return { success: false };
+    }
+};
+
+// --- Fine-Tuning Functions ---
+
+export const loadFineTuningExamples = async (): Promise<FineTuningExample[]> => {
+    try {
+        const data = localStorage.getItem(FINE_TUNING_EXAMPLES_KEY);
+        return data ? JSON.parse(data) : [];
+    } catch (e) {
+        console.error("Failed to load fine-tuning examples", e);
+        return [];
+    }
+};
+
+export const saveFineTuningExample = async (example: FineTuningExample): Promise<{ success: boolean }> => {
+    try {
+        const examples = await loadFineTuningExamples();
+        examples.push(example);
+        localStorage.setItem(FINE_TUNING_EXAMPLES_KEY, JSON.stringify(examples));
+        return { success: true };
+    } catch (e) {
+        console.error("Failed to save fine-tuning example", e);
+        return { success: false };
+    }
+};
+
+// FIX: Rewrote keyword matching to use Sets, which is more performant and avoids a type error with `Array.prototype.includes`.
+export const findSimilarFineTuningExamples = async (prompt: string, examples: FineTuningExample[]): Promise<FineTuningExample[]> => {
+    // Basic keyword matching for now. More advanced logic (e.g., embeddings) could be used.
+    const promptKeywords = new Set(prompt.toLowerCase().match(/\b(\w+)\b/g) || []);
+    if (promptKeywords.size < 3) return [];
+
+    const relevantExamples = examples.filter(ex => {
+        const exampleKeywords = new Set(ex.originalPrompt.toLowerCase().match(/\b(\w+)\b/g) || []);
+        const commonKeywords = [...promptKeywords].filter(kw => exampleKeywords.has(kw));
+        // Consider it similar if more than 50% of the shorter prompt's keywords match
+        const threshold = Math.min(promptKeywords.size, exampleKeywords.size) * 0.5;
+        return commonKeywords.length > threshold;
+    });
+
+    // Return the most recent 1-2 examples
+    return relevantExamples.slice(-2);
 };

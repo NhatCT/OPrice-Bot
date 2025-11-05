@@ -1,7 +1,7 @@
 import React from 'react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 
-const COLORS = ['#60a5fa', '#34d399', '#f472b6', '#fbbf24', '#a78bfa'];
+const COLORS = ['#3b82f6', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899'];
 
 interface ChartData {
     name: string;
@@ -13,23 +13,27 @@ interface AnalysisChartProps {
         type: 'bar';
         title: string;
         data: ChartData[];
+        unit?: string;
     };
     theme: 'light' | 'dark';
 }
 
-const formatValue = (value: number) => {
+const formatValue = (value: number, unit?: string) => {
+    if (unit === '%') return `${value}%`;
     if (value >= 1_000_000_000) return `${(value / 1_000_000_000).toFixed(1).replace('.0', '')} Tỷ`;
     if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1).replace('.0', '')} Tr`;
     if (value >= 1_000) return `${(value / 1_000).toFixed(1).replace('.0', '')} K`;
     return value.toLocaleString('vi-VN');
 };
 
-const CustomTooltip = ({ active, payload, label }: any) => {
+const CustomTooltip = ({ active, payload, label, unit }: any) => {
     if (active && payload && payload.length) {
+      const formattedValue = Number(payload[0].value).toLocaleString('vi-VN');
+      const unitDisplay = unit ? (unit === '%' ? unit : ` ${unit}`) : '';
       return (
         <div className="p-2 bg-slate-100/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg">
           <p className="font-bold text-slate-800 dark:text-slate-100">{label}</p>
-          <p className="text-sm text-blue-600 dark:text-blue-400">{`${payload[0].name}: ${Number(payload[0].value).toLocaleString('vi-VN')} VND`}</p>
+          <p className="text-sm" style={{ color: payload[0].fill }}>{`${payload[0].name}: ${formattedValue}${unitDisplay}`}</p>
         </div>
       );
     }
@@ -50,30 +54,27 @@ export const AnalysisChart: React.FC<AnalysisChartProps> = ({ chart, theme }) =>
         );
     }
 
-    if (chart.type === 'bar') {
-        const dataKey = Object.keys(chart.data[0] || {}).find(key => key !== 'name') || 'value';
-        
-        return (
-            <div className="my-4">
-                <h4 className="text-center font-semibold text-slate-700 dark:text-slate-200 mb-3">{chart.title}</h4>
-                <div className="h-64">
-                    <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={chart.data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }} barGap={10}>
-                            <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} />
-                            <XAxis dataKey="name" stroke={tickColor} fontSize={12} tickLine={false} axisLine={false} />
-                            <YAxis stroke={tickColor} fontSize={12} tickLine={false} axisLine={false} tickFormatter={formatValue} />
-                            <Tooltip content={CustomTooltip} cursor={{ fill: theme === 'dark' ? 'rgba(148, 163, 184, 0.1)' : 'rgba(100, 116, 139, 0.1)' }} />
-                            <Bar dataKey={dataKey} name="Giá trị" barSize={40} radius={[4, 4, 0, 0]}>
-                                 {chart.data.map((entry, idx) => (
-                                    <Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />
-                                ))}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
+    // Treat any chart with valid data as a bar chart for robustness.
+    const dataKey = Object.keys(chart.data[0] || {}).find(key => key !== 'name') || 'value';
+    
+    return (
+        <div className="my-4 analysis-chart-wrapper">
+            <h4 className="text-center font-semibold text-slate-700 dark:text-slate-200 mb-3">{chart.title}</h4>
+            <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chart.data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }} barGap={10} isAnimationActive={true}>
+                        <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} />
+                        <XAxis dataKey="name" stroke={tickColor} fontSize={12} tickLine={false} axisLine={false} />
+                        <YAxis stroke={tickColor} fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => formatValue(value, chart.unit)} />
+                        <Tooltip content={<CustomTooltip unit={chart.unit} />} cursor={{ fill: theme === 'dark' ? 'rgba(148, 163, 184, 0.1)' : 'rgba(100, 116, 139, 0.1)' }} />
+                        <Bar dataKey={dataKey} name="Giá trị" barSize={40} radius={[4, 4, 0, 0]}>
+                             {chart.data.map((entry, idx) => (
+                                <Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />
+                            ))}
+                        </Bar>
+                    </BarChart>
+                </ResponsiveContainer>
             </div>
-        );
-    }
-
-    return <div>Loại biểu đồ không được hỗ trợ.</div>;
+        </div>
+    );
 };
