@@ -20,6 +20,7 @@ import { ArrowPathIcon } from './icons/ArrowPathIcon';
 import { EllipsisHorizontalIcon } from './icons/EllipsisHorizontalIcon';
 import { TypingIndicator } from './TypingIndicator';
 import { FunnelIcon } from './icons/FunnelIcon';
+import { InformationCircleIcon } from './icons/InformationCircleIcon';
 
 interface ChatMessageProps {
   message: ChatMessage;
@@ -32,7 +33,7 @@ interface ChatMessageProps {
   isSelectedForCompare: boolean;
   onEditAnalysis: (message: ChatMessage) => void;
   sourceFilter?: string;
-  effectiveTheme: Theme;
+  effectiveTheme: 'light' | 'dark';
   isLastMessage: boolean;
   isLoading: boolean;
   onSourceFilterChange: (uri: string | null) => void;
@@ -55,6 +56,7 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
   const canEdit = isModel && !!message.analysisParams && !!message.task;
   const canExport = isModel && (!!message.analysisParams || !!message.marketResearchData) && !!message.task;
   const canCopyOriginal = message.isTranslated && message.originalContent;
+  const hasSummary = message.summary && message.summary.trim() !== '';
   const showTypingIndicator = isModel && isLastMessage && isLoading && !message.content && !message.component;
   const showCursor = isModel && isLastMessage && isLoading && !message.component && !!message.content;
 
@@ -283,7 +285,29 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                         <TypingIndicator />
                     ) : (
                         <>
+                            {hasSummary && (
+                                <div className="mb-4 p-4 bg-blue-50 dark:bg-slate-700/50 border-l-4 border-blue-400 rounded-r-lg animate-fade-in-fast">
+                                    <h4 className="flex items-center gap-2 text-sm font-bold text-blue-800 dark:text-blue-300 mb-2">
+                                        <InformationCircleIcon className="w-5 h-5" />
+                                        Tóm tắt
+                                    </h4>
+                                    <div className="prose prose-sm dark:prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none">
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                                            {message.summary!}
+                                        </ReactMarkdown>
+                                    </div>
+                                </div>
+                            )}
                             {message.component}
+                            {message.charts && message.charts.length > 0 && (
+                                <div className="my-4 space-y-4">
+                                    {message.charts.map((chart: any, i: number) =>
+                                        chart.component ? (
+                                            <chart.component key={i} chart={chart} theme={effectiveTheme} />
+                                        ) : null
+                                    )}
+                                </div>
+                            )}
                             {(message.content || showCursor) && (
                                 <div className="prose prose-sm dark:prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none">
                                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>

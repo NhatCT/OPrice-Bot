@@ -24,7 +24,15 @@ const saveAllConversations = (conversations: Record<string, { meta: Conversation
     const metaRecord: Record<string, ConversationMeta> = {};
     for (const id in conversations) {
         metaRecord[id] = conversations[id].meta;
-        localStorage.setItem(getConvoMessagesKey(id), JSON.stringify(conversations[id].messages));
+        try {
+            localStorage.setItem(getConvoMessagesKey(id), JSON.stringify(conversations[id].messages));
+        } catch (error) {
+            console.error(`Error saving messages for convo ${id}:`, error);
+            // Handle quota exceeded error if necessary
+            if ((error as DOMException).name === 'QuotaExceededError') {
+                 console.error(`Quota exceeded for conversation ${id}. Consider clearing some data.`);
+            }
+        }
     }
     localStorage.setItem(CONVERSATIONS_META_KEY, JSON.stringify(metaRecord));
 };
@@ -113,12 +121,9 @@ export const saveMessages = async (id: string, messages: ChatMessage[]): Promise
      try {
         const conversations = getAllConversations();
         if (!conversations[id]) {
-            // If conversation meta doesn't exist, create it.
-            // This might happen in some edge cases.
             conversations[id] = { meta: { id, title: "Cuộc trò chuyện mới" }, messages: [] };
         };
 
-        // Assign IDs to new model messages for feedback tracking
         let nextMessageId = 1;
         const existingIds = messages.map(m => m.id).filter(Boolean);
         if(existingIds.length > 0) {
@@ -126,26 +131,21 @@ export const saveMessages = async (id: string, messages: ChatMessage[]): Promise
         }
 
         const messagesWithIds = messages.map(msg => {
-            // Strip non-serializable React component before saving.
             const { component, ...restOfMsg } = msg as any;
-
-            // Strip large image data before saving to localStorage to avoid quota errors.
+            
             let finalMsg: Partial<ChatMessage> = {
                 ...restOfMsg,
                 id: msg.id ?? (msg.role ==='model' ? nextMessageId++ : undefined)
             };
 
-            if (finalMsg.marketResearchData && finalMsg.marketResearchData.key_items) {
-                finalMsg = {
-                    ...finalMsg,
-                    marketResearchData: {
-                        ...finalMsg.marketResearchData,
-                        key_items: finalMsg.marketResearchData.key_items.map((item: any) => {
-                            const { image_base64, ...restOfItem } = item; // Remove image_base64
-                            return restOfItem;
-                        })
-                    }
-                };
+            // Strip large, non-essential data before saving to prevent quota errors
+            if (finalMsg.marketResearchData?.trend_sections) {
+                finalMsg.marketResearchData.trend_sections.forEach(section => {
+                    section.key_items.forEach(item => {
+                        delete (item as any).image_base64; // Deprecated but might exist in old data
+                        delete (item as any).image_url; // Remove dynamic URL to save space
+                    });
+                });
             }
 
             return finalMsg;
@@ -229,7 +229,6 @@ export const deleteConversationGroup = async (id: string): Promise<{ success: bo
                 convo.groupId = null;
             }
         });
-        // This is a bit inefficient as it re-reads/re-writes messages, but it's safe
         const fullConversations = getAllConversations();
         Object.keys(fullConversations).forEach(convoId => {
             if (fullConversations[convoId].meta.groupId === id) {
@@ -248,11 +247,9 @@ export const deleteConversationGroup = async (id: string): Promise<{ success: bo
 
 export const assignConversationToGroup = async (conversationId: string, groupId: string | null): Promise<{ success: boolean }> => {
     try {
-        // This is simpler - we just need to update the conversation's meta
         const convos = await loadConversations();
         if (convos[conversationId]) {
             convos[conversationId].groupId = groupId;
-            // Directly save the meta file
             localStorage.setItem(CONVERSATIONS_META_KEY, JSON.stringify(convos));
             return { success: true };
         }
@@ -265,10 +262,6 @@ export const assignConversationToGroup = async (conversationId: string, groupId:
 
 // --- Business Profile Functions ---
 
-// FIX: The BusinessProfile type uses 'products', not 'frequentProducts'.
-// This function is updated to use the correct property name and handle
-// backward compatibility for data stored with the old name. It also ensures
-// that loaded product objects have all the required fields from the Product type.
 export const loadBusinessProfile = async (): Promise<BusinessProfile> => {
     const defaultProfile: BusinessProfile = {
         defaultCosts: {},
@@ -280,10 +273,8 @@ export const loadBusinessProfile = async (): Promise<BusinessProfile> => {
         
         const profile = JSON.parse(data);
         
-        // Handle backward compatibility from 'frequentProducts' to 'products'
         const productList = profile.products || profile.frequentProducts || [];
         
-        // Ensure backward compatibility for products that might not have all fields
         profile.products = productList.map((p: any, index: number) => ({
             id: p.id || `${Date.now()}-${index}`,
             sku: p.sku || '',
@@ -292,7 +283,6 @@ export const loadBusinessProfile = async (): Promise<BusinessProfile> => {
             price: p.price || '',
         }));
 
-        // Clean up old property if it exists
         if (profile.frequentProducts) {
             delete profile.frequentProducts;
         }
@@ -338,20 +328,16 @@ export const saveFineTuningExample = async (example: FineTuningExample): Promise
     }
 };
 
-// FIX: Rewrote keyword matching to use Sets, which is more performant and avoids a type error with `Array.prototype.includes`.
 export const findSimilarFineTuningExamples = async (prompt: string, examples: FineTuningExample[]): Promise<FineTuningExample[]> => {
-    // Basic keyword matching for now. More advanced logic (e.g., embeddings) could be used.
     const promptKeywords = new Set(prompt.toLowerCase().match(/\b(\w+)\b/g) || []);
     if (promptKeywords.size < 3) return [];
 
     const relevantExamples = examples.filter(ex => {
         const exampleKeywords = new Set(ex.originalPrompt.toLowerCase().match(/\b(\w+)\b/g) || []);
         const commonKeywords = [...promptKeywords].filter(kw => exampleKeywords.has(kw));
-        // Consider it similar if more than 50% of the shorter prompt's keywords match
         const threshold = Math.min(promptKeywords.size, exampleKeywords.size) * 0.5;
         return commonKeywords.length > threshold;
     });
 
-    // Return the most recent 1-2 examples
     return relevantExamples.slice(-2);
 };

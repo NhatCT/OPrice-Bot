@@ -1,7 +1,5 @@
-import { GoogleGenAI, GenerateContentParameters, Type, Content, Modality } from '@google/genai';
-// FIX: Add Task to import to be used in getChatResponseStream signature
+import { GoogleGenAI, GenerateContentResponse, GenerateContentParameters, Type, Content, Modality } from '@google/genai';
 import type { ChatMessage, Task } from '../types';
-import { getCostSheetData, CostSheetItem } from './dataService';
 
 const API_KEY = process.env.API_KEY;
 
@@ -10,53 +8,9 @@ if (!API_KEY) {
 }
 
 const ai = new GoogleGenAI({ apiKey: API_KEY! });
-const modelName = 'gemini-2.5-flash';
 
-let systemInstructionCache: string | null = null;
 
-const buildSystemInstruction = (costSheetItems: CostSheetItem[]): string => {
-    const productDataString = costSheetItems.map(item => {
-        const fPrice = Number(item.price).toLocaleString('vi-VN');
-        const fCostGoods = Number(item.costOfGoods).toLocaleString('vi-VN');
-        const fOpCost = Number(item.operatingCost).toLocaleString('vi-VN');
-        return `- ${item.name}: Giá bán ${fPrice}, Giá vốn ${fCostGoods}, Chi phí vận hành ${fOpCost}`;
-    }).join('\n');
-
-    return `You are a specialized business assistant for 'V64', a Vietnamese company. You have access to the following V64 2025 costsheet data. Use this data for any relevant business analysis unless the user provides different data.
----
-Bảng giá và chi phí sản phẩm V64 (đơn vị VND):
-${productDataString}
----
-
-Your capabilities include:
-1.  **Answering questions about V64:** Respond to inquiries about the company, its solutions, projects, and related information using the search results provided to you.
-2.  **Performing Business Analysis:** Execute specific business analysis tasks (like profit, promotion, pricing, and market research analysis) based on structured data provided by the user OR the costsheet data above.
-3.  **Analyzing Data from Images:** Read, interpret, and perform calculations on data from user-uploaded images (e.g., spreadsheets, reports) to answer their questions.
-
-You MUST adhere to these rules:
-- If the user's query is outside these defined areas (e.g., general knowledge, weather, chit-chat, personal opinions, cooking recipes, etc.), you MUST politely decline.
-- When declining, state that you are a specialized assistant for V64 and can only help with V64-related topics or business analysis based on provided data.
-- Do NOT attempt to answer out-of-scope questions. For example, if asked 'what is 1+1', do not answer '2'. Decline the request.
-- All your analysis and responses should be professional and business-oriented.
-- Your response must be in English, as it will be translated by the application.`;
-};
-
-const getSystemInstruction = async (): Promise<string> => {
-    if (systemInstructionCache) {
-        return systemInstructionCache;
-    }
-    try {
-        const costSheetItems = await getCostSheetData();
-        if (costSheetItems.length > 0) {
-            systemInstructionCache = buildSystemInstruction(costSheetItems);
-            return systemInstructionCache;
-        } else {
-            throw new Error("No items from cost sheet");
-        }
-    } catch (error) {
-        console.warn("Could not fetch dynamic system instruction, using fallback.", error);
-        // Fallback to old hardcoded data
-        return `You are a specialized business assistant for 'V64', a Vietnamese company. You have access to the following V64 2025 costsheet data. Use this data for any relevant business analysis unless the user provides different data.
+const HARDCODED_SYSTEM_INSTRUCTION = `You are a specialized business assistant for 'V64', a Vietnamese company. You have access to the following V64 2025 costsheet data. Use this data for any relevant business analysis unless the user provides different data.
 ---
 Bảng giá và chi phí sản phẩm V64 (đơn vị VND):
 - Áo Khoác Nam: Giá bán 792,000, Chi phí vận hành 291,699
@@ -83,16 +37,18 @@ You MUST adhere to these rules:
 - Do NOT attempt to answer out-of-scope questions. For example, if asked 'what is 1+1', do not answer '2'. Decline the request.
 - All your analysis and responses should be professional and business-oriented.
 - Your response must be in English, as it will be translated by the application.`;
-    }
+
+
+const getSystemInstruction = async (): Promise<string> => {
+    return HARDCODED_SYSTEM_INSTRUCTION;
 };
 
 
-const CREATIVE_SYSTEM_INSTRUCTION = `You are a world-class Fashion Expert and Creative Director for 'V64', a Vietnamese fashion brand. Your role is to conduct strategic analysis of global fashion trends to develop groundbreaking collection ideas.
+const CREATIVE_SYSTEM_INSTRUCTION = `You are a world-class Fashion Trend Analyst and Creative Director for 'V64', a Vietnamese fashion brand. Your role is to conduct strategic analysis of global fashion trends to develop groundbreaking collection ideas. Your analysis must be insightful, strategic, and tailored to the brand's context.
 
-You MUST adhere to these rules:
-- For any market research or trend analysis task, you **MUST use Google Search** to find the latest, most relevant information from reputable sources (e.g., WGSN, Vogue, Business of Fashion, market reports).
-- Your analysis must be insightful, strategic, and tailored to the brand's context.
-- Your response must be in English, as it will be translated by the application.`;
+**CRITICAL RULE:** For any market research or trend analysis task, you **MUST use Google Search** to find the latest, most relevant information from reputable sources (e.g., WGSN, Vogue Runway, Business of Fashion, market reports).
+
+Your response must be in English, as it will be translated by the application.`;
 
 
 interface StreamChunk {
@@ -119,10 +75,18 @@ const buildGeminiHistory = (history: ChatMessage[]): Content[] => {
     }).filter(Boolean) as Content[];
 };
 
-// Kiểm tra xem prompt có cần tra cứu thị trường (grounding) không
-const needsMarketGrounding = (prompt: string): boolean => {
+// Kiểm tra xem prompt có cần tra cứu Google không
+const needsGoogleSearch = (prompt: string): boolean => {
     const lowerPrompt = prompt.toLowerCase();
-    return lowerPrompt.includes('tham khảo giá thị trường') || lowerPrompt.includes('market price') || lowerPrompt.includes('đối thủ cạnh tranh');
+    const keywords = [
+        'sử dụng google search', 
+        'use google search',
+        'tham khảo giá thị trường',
+        'market price',
+        'đối thủ cạnh tranh',
+        'competitors'
+    ];
+    return keywords.some(kw => lowerPrompt.includes(kw));
 };
 
 // Kiểm tra xem prompt có phải là câu hỏi về V64 không
@@ -133,12 +97,70 @@ const isV64Question = (prompt: string): boolean => {
     return !isBusiness && keywords.some(kw => lowerPrompt.includes(kw));
 }
 
+// Kiểm tra xem prompt có phải là yêu cầu phân tích kinh doanh không
+const isBusinessAnalysis = (prompt: string): boolean => {
+    const lowerPrompt = prompt.toLowerCase();
+    const keywords = ['phân tích lợi nhuận', 'phân tích khuyến mãi', 'phân tích đồng giá', 'profit analysis', 'promo analysis', 'market research', 'nghiên cứu xu hướng', 'brand positioning', 'định vị thương hiệu', 'phân tích cạnh tranh'];
+    return keywords.some(kw => lowerPrompt.includes(kw));
+}
+
 // Kiểm tra xem prompt có yêu cầu phản hồi JSON để phân tích không
 const isJsonAnalysisTask = (prompt: string): boolean => {
-    return prompt.includes('YÊU CẦU ĐỊNH DẠNG ĐẦU RA') || prompt.includes('REQUIRED OUTPUT FORMAT');
+    return prompt.includes('REQUIRED OUTPUT FORMAT: JSON') || prompt.includes('YÊU CẦU ĐỊNH DẠNG ĐẦU RA: JSON');
 };
 
-// FIX: Update function signature to accept a `useCreativePersona` flag.
+const marketResearchSchema = {
+  type: Type.OBJECT,
+  properties: {
+    trend_sections: {
+      type: Type.ARRAY,
+      description: 'An array of major trend sections.',
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          title: { type: Type.STRING, description: 'The title of the trend section, e.g., "1. Trend Core – Y2K Revival".' },
+          description: { type: Type.STRING, description: 'A short, bulleted list of key characteristics of the trend in Vietnamese. Use Markdown for bullet points. E.g., "- Quần túi hộp, áo nhiều ngăn\\n- Thắt lưng trang trí đặc sắc"' },
+          key_items: {
+            type: Type.ARRAY,
+            description: 'An array of 5 key fashion items that exemplify this trend.',
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                brand_name: { type: Type.STRING, description: 'The name of a real-world brand that showcases this trend, e.g., "DOLCE & GABBANA".' },
+                image_search_query: { type: Type.STRING, description: 'A concise, effective English search query for Google Images to find a real runway, studio, or street style photo of this item from the specified brand and trend. Example: "runway photo of baggy stone wash jeans Nili Lotan Fall 2024".' }
+              },
+              required: ['brand_name', 'image_search_query']
+            }
+          }
+        },
+        required: ['title', 'description', 'key_items']
+      }
+    },
+    wash_effect_summary: {
+      type: Type.OBJECT,
+      description: 'A summary section for washing effects.',
+      properties: {
+        title: { type: Type.STRING, description: 'The title of this section, e.g., "4. Washing Effect – Hiệu ứng wash".' },
+        table: {
+          type: Type.ARRAY,
+          description: 'A table summarizing different wash types.',
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              wash_type: { type: Type.STRING, description: 'The name of the wash effect, e.g., "Smoky grey wash".' },
+              application_effect: { type: Type.STRING, description: 'The application and effect of the wash in Vietnamese, e.g., "Màu tro xám vintage".' }
+            },
+            required: ['wash_type', 'application_effect']
+          }
+        }
+      },
+      required: ['title', 'table']
+    }
+  },
+  required: ['trend_sections', 'wash_effect_summary']
+};
+
+
 export async function* getChatResponseStream(
     history: ChatMessage[],
     signal: AbortSignal,
@@ -150,6 +172,10 @@ export async function* getChatResponseStream(
     const lastMessage = history[history.length - 1];
     const prompt = lastMessage.content;
     const task = options?.task;
+    
+    const isAnalysisFromPrompt = !task && isBusinessAnalysis(prompt);
+    const useProModel = task === 'profit-analysis' || task === 'promo-price' || task === 'group-price' || task === 'market-research' || task === 'brand-positioning' || isAnalysisFromPrompt;
+    const modelName = useProModel ? 'gemini-2.5-pro' : 'gemini-2.5-flash';
 
     let systemInstruction: string;
     if (options?.useCreativePersona) {
@@ -158,7 +184,6 @@ export async function* getChatResponseStream(
         systemInstruction = await getSystemInstruction();
     }
 
-    // FIX: Changed GenerateContentRequest to GenerateContentParameters
     const request: GenerateContentParameters = {
         model: modelName,
         contents: [],
@@ -198,63 +223,65 @@ export async function* getChatResponseStream(
     request.contents = [...previousHistory, lastContent];
 
     const isAnalysis = isJsonAnalysisTask(prompt);
-    // FIX: Use the 'task' variable passed in options to reliably determine if grounding is needed,
-    // instead of relying on fragile keyword matching in the prompt. This ensures 'market-research'
-    // and other analysis tasks correctly trigger the Google Search tool.
-    const useGrounding = task === 'market-research' || task === 'brand-positioning' || needsMarketGrounding(prompt) || isV64Question(prompt);
+    const useGrounding = task === 'market-research' || task === 'brand-positioning' || needsGoogleSearch(prompt) || isV64Question(prompt);
 
-    if (isAnalysis && useGrounding) {
-        // For analysis tasks that ALSO need market data, use the grounding tool.
-        // The detailed prompt already instructs the model to return a JSON code block.
-        request.config!.tools = [{ googleSearch: {} }];
-    } else if (isAnalysis) {
-        // For analysis tasks WITHOUT market data, use the strict JSON mode.
+    if (isAnalysis) {
         request.config!.responseMimeType = "application/json";
-        request.config!.responseSchema = {
-            type: Type.OBJECT,
-            properties: {
-                analysis: { type: Type.STRING, description: "Detailed analysis text. Newlines must be escaped as \\n." },
-                charts: {
-                    type: Type.ARRAY,
-                    description: "An array of chart objects.",
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            type: { type: Type.STRING, description: "Type of the chart, e.g., 'bar'." },
-                            title: { type: Type.STRING, description: "Title of the chart." },
-                            unit: { type: Type.STRING, description: "Unit for the chart values (e.g., 'VND', '%'). Leave empty for dimensionless values." },
-                            data: {
-                                type: Type.ARRAY,
-                                description: "Data points for the chart.",
-                                items: {
-                                    type: Type.OBJECT,
-                                    properties: {
-                                        name: { type: Type.STRING, description: "Label for the data point." },
-                                        value: { type: Type.NUMBER, description: "Value for the data point." }
-                                    },
-                                    required: ['name', 'value']
+        if (task === 'market-research') {
+            request.config!.responseSchema = marketResearchSchema;
+            request.config!.tools = [{ googleSearch: {} }];
+        } else {
+            request.config!.responseSchema = {
+                type: Type.OBJECT,
+                properties: {
+                    summary: { type: Type.STRING, description: "A concise summary of the key metrics from the analysis. Important numbers and conclusions MUST be formatted in bold using Markdown (e.g., **1,234,567 VND** or **+25%**). Newlines must be escaped as \\n." },
+                    analysis: { type: Type.STRING, description: "Detailed analysis text. Newlines must be escaped as \\n." },
+                    charts: {
+                        type: Type.ARRAY,
+                        description: "An array of chart objects.",
+                        items: {
+                            type: Type.OBJECT,
+                            properties: {
+                                type: { type: Type.STRING, description: "Type of the chart, e.g., 'bar'." },
+                                title: { type: Type.STRING, description: "Title of the chart." },
+                                unit: { type: Type.STRING, description: "Unit for the chart values (e.g., 'VND', '%'). Leave empty for dimensionless values." },
+                                data: {
+                                    type: Type.ARRAY,
+                                    description: "Data points for the chart.",
+                                    items: {
+                                        type: Type.OBJECT,
+                                        properties: {
+                                            name: { type: Type.STRING, description: "Label for the data point." },
+                                            value: { type: Type.NUMBER, description: "Value for the data point." }
+                                        },
+                                        required: ['name', 'value']
+                                    }
                                 }
-                            }
-                        },
-                        required: ['type', 'title', 'data']
+                            },
+                            required: ['type', 'title', 'data']
+                        }
                     }
-                }
-            },
-            required: ['analysis', 'charts']
-        };
+                },
+                required: ['summary', 'analysis', 'charts']
+            };
+            if (useGrounding) {
+                 request.config!.tools = [{ googleSearch: {} }];
+            }
+        }
     } else if (useGrounding) {
-        // For simple Q&A with grounding (e.g., V64 questions).
         request.config!.tools = [{ googleSearch: {} }];
     }
     
     try {
-        const streamResult = await ai.models.generateContentStream(request);
+        const resultStream = await ai.models.generateContentStream(request);
         
+        let lastChunk: GenerateContentResponse | null = null;
+
         signal.addEventListener('abort', () => {
             console.log("Stream abort requested.");
         });
 
-        for await (const chunk of streamResult) {
+        for await (const chunk of resultStream) {
             if (signal.aborted) {
               console.log("Aborting stream processing.");
               break;
@@ -263,15 +290,12 @@ export async function* getChatResponseStream(
                 firstChunkTime = Date.now() - startTime;
             }
             yield { textChunk: chunk.text };
+            lastChunk = chunk;
         }
         
-        const finalResponse = await streamResult.response;
+        const finalResponse = lastChunk;
         const totalTime = Date.now() - startTime;
 
-        // FIX: Add a defensive check for finalResponse. The stream can end
-        // without a valid final response object in some cases (e.g., if the
-        // prompt is completely empty or triggers safety filters immediately).
-        // This prevents the "Cannot read properties of undefined (reading 'candidates')" error.
         if (!finalResponse) {
             console.warn("Gemini stream ended without a final response object.");
             yield {
@@ -312,7 +336,7 @@ export async function* getChatResponseStream(
 }
 
 export const translateText = async (text: string, sourceLang: 'vi' | 'en', targetLang: 'vi' | 'en'): Promise<string | null> => {
-    if (!text.trim()) return text;
+    if (!text || !text.trim()) return text;
     
     const sourceLangName = sourceLang === 'vi' ? 'Vietnamese' : 'English';
     const targetLangName = targetLang === 'vi' ? 'Vietnamese' : 'English';
@@ -324,65 +348,49 @@ export const translateText = async (text: string, sourceLang: 'vi' | 'en', targe
     ${text}
     ---
     `;
+    
+    let attempts = 0;
+    const maxRetries = 3;
 
-    try {
-        const response = await ai.models.generateContent({
-            model: modelName,
-            contents: prompt
-        });
-        return response.text.trim();
-    } catch (error) {
-        console.error(`Failed to translate text from ${sourceLang} to ${targetLang}:`, error);
-        return null;
-    }
-};
-
-
-export const generateImageFromPrompt = async (prompt: string): Promise<string | null> => {
-    if (!prompt) return null;
-    try {
-        const response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash-image',
-            contents: { parts: [{ text: prompt }] },
-            config: {
-                responseModalities: [Modality.IMAGE],
-            },
-        });
-        
-        if (!response.candidates || response.candidates.length === 0) {
-            const feedback = response.promptFeedback;
-            console.error("Image generation failed: No candidates returned. This might be due to safety filters.", {
-                prompt,
-                blockReason: feedback?.blockReason,
-                safetyRatings: feedback?.safetyRatings,
+    while (attempts < maxRetries) {
+        try {
+            const response = await ai.models.generateContent({
+                model: 'gemini-2.5-flash',
+                contents: { parts: [{ text: prompt }] },
             });
-            return null;
-        }
-
-        for (const part of response.candidates[0].content.parts) {
-            if (part.inlineData) {
-                return part.inlineData.data; // This is the base64 string
+            return response.text.trim();
+        } catch (error) {
+            attempts++;
+            console.error(`Attempt ${attempts}: Failed to translate text from ${sourceLang} to ${targetLang}:`, error);
+            if (attempts >= maxRetries) {
+                return null; // Return null after the last attempt
             }
+            // Wait for a short period before retrying
+            await new Promise(res => setTimeout(res, 500 * attempts));
         }
-        console.warn('Image generation call succeeded but no image data was returned in parts.');
-        return null;
+    }
+    return null; // Should be unreachable, but for type safety
+};
 
+export const findImageFromSearchQuery = async (query: string): Promise<string | null> => {
+    if (!query) return null;
+    try {
+        // Use Unsplash Source which is designed for this kind of hotlinking and can use the query.
+        // We directly return the URL and let the <img> tag handle the loading and any redirects.
+        // This is more robust against CORS/CSP issues that can block client-side fetch() calls.
+        // The ImageWithStatus component will gracefully handle if the image fails to load.
+
+        // Sanitize and encode the query for the URL.
+        const sanitizedQuery = query.split(',').slice(0, 3).join(','); // Use first few keywords for better results
+        const encodedQuery = encodeURIComponent(sanitizedQuery);
+        
+        return `https://source.unsplash.com/400x600/?${encodedQuery}`;
     } catch (error) {
-        // FIX: Improve error logging to prevent "[object Object]".
-        // Create a clear, single-string error message for logging.
-        let detailedError = 'An unknown error occurred.';
-        if (error instanceof Error) {
-            detailedError = error.message;
-        } else if (typeof error === 'object' && error !== null) {
-            detailedError = (error as any).message || JSON.stringify(error);
-        } else {
-            detailedError = String(error);
-        }
-        console.error(`Failed to generate image from prompt: ${detailedError}. Prompt was: "${prompt}"`);
+        // This block is now less likely to be hit, but good to keep.
+        console.error("Failed to construct image search URL:", error);
         return null;
     }
 };
-
 
 export interface StressTestResult {
     success: boolean;
@@ -468,10 +476,9 @@ export const createFineTuningExampleFromCorrection = async (
 
     try {
         const response = await ai.models.generateContent({
-            model: modelName,
-            contents: metaPrompt
+            model: 'gemini-2.5-pro',
+            contents: { parts: [{ text: metaPrompt }] }
         });
-        // FIX: Changed response.text() to response.text
         return response.text;
     } catch (error) {
         console.error("Failed to create fine-tuning example:", error);

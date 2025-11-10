@@ -1,7 +1,5 @@
 import React from 'react';
 
-// Fix: Update component props to accept all standard SVG props.
-// This allows passing props like 'title' for tooltips and resolves type errors.
 export const CheckIcon: React.FC<React.SVGProps<SVGSVGElement>> = (props) => (
   <svg 
     xmlns="http://www.w3.org/2000/svg" 

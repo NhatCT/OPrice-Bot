@@ -89,7 +89,6 @@ export const FindBar: React.FC<FindBarProps> = ({ isVisible, onClose, containerR
         });
 
         if (totalMatches > 0) {
-            // FIX: Use type assertion `as HTMLElement[]` instead of generic to fix error.
             const newMatches = Array.from(container.querySelectorAll('mark.find-match')) as HTMLElement[];
             setMatches(newMatches);
             setCurrentIndex(0);

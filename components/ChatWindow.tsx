@@ -1,5 +1,7 @@
+
+
 import React, { useEffect, useRef, forwardRef } from 'react';
-import type { ChatMessage, Theme } from '../types';
+import type { ChatMessage } from '../types';
 import { ChatMessageComponent } from './ChatMessage';
 import { TypingIndicator } from './TypingIndicator';
 import { V64Logo } from './icons/V64Logo';
@@ -15,7 +17,8 @@ interface ChatWindowProps {
   onToggleCompare: (index: number) => void;
   onEditAnalysis: (message: ChatMessage) => void;
   sourceFilter: string | null;
-  effectiveTheme: Theme;
+  // FIX: `effectiveTheme` is always resolved to 'light' or 'dark' in the App component. The type `Theme` (which includes 'system') was incorrect.
+  effectiveTheme: 'light' | 'dark';
   onSourceFilterChange: (uri: string | null) => void;
 }
 

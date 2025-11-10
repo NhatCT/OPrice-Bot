@@ -3,13 +3,8 @@ import type { MarketResearchData } from '../types';
 import { AnalysisChart } from './charts/AnalysisChart';
 import { ScissorsIcon } from './icons/ScissorsIcon';
 import { SwatchIcon } from './icons/SwatchIcon';
-import { TagIcon } from './icons/TagIcon';
 import { SparklesIcon } from './icons/SparklesIcon';
-import { LightBulbIcon } from './icons/LightBulbIcon';
-import { ShoppingBagIcon } from './icons/ShoppingBagIcon';
 import { PhotoIcon } from './icons/PhotoIcon';
-import { GlobeAltIcon } from './icons/GlobeAltIcon';
-import { ColorSwatchRenderer } from './ColorSwatchRenderer';
 import { XCircleIcon } from './icons/XCircleIcon';
 
 interface MarketResearchReportProps {
@@ -17,28 +12,15 @@ interface MarketResearchReportProps {
   theme: 'light' | 'dark';
 }
 
-const iconMap: Record<string, { icon: React.ReactNode; color: string }> = {
-    scissors: { icon: <ScissorsIcon className="w-5 h-5" />, color: 'text-sky-500' },
-    swatch: { icon: <SwatchIcon className="w-5 h-5" />, color: 'text-purple-500' },
-    tag: { icon: <TagIcon className="w-5 h-5" />, color: 'text-amber-500' },
-    sparkles: { icon: <SparklesIcon className="w-5 h-5" />, color: 'text-pink-500' },
-    lightbulb: { icon: <LightBulbIcon className="w-5 h-5" />, color: 'text-yellow-500' },
-    'shopping-bag': { icon: <ShoppingBagIcon className="w-5 h-5" />, color: 'text-green-500' },
-    globe: { icon: <GlobeAltIcon className="w-5 h-5" />, color: 'text-blue-500' },
-    default: { icon: <div className="w-5 h-5" />, color: 'text-slate-500' },
-};
-
 const ReportSection: React.FC<{
     title: string; 
-    iconName: string; 
     children: React.ReactNode
-}> = ({ title, iconName, children }) => {
-    const { icon, color } = iconMap[iconName] || iconMap.default;
+}> = ({ title, children }) => {
     return (
         <div className="report-section">
-            <div className={`report-section-header flex items-center gap-3 border-b border-slate-200 dark:border-slate-700 pb-2 mb-4 ${color}`}>
-                {icon}
-                <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200">{title}</h3>
+            <div className={`report-section-header flex items-center gap-3 border-b border-slate-200 dark:border-slate-700 pb-2 mb-4`}>
+                <SparklesIcon className="w-6 h-6 text-purple-500" />
+                <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{title}</h2>
             </div>
             <div className="prose prose-sm dark:prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none leading-relaxed">
                 {children}
@@ -47,25 +29,41 @@ const ReportSection: React.FC<{
     );
 };
 
-const ImageWithStatus: React.FC<{ src: string; alt: string }> = ({ src, alt }) => {
+const ImageWithStatus: React.FC<{ src?: string; alt: string }> = ({ src, alt }) => {
   const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
 
   useEffect(() => {
-    setStatus('loading');
+    if (src) {
+        setStatus('loading');
+    } else {
+        // If no src is provided initially, it's in a pre-loading state
+        setStatus('loading');
+    }
   }, [src]);
 
+  if (!src) {
+      return (
+        <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/50">
+            <div className="animate-pulse flex flex-col items-center justify-center">
+                <PhotoIcon className="w-12 h-12 opacity-50" />
+                <p className="text-xs mt-2">Đang tìm ảnh...</p>
+            </div>
+        </div>
+      )
+  }
+
   return (
-    <div className="w-full h-full flex items-center justify-center relative bg-slate-100 dark:bg-slate-700/50">
+    <div className="w-full h-full flex items-center justify-center relative bg-slate-100 dark:bg-slate-800/50">
       {status === 'loading' && (
-        <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 animate-pulse">
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 animate-pulse">
           <PhotoIcon className="w-12 h-12" />
           <p className="text-xs mt-2">Đang tải ảnh...</p>
         </div>
       )}
       {status === 'error' && (
-        <div className="w-full h-full flex flex-col items-center justify-center text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-4 text-center">
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-4 text-center">
           <XCircleIcon className="w-12 h-12 opacity-60" />
-          <p className="text-xs mt-2 font-medium">Không thể tải ảnh</p>
+          <p className="text-xs mt-2 font-medium">Không tìm thấy ảnh</p>
         </div>
       )}
       <img
@@ -74,7 +72,6 @@ const ImageWithStatus: React.FC<{ src: string; alt: string }> = ({ src, alt }) =
         onLoad={() => setStatus('loaded')}
         onError={() => setStatus('error')}
         className={`w-full h-full object-cover transition-opacity duration-300 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
-        style={{ position: status === 'loaded' ? 'static' : 'absolute' }}
       />
     </div>
   );
@@ -82,82 +79,84 @@ const ImageWithStatus: React.FC<{ src: string; alt: string }> = ({ src, alt }) =
 
 
 export const MarketResearchReport: React.FC<MarketResearchReportProps> = ({ data, theme }) => {
+  const { trend_sections, wash_effect_summary, charts } = data;
 
-    const { global_analysis, collection_concepts, key_items, charts } = data;
+  return (
+    <div className="space-y-8">
+      {trend_sections?.map((section, index) => (
+        <ReportSection key={index} title={section.title}>
+          <div className="prose prose-sm dark:prose-invert max-w-none whitespace-pre-wrap mb-6">{section.description}</div>
 
-    return (
-        <div className="space-y-8">
-            {/* Global Analysis */}
-            {global_analysis && (
-                <ReportSection title={global_analysis.title} iconName="globe">
-                    <div className="space-y-6">
-                        {global_analysis.sections.map((section, index) => (
-                             <div key={index}>
-                                <div className={`flex items-center gap-2 mb-2 ${iconMap[section.icon]?.color || 'text-slate-500'}`}>
-                                    {iconMap[section.icon]?.icon || iconMap.default.icon}
-                                    <h4 className="font-semibold">{section.title}</h4>
-                                </div>
-                                <div className="text-slate-600 dark:text-slate-300 ml-7">
-                                    <ColorSwatchRenderer text={section.content} />
-                                </div>
-                             </div>
-                        ))}
-                    </div>
-                </ReportSection>
-            )}
-
-            {/* Collection Concepts */}
-            {collection_concepts && collection_concepts.length > 0 && (
-                <ReportSection title="BƯỚC 2: PHÁT TRIỂN Ý TƯỞNG BỘ SƯU TẬP" iconName="lightbulb">
-                    <div className="space-y-6">
-                        {collection_concepts.map((concept, index) => (
-                            <div key={index} className="p-4 bg-slate-100 dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-700 space-y-2">
-                                <h4 className="font-bold text-base text-blue-600 dark:text-blue-400">{concept.name}</h4>
-                                <div><strong>Cảm hứng:</strong> <ColorSwatchRenderer text={concept.description} /></div>
-                                <div><strong>Bảng màu:</strong> <ColorSwatchRenderer text={concept.color_palette} /></div>
-                                <div><strong>Chất liệu:</strong> <ColorSwatchRenderer text={concept.materials} /></div>
-                            </div>
-                        ))}
-                    </div>
-                </ReportSection>
-            )}
-
-            {/* Key Items with Images */}
-            {key_items && key_items.length > 0 && (
-                <ReportSection title="BƯỚC 3: ĐỀ XUẤT CÁC THIẾT KẾ SẢN PHẨM CHỦ LỰC" iconName="shopping-bag">
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {key_items.map((item, index) => (
-                            <div key={index} className="item-card border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden flex flex-col">
-                                <div className="aspect-square">
-                                   {item.image_url ? (
-                                        <ImageWithStatus src={item.image_url} alt={item.item_name} />
-                                    ) : (
-                                        <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-700/50">
-                                            <PhotoIcon className="w-12 h-12 opacity-50" />
-                                            <p className="text-xs mt-2">Không có ảnh tham khảo</p>
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="item-card-content p-4 flex-grow">
-                                    <h4 className="font-bold text-slate-800 dark:text-slate-100">{item.item_name}</h4>
-                                    <div className="text-slate-600 dark:text-slate-300 text-sm mt-1">
-                                        <ColorSwatchRenderer text={item.description} />
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </ReportSection>
-            )}
-
-            {/* Charts */}
-            {charts && charts.length > 0 && (
-                <div>
-                    {charts.map((chart, index) => (
-                        <AnalysisChart key={index} chart={chart} theme={theme} />
-                    ))}
+          {section.key_items && section.key_items.length > 0 && (
+            <div className="mt-6 not-prose grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+              {section.key_items.map((item, itemIndex) => (
+                <div
+                  key={itemIndex}
+                  className="item-card flex flex-col rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 shadow-sm"
+                >
+                  <div className="aspect-[3/4]">
+                    <ImageWithStatus
+                        src={item.image_url}
+                        alt={item.brand_name}
+                    />
+                  </div>
+                  <div className="p-3 text-center">
+                    <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
+                      {item.brand_name}
+                    </h4>
+                  </div>
                 </div>
-            )}
+              ))}
+            </div>
+          )}
+        </ReportSection>
+      ))}
+
+      {wash_effect_summary?.table && (
+        <div className="report-section">
+            <div className={`report-section-header flex items-center gap-3 border-b border-slate-200 dark:border-slate-700 pb-2 mb-4`}>
+                 <SwatchIcon className="w-6 h-6 text-sky-500" />
+                 <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">{wash_effect_summary.title}</h2>
+            </div>
+            <div className="overflow-x-auto my-4">
+                <table className="table-auto w-full border-collapse border border-slate-300 dark:border-slate-600">
+                <thead className="bg-slate-100 dark:bg-slate-700">
+                    <tr>
+                    <th className="border border-slate-200 dark:border-slate-600 px-4 py-2 text-left font-semibold text-slate-800 dark:text-slate-200">
+                        Loại Wash
+                    </th>
+                    <th className="border border-slate-200 dark:border-slate-600 px-4 py-2 text-left font-semibold text-slate-800 dark:text-slate-200">
+                        Ứng dụng & Hiệu quả
+                    </th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {wash_effect_summary.table.map((row, index) => (
+                    <tr
+                        key={index}
+                        className="border-b border-slate-200 dark:border-slate-600 last:border-b-0"
+                    >
+                        <td className="border border-slate-200 dark:border-slate-600 px-4 py-2 text-slate-700 dark:text-slate-300 font-medium">
+                        {row.wash_type}
+                        </td>
+                        <td className="border border-slate-200 dark:border-slate-600 px-4 py-2 text-slate-700 dark:text-slate-300">
+                        {row.application_effect}
+                        </td>
+                    </tr>
+                    ))}
+                </tbody>
+                </table>
+            </div>
         </div>
-    );
+      )}
+
+      {charts && charts.length > 0 && (
+        <div>
+          {charts.map((chart, index) => (
+            <AnalysisChart key={index} chart={chart} theme={theme} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };

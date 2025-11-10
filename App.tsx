@@ -1,366 +1,315 @@
-
 // NOTE FOR DEVELOPER:
 // This application runs entirely in the browser and connects directly to the Google Gemini API.
-// To make it work, you need to ensure the Gemini API key is correctly configured in the execution environment.
-// The backend-dependent code has been removed to resolve "Failed to fetch" errors.
+// To make it work, ensure the Gemini API key is correctly configured in your environment.
 
-// FIX: Import React hooks (useState, useMemo, useCallback, useRef, useEffect) to resolve 'Cannot find name' errors.
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
-import { ChatWindow } from './components/ChatWindow';
-import { MessageInput } from './components/MessageInput';
-// FIX: Removed unused 'summarizeTitle' import as it is no longer exported from geminiService.
-import { getChatResponseStream, createFineTuningExampleFromCorrection, translateText } from './services/geminiService';
-import * as apiService from './services/apiService';
-import type { ChatMessage, UserProfile, Theme, Font, ConversationMeta, Task, ConversationGroup, BusinessProfile, FineTuningExample, Feedback } from './types';
-import { ConfirmationDialog } from './components/ConfirmationDialog';
-import { SettingsPopover } from './components/SettingsPopover';
-import { Welcome } from './components/Welcome';
-import { Sidebar } from './components/Sidebar';
-import { MenuIcon } from './components/icons/MenuIcon';
-import { typingSound } from './assets/typingSound';
-import { messageReceivedSound } from './assets/messageReceivedSound';
-import { WorkflowDialog } from './components/WorkflowDialog';
-import { WorkflowIcon } from './components/icons/WorkflowIcon';
-import { TestingGuideDialog } from './components/TestingGuideDialog';
-import { CheckBadgeIcon } from './components/icons/CheckBadgeIcon';
-import { ComparisonToolbar } from './components/ComparisonToolbar';
-import { SourceComparisonDialog } from './components/SourceComparisonDialog';
-import { ExportDialog } from './components/ExportDialog';
-import { ArrowDownTrayIcon } from './components/icons/ArrowDownTrayIcon';
-import { toPng } from 'html-to-image';
-import { AnalysisChart } from './components/charts/AnalysisChart';
-import { SourceFilterControl } from './components/SourceFilterControl';
-import { FindBar } from './components/FindBar';
-import { MagnifyingGlassIcon } from './components/icons/MagnifyingGlassIcon';
-import { BusinessProfileDialog } from './components/BusinessProfileDialog';
-import { FeedbackDialog } from './components/FeedbackDialog';
-import { DotsVerticalIcon } from './components/icons/DotsVerticalIcon';
-import { ProductCatalog } from './components/ProductCatalog';
-import { BrandPositioningMap } from './components/BrandPositioningMap';
+import React, {
+  useState,
+  useMemo,
+  useCallback,
+  useRef,
+  useEffect
+} from "react";
+import { ChatWindow } from "./components/ChatWindow";
+import { MessageInput } from "./components/MessageInput";
+import { getChatResponseStream, translateText, createFineTuningExampleFromCorrection, findImageFromSearchQuery } from "./services/geminiService";
+import * as apiService from "./services/apiService";
+import * as businessService from "./services/businessService";
+import type {
+  ChatMessage,
+  UserProfile,
+  Theme,
+  Font,
+  ConversationMeta,
+  Task,
+  ConversationGroup,
+  BusinessProfile,
+  FineTuningExample,
+  Feedback,
+  AnalysisResult,
+} from "./types";
+import { ConfirmationDialog } from "./components/ConfirmationDialog";
+import { SettingsPopover } from "./components/SettingsPopover";
+import { Welcome } from "./components/Welcome";
+import { Sidebar } from "./components/Sidebar";
+import { WorkflowDialog } from "./components/WorkflowDialog";
+import { TestingGuideDialog } from "./components/TestingGuideDialog";
+import { ComparisonToolbar } from "./components/ComparisonToolbar";
+import { SourceComparisonDialog } from "./components/SourceComparisonDialog";
+import { ExportDialog } from "./components/ExportDialog";
+import { BusinessProfileDialog } from "./components/BusinessProfileDialog";
+import { FeedbackDialog } from "./components/FeedbackDialog";
+import { MenuIcon } from "./components/icons/MenuIcon";
+import { MagnifyingGlassIcon } from "./components/icons/MagnifyingGlassIcon";
+import { typingSound } from "./assets/typingSound";
+import { messageReceivedSound } from "./assets/messageReceivedSound";
+import { toPng } from "html-to-image";
+import { AnalysisChart } from "./components/charts/AnalysisChart";
+import { SourceFilterControl } from "./components/SourceFilterControl";
+import { FindBar } from "./components/FindBar";
+import { ProductCatalog } from "./components/ProductCatalog";
+import { BrandPositioningMap } from "./components/BrandPositioningMap";
+import { MarketResearchReport } from "./components/MarketResearchReport";
 
+/* ===========================================================
+   ================= CONSTANTS & CONFIG ======================
+   =========================================================== */
+const THEME_KEY = "theme";
+const FONT_KEY = "font";
+const SOUND_ENABLED_KEY = "soundEnabled";
+const ACTIVE_CONVERSATION_ID_KEY = "activeConversationId";
 
-const THEME_KEY = 'theme';
-const FONT_KEY = 'font';
-const SOUND_ENABLED_KEY = 'soundEnabled';
-const ACTIVE_CONVERSATION_ID_KEY = 'activeConversationId'; // Still needed for session resume
-
-const generateSummaryForTask = (task: Task, params: any): string => {
-    switch (task) {
-        case 'profit-analysis':
-            return `Phân tích Lợi nhuận: ${params.productName}`;
-        case 'promo-price':
-            return `Phân tích KM: ${params.productName}`;
-        case 'group-price':
-            const price = Number(params.flatPrice).toLocaleString('vi-VN');
-            return `Phân tích Đồng giá: ${price} VND`;
-        case 'market-research':
-            const markets = Array.isArray(params.markets) ? ` (${params.markets.slice(0, 2).join(', ')})` : '';
-            return `Nghiên cứu: ${params.style_keywords}${markets}`;
-        case 'brand-positioning':
-            return `Phân tích Định vị Thương hiệu`;
-        default:
-            return "Yêu cầu phân tích tùy chỉnh.";
-    }
-}
-
-/**
- * Attempts to parse a JSON string, and if it fails, tries to fix common issues
- * in the 'analysis' field (unescaped quotes/newlines) before trying again.
- * @param jsonString The potentially malformed JSON string.
- * @param originalText The original full text from the AI, used as a fallback.
- * @returns A parsed JSON object or a fallback object.
- */
-const fixAndParseJson = (jsonString: string, originalText: string): any => {
-    try {
-        // First attempt to parse the string as-is.
-        return JSON.parse(jsonString);
-    } catch (e) {
-        console.warn("Initial JSON parse failed. Attempting to repair.", e);
-
-        // Attempt to repair the 'analysis' field for simpler JSON tasks
-        try {
-            const analysisKey = '"analysis":';
-            const keyIndex = jsonString.indexOf(analysisKey);
-
-            // If the key we need for repair isn't present, this specific repair method is not applicable.
-            // Fallback to raw text without throwing an error to avoid confusing console messages.
-            if (keyIndex === -1) {
-                console.warn("JSON repair skipped: Could not find 'analysis' key. Falling back to raw text.");
-                return { analysis: originalText, charts: [], sources: [] };
-            }
-
-            const valueStartIndex = jsonString.indexOf('"', keyIndex + analysisKey.length);
-            if (valueStartIndex === -1) {
-                throw new Error("Malformed 'analysis' value (missing opening quote).");
-            }
-
-            const prefix = jsonString.substring(0, valueStartIndex + 1);
-            const rest = jsonString.substring(valueStartIndex + 1);
-
-            const contentEndIndex = rest.lastIndexOf('"');
-            if (contentEndIndex === -1) {
-                throw new Error("Malformed 'analysis' value (missing closing quote).");
-            }
-            
-            const content = rest.substring(0, contentEndIndex);
-            const suffix = rest.substring(contentEndIndex);
-
-            const fixedContent = content
-                .replace(/\\/g, '\\\\') // 1. Escape existing backslashes
-                .replace(/"/g, '\\"')   // 2. Escape double quotes
-                .replace(/\n/g, '\\n'); // 3. Escape newlines
-
-            const fixedJsonString = prefix + fixedContent + suffix;
-            
-            const parsed = JSON.parse(fixedJsonString);
-            console.log("Successfully parsed JSON after repair.");
-            return parsed;
-        } catch (repairError: any) {
-            console.error(`JSON repair attempt failed: ${repairError.message}. Falling back to raw text.`);
-            return { analysis: originalText, charts: [], sources: [] };
-        }
-    }
+const taskTitles: Record<Task, string> = {
+  'profit-analysis': 'Phân tích Lợi nhuận & Lập kế hoạch Kinh doanh',
+  'promo-price': 'Phân tích & Dự báo Hiệu quả Khuyến mãi',
+  'group-price': 'Phân tích Chiến dịch Đồng giá',
+  'market-research': 'Nghiên cứu Xu hướng & Lên ý tưởng Bộ sưu tập',
+  'brand-positioning': 'Định vị Thương hiệu'
 };
 
-// Centralized prompt generation
-const generatePromptForTask = (task: Task, params: any): string => {
-    const jsonInstruction = `
+const playSound = (audio: HTMLAudioElement, enabled: boolean) => {
+  if (!enabled) return;
+  try {
+    const clone = audio.cloneNode(true) as HTMLAudioElement;
+    clone.volume = audio.volume;
+    clone.currentTime = 0;
+    clone.play().catch(() => {});
+  } catch {}
+};
 
-**YÊU CẦU ĐỊNH DẠNG ĐẦU RA (CỰC KỲ QUAN TRỌNG):**
-Toàn bộ phản hồi của bạn **BẮT BUỘC** phải là một khối mã JSON duy nhất, hợp lệ (sử dụng \`\`\`json). Không được có bất kỳ văn bản nào bên ngoài khối mã này. JSON phải có cấu trúc như sau:
+const translateChartData = async (charts: any[]): Promise<any[]> => {
+    if (!charts || !Array.isArray(charts)) return [];
+
+    const translatedCharts = await Promise.all(
+        charts.map(async (chart) => {
+            // Translate chart title
+            const translatedTitle = chart.title ? await translateText(chart.title, 'en', 'vi') : chart.title;
+
+            // Translate data point names
+            const translatedData = chart.data && Array.isArray(chart.data)
+                ? await Promise.all(
+                    chart.data.map(async (dataPoint: any) => {
+                        if (typeof dataPoint.name === 'string') {
+                            const translatedName = await translateText(dataPoint.name, 'en', 'vi');
+                            return { ...dataPoint, name: translatedName || dataPoint.name };
+                        }
+                        return dataPoint;
+                    })
+                )
+                : chart.data; // Keep original if not an array
+
+            return {
+                ...chart,
+                title: translatedTitle || chart.title,
+                data: translatedData,
+            };
+        })
+    );
+
+    return translatedCharts;
+};
+
+const buildAnalysisPrompt = (task: Task, params: Record<string, any>): string => {
+  if (task === 'market-research') {
+        const competitors = Array.isArray(params.competitors) ? params.competitors.join(', ') : params.competitors || 'None';
+        const useSearch = competitors && competitors.length > 0;
+        return `YÊU CẦU ĐỊNH DẠNG ĐẦU RA: JSON. You are a world-class Fashion Trend Analyst. Conduct a detailed fashion trend report based on the criteria below. ${useSearch ? 'Use Google Search extensively to gather real-time, relevant information from top sources like WGSN, Vogue Runway, and Business of Fashion.' : ''} The analysis must be structured like a professional presentation for a fashion brand's product development team.
+
+CRITERIA:
+- Season: ${params.season} ${params.year}
+- Style Keywords: ${params.style_keywords}
+- Target Audience: ${params.target_audience}
+- Reference Markets: ${params.markets.join(', ')}
+- Competitors for Context: ${competitors}
+
+The JSON output MUST follow this exact structure:
 {
-  "analysis": "...",
-  "charts": [
+  "trend_sections": [
     {
-      "type": "bar",
-      "title": "Tiêu đề của biểu đồ",
-      "unit": "VND",
-      "data": [
-        { "name": "Tên cột 1", "value": 12345 },
-        { "name": "Tên cột 2", "value": 67890 }
+      "title": "1. Trend Core – [Name of Trend 1]",
+      "description": "- [Key characteristic 1 in Vietnamese]\\n- [Key characteristic 2 in Vietnamese]",
+      "key_items": [
+        { "brand_name": "[Brand Name 1]", "image_search_query": "[Concise English query for a real runway/studio photo of an item from this brand and trend]" },
+        { "brand_name": "[Brand Name 2]", "image_search_query": "[...]" },
+        { "brand_name": "[Brand Name 3]", "image_search_query": "[...]" },
+        { "brand_name": "[Brand Name 4]", "image_search_query": "[...]" },
+        { "brand_name": "[Brand Name 5]", "image_search_query": "[...]" }
       ]
     }
-  ]
+  ],
+  "wash_effect_summary": {
+    "title": "4. Washing Effect – Hiệu ứng wash",
+    "table": [
+      { "wash_type": "[Name of Wash 1]", "application_effect": "[Description in Vietnamese]" },
+      { "wash_type": "[Name of Wash 2]", "application_effect": "[...]" }
+    ]
+  }
 }
-
-**QUY TẮC CHO TRƯỜNG "charts":**
-1.  "charts" **PHẢI** là một mảng (array) các đối tượng biểu đồ.
-2.  Mỗi đối tượng biểu đồ **PHẢI** có các trường: "type", "title", "data", và "unit".
-3.  Trường "type" **BẮT BUỘC PHẢI** có giá trị là "bar". Không được sử dụng bất kỳ giá trị nào khác.
-4.  Trường "data" **BẮT BUỘC PHẢI** là một mảng (array) các đối tượng có dạng \`{ "name": "string", "value": number }\`.
-5.  Trường "unit" **PHẢI** là chuỗi chỉ định đơn vị (ví dụ: "VND", "%"). Nếu không có đơn vị, để trống (\`"unit": ""\`).
-
-**QUY TẮC CHO TRƯỜNG "analysis" (TUYỆT ĐỐI PHẢI TUÂN THỦ):**
-1.  Giá trị của trường "analysis" **PHẢI** là một chuỗi (string) JSON hợp lệ.
-2.  Tất cả các ký tự xuống dòng **BẮT BUỘC** phải được thay thế bằng \`\\n\`.
-3.  Tất cả các dấu nháy kép (") **BẮT BUỘC** phải được escape bằng \`\\"\`.
+For 'image_search_query', create a concise, effective query for an image search engine to find a REAL runway, studio, or street style photo. Example: "runway photo of baggy stone wash jeans Nili Lotan Fall 2024".
+`;
+  }
+    
+  const intro = `REQUIRED OUTPUT FORMAT: JSON
+TASK: Perform a business analysis based on the following data.
+Analyze the data and provide a summary of key metrics, a detailed analysis text, and a data array for charts.
+The JSON output must contain three keys: "summary" (string), "analysis" (string), and "charts" (array of objects).
+The "summary" string MUST be a concise summary of the key metrics, with important numbers formatted in bold Markdown (e.g., **1,234,567 VND**).
+The "analysis" and "summary" strings must escape newlines as \\n.
+The "charts" array must contain objects with "type", "title", "unit", and "data" keys.
+---
 `;
 
-    switch (task) {
-        case 'profit-analysis': {
-            const { calculationTarget, period, productName, cost, variableCost, fixedCost, sellingPrice, salesVolume, targetProfit, targetProfitPercent, competitors } = params;
-            const periodText = period === 'monthly' ? 'THÁNG' : 'NĂM';
-            let targetText = '';
-            switch (calculationTarget) {
-                case 'sellingPrice': targetText = 'GIÁ BÁN CẦN THIẾT'; break;
-                case 'salesVolume': targetText = 'DOANH SỐ CẦN THIẾT'; break;
-                case 'profit': targetText = 'LỢI NHUẬN TIỀM NĂNG'; break;
-            }
-
-            let prompt = `Thực hiện phân tích lợi nhuận cho sản phẩm "${productName}".\n\n`;
-            prompt += `**Kế hoạch:**\n- Kỳ: ${periodText}\n- Mục tiêu: **${targetText}**\n\n`;
-            prompt += `**Dữ liệu:**\n- Giá vốn/sp: ${cost} VND\n- Chi phí biến đổi/sp: ${variableCost} VND\n- Tổng chi phí cố định: ${fixedCost} VND\n`;
-
-            if (calculationTarget !== 'sellingPrice') prompt += `- Giá bán dự kiến/sp: ${sellingPrice} VND\n`;
-            if (calculationTarget !== 'salesVolume') prompt += `- Doanh số dự kiến: ${salesVolume} sp\n`;
-            if (calculationTarget !== 'profit') {
-                if(params.profitTargetType === 'percent') {
-                    prompt += `- Lợi nhuận mục tiêu: ${targetProfitPercent}% trên Tổng Chi phí.\n`;
-                } else {
-                    prompt += `- Lợi nhuận mục tiêu: ${targetProfit} VND\n`;
-                }
-            }
-            
-            if (competitors) {
-                const competitorList = competitors.replace(/\n/g, ', ');
-                const priceToCompare = calculationTarget === 'sellingPrice' ? 'Giá bán mục tiêu' : 'Giá bán dự kiến';
-                prompt += `\n**Yêu cầu thị trường:**\n- **Sử dụng Google Search**, tra cứu giá bán "${productName}" từ các đối thủ: ${competitorList}.\n- Thêm mục **"Phân tích Cạnh tranh"** để so sánh **${priceToCompare}** với giá thị trường.\n- Thêm biểu đồ cột so sánh **${priceToCompare}** với giá trung bình của từng đối thủ.\n\n`;
-            }
-            
-            prompt += `**Yêu cầu phân tích:**\n1. Công thức tính.\n2. Kết quả tính toán.\n3. Phân tích Điểm hòa vốn.\n4. Đánh giá & Lời khuyên.`;
-            
-            prompt += jsonInstruction;
-            return prompt;
+  let dataSection = `DATA:\n`;
+  switch (task) {
+    case 'profit-analysis':
+      dataSection += `Analysis Type: Profitability and Business Planning\n`;
+      dataSection += `Product Name: ${params.productName}\n`;
+      dataSection += `Unit Cost: ${params.cost} VND\n`;
+      dataSection += `Unit Variable Cost: ${params.variableCost} VND\n`;
+      dataSection += `Total Fixed Cost (${params.period}): ${params.fixedCost} VND\n`;
+      dataSection += `Target Calculation: ${params.calculationTarget}\n`;
+      if (params.calculationTarget !== 'sellingPrice') dataSection += `Unit Selling Price: ${params.sellingPrice} VND\n`;
+      if (params.calculationTarget !== 'salesVolume') dataSection += `Expected Sales Volume (${params.period}): ${params.salesVolume} units\n`;
+      if (params.calculationTarget !== 'profit') {
+        if (params.profitTargetType === 'amount') {
+          dataSection += `Target Profit (${params.period}): ${params.targetProfit} VND\n`;
+        } else {
+          dataSection += `Target Profit Margin: ${params.targetProfitPercent}%\n`;
         }
-        case 'promo-price': {
-            const { productName, originalPrice, cost, currentSales, discount, promoGoal, competitors } = params;
-            const newPrice = Number(originalPrice) * (1 - Number(discount) / 100);
-            let prompt = `Phân tích hiệu quả khuyến mãi.\n\n**Dữ liệu:**\n- Sản phẩm: "${productName}"\n- Giá gốc: ${originalPrice} VND\n- Giá vốn: ${cost} VND\n- Doanh số/tháng: ${currentSales} sp\n- Giảm giá: **${discount}%** (giá mới ${newPrice.toLocaleString('vi-VN')} VND)\n- Mục tiêu: **${promoGoal === 'profit' ? 'Tối đa hóa Lợi nhuận' : 'Tối đa hóa Doanh thu'}**\n\n`;
-            
-            if (competitors) {
-                prompt += `**Yêu cầu thị trường:**\n- **Sử dụng Google Search**, tra cứu giá "${productName}" từ các đối thủ: ${competitors.replace(/\n/g, ', ')}.\n- Thêm mục **"Phân tích Cạnh tranh"** để so sánh giá khuyến mãi với giá thị trường.\n- Thêm biểu đồ cột so sánh giá khuyến mãi với giá của đối thủ.\n\n`;
-            }
+      }
+      if (params.competitors && params.competitors.length > 0) dataSection += `Competitors for market comparison: ${params.competitors.join(', ')}. Use Google Search to get their market prices.`;
+      break;
+    case 'promo-price':
+       dataSection += `Analysis Type: Promotion Effectiveness Forecast\n`;
+       dataSection += `Product Name: ${params.productName}\n`;
+       dataSection += `Original Selling Price: ${params.originalPrice} VND\n`;
+       dataSection += `Unit Cost: ${params.cost} VND\n`;
+       dataSection += `Current Sales Volume (monthly): ${params.currentSales} units\n`;
+       dataSection += `Proposed Discount Rate: ${params.discount}%\n`;
+       dataSection += `Campaign Goal: ${params.promoGoal === 'profit' ? 'Maximize Profit' : 'Maximize Revenue'}\n`;
+       if (params.competitors && params.competitors.length > 0) dataSection += `Competitors for market comparison: ${params.competitors.join(', ')}. Use Google Search to get their market prices.`;
+       break;
+    case 'group-price':
+        dataSection += `Analysis Type: Flat-Price Campaign Analysis\n`;
+        dataSection += `Target Flat Price: ${params.flatPrice} VND\n`;
+        dataSection += `Expected Sales Growth per Product: ${params.salesIncrease}%\n`;
+        dataSection += `Products in Campaign:\n`;
+        params.products.forEach((p: any) => {
+            dataSection += `- Name: ${p.name}, Original Price: ${p.originalPrice} VND, Unit Cost: ${p.cost} VND, Current Sales (monthly): ${p.currentSales} units\n`;
+        });
+        if (params.competitors && params.competitors.length > 0) dataSection += `Competitors for market comparison: ${params.competitors.join(', ')}. Use Google Search to get their market prices.`;
+        break;
+    default:
+      return JSON.stringify(params);
+  }
 
-            prompt += `**Yêu cầu phân tích:**\n1. **DỰ BÁO TĂNG TRƯỞNG DOANH SỐ:** Ước tính tỷ lệ tăng trưởng doanh số hợp lý dựa trên mức giảm giá.\n2. **PHÂN TÍCH SO SÁNH:** So sánh "Trước" và "Sau" khuyến mãi về Doanh thu, Lợi nhuận.\n3. **KẾT LUẬN & ĐỀ XUẤT:** Có nên thực hiện chiến dịch này không?`;
-
-            prompt += jsonInstruction;
-            return prompt;
-        }
-        case 'group-price': {
-             const { products, flatPrice, salesIncrease, competitors } = params;
-            const productListString = products.map((p: any) => `${p.name || 'Sản phẩm không tên'} | ${p.cost || 0} | ${p.originalPrice || 0} | ${p.currentSales || 0}`).join('\n');
-            
-            let prompt = `Phân tích chính sách bán đồng giá.\n\n**Sản phẩm & Dữ liệu:**\n(Tên | Giá vốn | Giá gốc | Doanh số/tháng)\n${productListString}\n\n`;
-            prompt += `**Kịch bản:**\n- Giá đồng giá: ${flatPrice} VND\n- Tăng trưởng doanh số kỳ vọng/sp: ${salesIncrease}%\n\n`;
-            
-            if (competitors) {
-                prompt += `**Yêu cầu thị trường:**\n- **Sử dụng Google Search**, tra cứu giá các sản phẩm tương tự từ đối thủ: ${competitors.replace(/\n/g, ', ')}.\n- Thêm mục **"Phân tích Cạnh tranh"** để so sánh mức giá đồng giá với giá thị trường.\n- Thêm biểu đồ so sánh giá đồng giá với giá của đối thủ.\n\n`;
-            }
-            
-            prompt += `**Yêu cầu phân tích:**\n1. So sánh tổng doanh thu và lợi nhuận của cả nhóm giữa "Hiện tại" và "Đồng giá".\n2. Phân tích thay đổi lợi nhuận cho từng sản phẩm.\n3. Kết luận và lời khuyên.`;
-            
-            prompt += jsonInstruction;
-            return prompt;
-        }
-        case 'market-research': {
-            const { season, year, style_keywords, target_audience, markets } = params;
-            const seasonText = season === 'spring-summer' ? 'Xuân/Hè' : 'Thu/Đông';
-            const marketsText = Array.isArray(markets) ? markets.join(', ') : markets;
-
-            let prompt = `Bạn là chuyên gia phân tích thời trang và thị trường denim toàn cầu.
-
-**Bối cảnh:**
-- **Thương hiệu:** V64 (thương hiệu denim Việt Nam, phong cách thanh lịch, tối giản, năng động cho người trẻ văn phòng).
-- **Mùa:** ${seasonText} ${year}
-- **Chủ đề:** ${style_keywords}
-- **Đối tượng:** ${target_audience}
-- **Thị trường tham chiếu:** ${marketsText}
-
-**Nhiệm vụ:**
-1. **Sử dụng Google Search**, phân tích thị trường, xu hướng, nguyên vật liệu, công nghệ và khả thi sản xuất cho thương hiệu denim V64 dựa trên bối cảnh trên.
-2. Đầu ra **BẮT BUỘC** phải là một bảng Markdown rõ ràng, gồm 3 phần chính.
-3. Mỗi phần gồm các cột: **Keyword | Mô tả tóm tắt | Insight chính | Mức độ ảnh hưởng (1–5)**
-
-**Yêu cầu:**
-- Chỉ chọn từ khóa (keyword) có liên quan đến denim, xu hướng văn phòng, hoặc nguyên liệu thân thiện môi trường.
-- Tự động chuẩn hóa tên (ví dụ: “liquid denim”, “comfort-stretch”, “barrel-leg”, “soft tailoring”).
-- Viết bằng **tiếng Việt**, giữ nguyên thuật ngữ kỹ thuật bằng **tiếng Anh** nếu phổ biến trong ngành.
-- Ưu tiên dựa theo các nguồn uy tín trên toàn cầu và các thị trường tham chiếu đã thiết lập.
-
-**Định dạng đầu ra (Bắt buộc là bảng Markdown):**
-
-| Nhóm | Keyword | Mô tả tóm tắt | Insight chính | Mức độ ảnh hưởng (1–5) |
-|------|----------|----------------|----------------|----------------|
-| Phân tích thị trường & xu hướng | ... | ... | ... | ... |
-| Nghiên cứu nguyên vật liệu & công nghệ | ... | ... | ... | ... |
-| Đánh giá tính khả thi | ... | ... | ... | ... |
-`;
-            return prompt;
-        }
-        case 'brand-positioning': {
-            // FIX: This prompt is now the core of the enhanced brand positioning analysis.
-            const brandData = `
-            - **Vị trí của V-SIXTYFOUR:** Nằm ở góc phần tư "Thời trang" (Fashion) và "Giá vừa phải" (Mid-Price).
-            - **Đối thủ cùng phân khúc:** ZARA, Levi's, Lee, Calvin Klein Jeans.
-            - **Đối thủ cao cấp hơn:** GUESS, VERSACE, GUCCI, LOUIS VUITTON, DSQUARED2, DIESEL (phân khúc "Giá cao" - "Thời trang").
-            - **Đối thủ giá thấp hơn / cơ bản hơn:** YODY, MUJI, UNIQLO (phân khúc "Cơ bản" - "Giá thấp/vừa phải"), ROUTINE, GENVIET, #icon denim, PT2000 (phân khúc "Thời trang" - "Giá thấp").
-            `;
-             let prompt = `**YÊU CẦU:** Với vai trò là một nhà chiến lược kinh doanh, hãy phân tích sơ đồ định vị thương hiệu của V-SIXTYFOUR. **Sử dụng Google Search** để tra cứu thông tin và chiến lược hiện tại của các đối thủ chính (Uniqlo, ZARA, Routine, Levi's) để làm cho phân tích thêm sắc bén.\n\n`;
-             prompt += `**DỮ LIỆU SƠ ĐỒ:**\n${brandData}\n\n`;
-             prompt += `**NỘI DUNG PHÂN TÍCH (BẮT BUỘC):**
-1.  **Phân tích SWOT cho V-SIXTYFOUR:**
-    *   **Điểm mạnh (Strengths):** Dựa vào vị trí hiện tại trên sơ đồ.
-    *   **Điểm yếu (Weaknesses):** Dựa vào vị trí hiện tại và các đối thủ xung quanh.
-    *   **Cơ hội (Opportunities):** Các khoảng trống thị trường hoặc hướng phát triển tiềm năng.
-    *   **Thách thức (Threats):** Áp lực cạnh tranh từ các nhóm đối thủ.
-2.  **Đề xuất Chiến lược (2-3 đề xuất):**
-    *   Đưa ra các hành động cụ thể, có tính thực thi cao để V-SIXTYFOUR củng cố vị thế và phát triển.`;
-            return prompt;
-        }
-        default:
-            return '';
-    }
+  return intro + dataSection;
 };
 
+const processMessagesWithComponents = (messages: ChatMessage[], effectiveTheme: 'light' | 'dark'): ChatMessage[] => {
+    return messages.map(msg => {
+        // FIX: Added a role check to prevent assigning components to user messages
+        if (msg.role === 'model' && !msg.component) {
+            if (msg.task === 'brand-positioning') {
+                return { ...msg, component: <BrandPositioningMap /> };
+            }
+            if (msg.marketResearchData) {
+                return { ...msg, component: <MarketResearchReport data={msg.marketResearchData} theme={effectiveTheme} /> };
+            }
+            if (msg.charts && msg.charts.length > 0) {
+                 return { ...msg, charts: msg.charts.map(c => ({...c, component: AnalysisChart})) };
+            }
+        }
+        return msg;
+    });
+};
 
+/* ===========================================================
+   =================== MAIN APP COMPONENT ====================
+   =========================================================== */
 const App: React.FC = () => {
+  /* ===================== STATE MANAGEMENT ===================== */
+  // --- Core State ---
   const [conversations, setConversations] = useState<Record<string, ConversationMeta>>({});
   const [conversationGroups, setConversationGroups] = useState<Record<string, ConversationGroup>>({});
   const [activeConversationId, setActiveConversationId] = useState<string | null>(null);
   const [activeConversationMessages, setActiveConversationMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [isConfirmDialogOpen, setIsConfirmDialogOpen] = useState<{ action: 'clear' | 'delete' | 'delete-group'; id?: string } | null>(null);
-  const [isWorkflowDialogOpen, setIsWorkflowDialogOpen] = useState(false);
-  const [isTestingGuideOpen, setIsTestingGuideOpen] = useState(false);
-  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
-  const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const [activeTool, setActiveTool] = useState<{ task: Task; initialData?: any; } | null>(null);
   const [activeView, setActiveView] = useState<'chat' | 'products'>('chat');
-  const [activeTool, setActiveTool] = useState<{ task: Task; initialData?: Record<string, any>; businessProfile: BusinessProfile | null } | null>(null);
+
+  // --- UI State ---
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [theme, setTheme] = useState<Theme>('system');
+  const [font, setFont] = useState<Font>('sans');
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
+  const [fineTuningExamples, setFineTuningExamples] = useState<FineTuningExample[]>([]);
+  
+  // --- Dialogs & Popovers ---
+  const [isWorkflowOpen, setIsWorkflowOpen] = useState(false);
+  const [isTestingGuideOpen, setIsTestingGuideOpen] = useState(false);
   const [isBusinessProfileOpen, setIsBusinessProfileOpen] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isExportDialogOpen, setIsExportDialogOpen] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
+  const [isFindBarVisible, setIsFindBarVisible] = useState(false);
+  const [feedbackDialogState, setFeedbackDialogState] = useState<{isOpen: boolean; message: ChatMessage | null; index: number | null}>({isOpen: false, message: null, index: null});
+  const [comparisonSelection, setComparisonSelection] = useState<number[]>([]);
+  const [isComparisonDialogOpen, setIsComparisonDialogOpen] = useState(false);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ type: 'convo' | 'group', id: string } | null>(null);
+
+  // --- Refs ---
   const abortControllerRef = useRef<AbortController | null>(null);
   const chatWindowRef = useRef<HTMLDivElement>(null);
-  const [comparisonSelection, setComparisonSelection] = useState<number[]>([]);
-  const [isComparisonOpen, setIsComparisonOpen] = useState(false);
-  const pendingAnalysisParamsRef = useRef<{ params: any; task: Task } | null>(null);
-  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
-  const [isFindVisible, setIsFindVisible] = useState(false);
-  const [fineTuningExamples, setFineTuningExamples] = useState<FineTuningExample[]>([]);
-  const [feedbackDialogData, setFeedbackDialogData] = useState<{ message: ChatMessage; index: number } | null>(null);
-  const headerMenuRef = useRef<HTMLDivElement>(null);
-
-
-  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(THEME_KEY) as Theme) || 'system');
-  const [font, setFont] = useState<Font>(() => (localStorage.getItem(FONT_KEY) as Font) || 'sans');
-  const [soundEnabled, setSoundEnabled] = useState<boolean>(() => {
-    const saved = localStorage.getItem(SOUND_ENABLED_KEY);
-    return saved !== null ? JSON.parse(saved) : true;
-  });
-  
-  const [osPrefersDark, setOsPrefersDark] = useState(() => 
-      typeof window !== 'undefined' ? window.matchMedia('(prefers-color-scheme: dark)').matches : false
-  );
-
   const typingAudio = useMemo(() => new Audio(typingSound), []);
   const messageAudio = useMemo(() => new Audio(messageReceivedSound), []);
-  
   typingAudio.volume = 0.5;
-  messageAudio.volume = 0.6;
-  
-  const playSound = (audio: HTMLAudioElement) => {
-    if (soundEnabled) {
-        audio.currentTime = 0;
-        audio.play().catch(error => console.error("Error playing sound:", error));
-    }
-  };
+  messageAudio.volume = 0.7;
 
+  /* ===================== EFFECTS (LIFECYCLE) ===================== */
+  // --- Initial Data Load ---
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (headerMenuRef.current && !headerMenuRef.current.contains(event.target as Node)) {
-        setIsHeaderMenuOpen(false);
+    const loadInitialData = async () => {
+      const [profile, convos, groups, busProfile, ftExamples] = await Promise.all([
+        apiService.loadUserProfile(),
+        apiService.loadConversations(),
+        apiService.loadConversationGroups(),
+        apiService.loadBusinessProfile(),
+        apiService.loadFineTuningExamples(),
+      ]);
+      setUserProfile(profile);
+      setConversations(convos);
+      setConversationGroups(groups);
+      setBusinessProfile(busProfile);
+      setFineTuningExamples(ftExamples);
+
+      const savedTheme = localStorage.getItem(THEME_KEY) as Theme | null;
+      const savedFont = localStorage.getItem(FONT_KEY) as Font | null;
+      const savedSound = localStorage.getItem(SOUND_ENABLED_KEY);
+      if (savedTheme) setTheme(savedTheme);
+      if (savedFont) setFont(savedFont);
+      if (savedSound) setSoundEnabled(JSON.parse(savedSound));
+
+      const lastActiveId = localStorage.getItem(ACTIVE_CONVERSATION_ID_KEY);
+      if (lastActiveId && convos[lastActiveId]) {
+        setActiveConversationId(lastActiveId);
+      } else if (Object.keys(convos).length > 0) {
+        setActiveConversationId(Object.keys(convos)[0]);
+      } else {
+        handleNewChat();
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    loadInitialData();
   }, []);
 
-  useEffect(() => {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      const handleChange = (e: MediaQueryListEvent) => setOsPrefersDark(e.matches);
-      mediaQuery.addEventListener('change', handleChange);
-      return () => mediaQuery.removeEventListener('change', handleChange);
-  }, []);
-  
+  // --- Theme & Font Management ---
+  const osPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
   const effectiveTheme = theme === 'system' ? (osPrefersDark ? 'dark' : 'light') : theme;
 
   useEffect(() => {
-      const root = window.document.documentElement;
-      root.classList.remove('light', 'dark');
-      root.classList.add(effectiveTheme);
-      localStorage.setItem(THEME_KEY, theme);
+    document.documentElement.classList.remove('light', 'dark');
+    document.documentElement.classList.add(effectiveTheme);
+    localStorage.setItem(THEME_KEY, theme);
   }, [theme, effectiveTheme]);
 
   useEffect(() => {
@@ -368,824 +317,711 @@ const App: React.FC = () => {
     document.body.classList.add(`font-${font}`);
     localStorage.setItem(FONT_KEY, font);
   }, [font]);
-  
+
   useEffect(() => {
     localStorage.setItem(SOUND_ENABLED_KEY, JSON.stringify(soundEnabled));
   }, [soundEnabled]);
-
-  const handleNewChat = useCallback(async (setSidebarOpen = true) => {
-    const newConversation = await apiService.createNewConversation();
-    if (newConversation) {
-        setConversations(prev => ({...prev, [newConversation.id]: newConversation }));
-        setActiveConversationId(newConversation.id);
-    }
-    
-    setIsLoading(false);
-    setActiveTool(null);
-    if (setSidebarOpen) setIsSidebarOpen(false);
-  }, []);
-
-  // Load initial data from API service
-  useEffect(() => {
-    const loadInitialData = async () => {
-        try {
-            const [profile, busProfile, loadedConversations, loadedGroups, loadedExamples] = await Promise.all([
-                apiService.loadUserProfile(),
-                apiService.loadBusinessProfile(),
-                apiService.loadConversations(),
-                apiService.loadConversationGroups(),
-                apiService.loadFineTuningExamples(),
-            ]);
-            
-            setUserProfile(profile);
-            setBusinessProfile(busProfile);
-            setConversationGroups(loadedGroups);
-            setFineTuningExamples(loadedExamples);
-
-            if (loadedConversations && Object.keys(loadedConversations).length > 0) {
-                setConversations(loadedConversations);
-                const savedActiveId = window.localStorage.getItem(ACTIVE_CONVERSATION_ID_KEY);
-                const lastId = Object.keys(loadedConversations).sort((a,b) => Number(b) - Number(a))[0];
-                setActiveConversationId(savedActiveId && loadedConversations[savedActiveId] ? savedActiveId : lastId || null);
-            } else {
-                // Create a new conversation if none exist
-                handleNewChat(false); // don't set sidebar open on initial load
-            }
-        } catch (error) {
-            console.error('Failed to load initial data:', error);
-            handleNewChat(false); // fallback to new chat on error
-        }
-    };
-    loadInitialData();
-  }, [handleNewChat]);
-
-  // Load messages when active conversation changes
-  useEffect(() => {
-    const loadMessagesForActiveConvo = async () => {
-      if (activeConversationId) {
-        try {
-          setIsLoading(true);
-          const messages = await apiService.loadMessages(activeConversationId);
-          
-          const processedMessages = messages.map(msg => {
-            if (msg.role === 'model' && msg.task) {
-                let component = null;
-                 if (msg.task === 'brand-positioning') {
-                    // For brand positioning, the component is now part of a combined message
-                    component = <BrandPositioningMap />;
-                } else if (msg.charts && Array.isArray(msg.charts)) {
-                    component = (
-                        <div>
-                          {msg.charts.map((chart: any, index: number) => (
-                            <AnalysisChart key={index} chart={chart} theme={effectiveTheme} />
-                          ))}
-                        </div>
-                    );
-                }
-                return { ...msg, component };
-            }
-            return msg;
-          });
-          
-          setActiveConversationMessages(processedMessages);
-          setComparisonSelection([]);
-          setSourceFilter(null);
-          window.localStorage.setItem(ACTIVE_CONVERSATION_ID_KEY, activeConversationId);
-        } catch (error) {
-          console.error(`Failed to load messages for conversation ${activeConversationId}:`, error);
-          setActiveConversationMessages([]);
-        } finally {
-          setIsLoading(false);
-        }
-      } else {
-        setActiveConversationMessages([]);
-      }
-    };
-    loadMessagesForActiveConvo();
-  }, [activeConversationId, effectiveTheme]);
   
-  // Save messages whenever they change
+  // --- Active Conversation Management ---
+  useEffect(() => {
+    if (activeConversationId) {
+      localStorage.setItem(ACTIVE_CONVERSATION_ID_KEY, activeConversationId);
+      setIsLoading(true);
+      apiService.loadMessages(activeConversationId).then(messages => {
+        // Process messages to re-attach non-serializable components
+        const processedMessages = processMessagesWithComponents(messages, effectiveTheme);
+        setActiveConversationMessages(processedMessages);
+        setIsLoading(false);
+      });
+    }
+  }, [activeConversationId, effectiveTheme]);
+
+  // --- Auto-save Messages ---
   useEffect(() => {
     if (activeConversationId && activeConversationMessages.length > 0) {
-        apiService.saveMessages(activeConversationId, activeConversationMessages);
+      apiService.saveMessages(activeConversationId, activeConversationMessages);
     }
   }, [activeConversationId, activeConversationMessages]);
-
-  const handleRenameConversation = useCallback(async (id: string, newTitle: string) => {
-      if (!newTitle.trim() || !conversations[id]) return;
-      
-      const originalTitle = conversations[id].title;
-      if (originalTitle === newTitle.trim()) return;
-
-      // Optimistic UI update
-      setConversations(prev => ({
-          ...prev,
-          [id]: { ...prev[id], title: newTitle.trim() }
-      }));
-      
-      const { success } = await apiService.saveConversationMeta(id, { title: newTitle.trim() });
-      if (!success) {
-        // Rollback on failure
-        setConversations(prev => ({
-            ...prev,
-            [id]: { ...prev[id], title: originalTitle }
-        }));
-      }
-  }, [conversations]);
   
-  const handleStopGeneration = () => {
-    if (abortControllerRef.current) {
-        abortControllerRef.current.abort();
-    }
-    setIsLoading(false);
-  };
-
-  const sendMessage = useCallback(async (userInput: string, image?: { file: File; dataUrl: string }, analysisPayload?: { params: any; task: Task }, regenerateMessageIndex?: number) => {
-    let currentConvoId = activeConversationId;
-    if (!currentConvoId) {
-        const newConvo = await apiService.createNewConversation();
-        if (newConvo) {
-            currentConvoId = newConvo.id;
-            setConversations(prev => ({ ...prev, [newConvo.id]: newConvo }));
-            setActiveConversationId(newConvo.id);
-        } else {
-            console.error("Could not create a new conversation.");
-            return;
-        }
-    }
-
-    let initialMessages: ChatMessage[];
-    if (typeof regenerateMessageIndex === 'number') {
-        initialMessages = activeConversationMessages.slice(0, regenerateMessageIndex - 1);
-    } else {
-        initialMessages = [...activeConversationMessages];
-    }
-
-    if (initialMessages.length > 0) {
-        const lastMsg = initialMessages[initialMessages.length - 1];
-        if (lastMsg.role === 'model' && lastMsg.suggestions) {
-            const { suggestions, ...rest } = lastMsg;
-            initialMessages[initialMessages.length - 1] = rest;
-        }
-    }
-    
-    let userMessage: ChatMessage | null = null;
-    let titleSource = userInput;
-
-    if (analysisPayload) {
-        const summary = generateSummaryForTask(analysisPayload.task, analysisPayload.params);
-        userMessage = { role: 'user' as const, content: summary };
-        titleSource = summary;
-    } else if (userInput || image) {
-        if (typeof regenerateMessageIndex === 'undefined') {
-            userMessage = { 
-                role: 'user' as const, 
-                content: userInput,
-                ...(image && { image: image.dataUrl }),
-            };
-        }
-    } else {
-        return; // Nothing to send
-    }
-    
-    setComparisonSelection([]);
-    setSourceFilter(null);
-    setIsLoading(true);
-    setActiveTool(null);
-    setIsSidebarOpen(false);
-
-    playSound(typingAudio);
-
-    const displayMessages = typeof regenerateMessageIndex === 'number'
-        ? activeConversationMessages.slice(0, regenerateMessageIndex)
-        : (userMessage ? [...initialMessages, userMessage] : initialMessages);
-
-    const placeholderMessage: ChatMessage = { role: 'model', content: '' };
-    setActiveConversationMessages([...displayMessages, placeholderMessage]);
-    
-    abortControllerRef.current = new AbortController();
-    
-    try {
-      let finalContent = '';
-      let finalSources: ChatMessage['sources'] = [];
-      let finalPerformance: ChatMessage['performance'] | undefined = undefined;
-      let finalError: string | undefined = undefined;
-      
-      const messagesForApi = userMessage ? [...initialMessages, userMessage] : [...initialMessages];
-        
-      let fullPrompt = userInput;
-      if (analysisPayload) {
-          fullPrompt = generatePromptForTask(analysisPayload.task, analysisPayload.params);
+  // --- Global Keyboard Shortcuts ---
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        setIsFindBarVisible(v => !v);
       }
-      const finalApiHistory = [...messagesForApi.slice(0, -1), { role: 'user' as const, content: fullPrompt, image: image?.dataUrl }];
-      
-      const stream = getChatResponseStream(finalApiHistory, abortControllerRef.current.signal, { task: analysisPayload?.task, useCreativePersona: analysisPayload?.task === 'market-research' });
-      for await (const chunk of stream) {
-          if (chunk.textChunk) finalContent += chunk.textChunk;
-          if (chunk.isFinal) {
-              finalSources = chunk.sources || [];
-              finalPerformance = chunk.performanceMetrics;
-              finalError = chunk.error;
-              break;
+      if (e.key === 'Escape') {
+        setIsFindBarVisible(false);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
+  /* ===================== DATA & COMPUTED VALUES ===================== */
+  const allSources = useMemo(() => {
+      const sources = new Map<string, { uri: string; title: string }>();
+      activeConversationMessages.forEach(msg => {
+          if (msg.role === 'model' && msg.sources) {
+              msg.sources.forEach(source => {
+                  if (!sources.has(source.uri)) {
+                      sources.set(source.uri, source);
+                  }
+              });
+          }
+      });
+      return Array.from(sources.values());
+  }, [activeConversationMessages]);
+  
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null);
+  
+  const filteredMessages = useMemo(() => {
+      if (!sourceFilter) return activeConversationMessages;
+      // Show user messages that preceded a filtered model message, and the model messages themselves.
+      const filtered: ChatMessage[] = [];
+      for(let i = 0; i < activeConversationMessages.length; i++) {
+          const msg = activeConversationMessages[i];
+          if(msg.role === 'model' && msg.sources?.some(s => s.uri === sourceFilter)) {
+              // Find the preceding user message(s)
+              for(let j = i - 1; j >= 0; j--) {
+                  const prevMsg = activeConversationMessages[j];
+                  if(prevMsg.role === 'user') {
+                      if(!filtered.includes(prevMsg)) {
+                          filtered.push(prevMsg);
+                      }
+                      break; // Found the direct user prompt, stop searching back
+                  }
+              }
+              filtered.push(msg);
           }
       }
-
-      // --- Final Processing ---
-      let contentToProcess = finalError || finalContent;
-      let isTranslated = false;
-      let originalContent = '';
-      
-      let parsedData: any = null;
-      let finalComponent: React.ReactNode | undefined = undefined;
-      let finalCharts: any[] | undefined = undefined;
-
-      const isJsonTask = !!analysisPayload && analysisPayload.task !== 'market-research' && analysisPayload.task !== 'brand-positioning';
-      const task = analysisPayload?.task;
-
-      if (isJsonTask && !finalError && contentToProcess) {
-        let jsonString = contentToProcess.trim();
-        const match = jsonString.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
-        jsonString = match?.[1]?.trim() ?? jsonString;
-        
-        parsedData = fixAndParseJson(jsonString, contentToProcess);
-
-        if (Array.isArray(parsedData.charts)) {
-            finalComponent = <div>{parsedData.charts.map((chart: any, i: number) => <AnalysisChart key={i} chart={chart} theme={effectiveTheme} />)}</div>;
-            contentToProcess = parsedData.analysis || '';
-            finalCharts = parsedData.charts;
-        }
-      } else if (task === 'brand-positioning') {
-            finalComponent = <BrandPositioningMap />;
-      }
-      
-      const finalMessage: ChatMessage = {
-          role: 'model',
-          content: contentToProcess,
-          sources: finalSources,
-          performance: finalPerformance,
-          isTranslated,
-          originalContent: isTranslated ? originalContent : undefined,
-          component: finalComponent,
-          charts: finalCharts,
-          ...(analysisPayload && { analysisParams: analysisPayload.params, task: analysisPayload.task }),
-      };
-
-      setActiveConversationMessages(prev => {
-        const newMsgs = [...prev];
-        const lastMsgIndex = newMsgs.length - 1;
-        newMsgs[lastMsgIndex] = finalMessage;
-        return newMsgs;
-      });
-      
-      if (!finalError) playSound(messageAudio);
-
-      const needsTitle = (initialMessages.length === 0) && conversations[currentConvoId]?.title === "Cuộc trò chuyện mới";
-      if (needsTitle && !finalError && titleSource && currentConvoId) {
-          const tempTitle = titleSource.length > 30 ? titleSource.substring(0, 30) + "..." : titleSource;
-          handleRenameConversation(currentConvoId, tempTitle);
-      }
-
-    } catch (error: any) {
-      if (error.name !== 'AbortError') {
-        console.error("Stream failed:", error);
-        const errorMessage = error.message || "Xin lỗi, đã có lỗi xảy ra. Vui lòng thử lại.";
-        setActiveConversationMessages(prev => {
-            const newMsgs = [...prev];
-            const lastMsgIndex = newMsgs.length - 1;
-            newMsgs[lastMsgIndex] = { ...newMsgs[lastMsgIndex], role: 'model', content: errorMessage };
-            return newMsgs;
-        });
-      }
-    } finally {
-      setIsLoading(false);
-      typingAudio.pause();
-      abortControllerRef.current = null;
-    }
-  }, [activeConversationId, activeConversationMessages, handleRenameConversation, typingAudio, messageAudio, playSound, effectiveTheme, conversations]);
-
-  const handleRegenerate = (index: number) => {
-    if (isLoading || index === 0) return;
-    const userMessage = activeConversationMessages[index - 1];
-    if (userMessage.role === 'user') {
-        sendMessage(userMessage.content, undefined, undefined, index);
-    }
-  };
-
-  const handleClearChat = async (id: string) => {
-    if (id === activeConversationId) {
-        setActiveConversationMessages([]);
-        setComparisonSelection([]);
-        setSourceFilter(null);
-    }
-    await apiService.clearConversationMessages(id);
-    setIsConfirmDialogOpen(null);
-    setActiveTool(null);
-  };
-
-  const handleDeleteConversation = async (id: string) => {
-    const oldConversations = conversations;
-    
-    // Optimistic UI update
-    const newConversations = { ...oldConversations };
-    delete newConversations[id];
-    setConversations(newConversations);
-
-    const { success } = await apiService.deleteConversation(id);
-    if (!success) {
-        setConversations(oldConversations); // Rollback on failure
-    }
-    
-    if (activeConversationId === id) {
-        const remainingIds = Object.keys(oldConversations)
-            .filter(convoId => convoId !== id)
-            .sort((a, b) => Number(b) - Number(a));
-        
-        if (remainingIds.length > 0) {
-            setActiveConversationId(remainingIds[0]);
-        } else {
-            await handleNewChat();
-        }
-    }
-    setIsConfirmDialogOpen(null);
-  };
-  
-  const handleFeedback = async (messageIndex: number, feedback: 'positive') => {
-    const updatedMessages = [...activeConversationMessages];
-    const messageToUpdate = updatedMessages[messageIndex];
-
-    if (messageToUpdate && messageToUpdate.role === 'model') {
-        updatedMessages[messageIndex] = { 
-            ...messageToUpdate,
-            role: 'model',
-            feedback: { rating: 5, issues: [] }, // Simple positive feedback
-        };
-        setActiveConversationMessages(updatedMessages);
-    }
-  };
-
-  const handleSaveFeedback = async (message: ChatMessage, feedbackData: Feedback, index: number) => {
-    // Update the message in the UI to show feedback has been given
-    setActiveConversationMessages(prev => prev.map((m, i) => 
-      i === index ? { ...m, role: 'model', feedback: feedbackData } : m
-    ));
-
-    // If there's a correction, create a fine-tuning example in the background
-    if (feedbackData.correction && feedbackData.correction.trim()) {
-        let originalPrompt = "Không tìm thấy prompt gốc.";
-        const messageIndex = index;
-        if (messageIndex > -1) {
-            for (let i = messageIndex - 1; i >= 0; i--) {
-                if (activeConversationMessages[i].role === 'user') {
-                    originalPrompt = activeConversationMessages[i].content;
-                    break;
-                }
-            }
-        }
-        
-        // Don't await, let it run in background
-        createFineTuningExampleFromCorrection(originalPrompt, message.content, feedbackData.correction)
-            .then(async (idealResponse) => {
-                if (idealResponse) {
-                    const newExample: FineTuningExample = {
-                        id: `ft-explicit-${Date.now()}`,
-                        originalPrompt,
-                        improvedResponse: idealResponse,
-                    };
-                    await apiService.saveFineTuningExample(newExample);
-                    const updatedExamples = await apiService.loadFineTuningExamples();
-                    setFineTuningExamples(updatedExamples);
-                    console.log("AI has learned from the explicit feedback.", newExample);
-                }
-            });
-    }
-    setFeedbackDialogData(null);
-  };
-  
-  const handleProfileUpdate = async (profile: UserProfile) => {
-    setUserProfile(profile);
-    await apiService.saveUserProfile(profile);
-  };
-
-  const handleBusinessProfileSave = async (profile: BusinessProfile) => {
-    setBusinessProfile(profile);
-    await apiService.saveBusinessProfile(profile);
-  };
-  
-  const handleForgetUser = async () => {
-    const keysToRemove = [ACTIVE_CONVERSATION_ID_KEY];
-    keysToRemove.forEach(key => window.localStorage.removeItem(key));
-    
-    const currentConvos = { ...conversations };
-    for (const id in currentConvos) {
-        await apiService.deleteConversation(id);
-    }
-
-    setUserProfile(null);
-    setConversations({});
-    setActiveConversationId(null);
-    await handleNewChat(false); // Start a fresh session
-  };
-  
-  const handleToggleCompare = (index: number) => {
-    setComparisonSelection(prev => {
-        const isSelected = prev.includes(index);
-        if (isSelected) {
-            return prev.filter(i => i !== index);
-        }
-        if (prev.length < 2) {
-            return [...prev, index].sort((a, b) => a - b);
-        }
-        return [prev[1], index].sort((a, b) => a - b);
-    });
-  };
-
-  const handleClearCompare = () => {
-      setComparisonSelection([]);
-  };
-
-  const handleEditAnalysis = useCallback((message: ChatMessage) => {
-    if (message.task && message.analysisParams) {
-        setActiveTool({ task: message.task, initialData: message.analysisParams, businessProfile });
-        setIsSidebarOpen(false);
-    }
-  }, [businessProfile]);
-  
-  const handleExportPng = useCallback(async () => {
-    if (!chatWindowRef.current) {
-        alert('Không thể tìm thấy nội dung chat để xuất.');
-        return;
-    }
-    setIsExporting(true);
-    try {
-        const dataUrl = await toPng(chatWindowRef.current, { 
-            cacheBust: true, 
-            backgroundColor: effectiveTheme === 'dark' ? '#0d1222' : '#f1f5f9', // slate-100
-            pixelRatio: 2,
-        });
-        const convoTitle = (activeConversationId && conversations[activeConversationId]?.title) || 'conversation';
-        const safeTitle = convoTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-        const link = document.createElement('a');
-        link.download = `conversation-V64-${safeTitle}.png`;
-        link.href = dataUrl;
-        link.click();
-    } catch (err) {
-        console.error('Không thể xuất ảnh PNG:', err);
-        alert('Đã xảy ra lỗi khi xuất ảnh. Vui lòng thử lại.');
-    } finally {
-        setIsExporting(false);
-        setIsExportDialogOpen(false);
-    }
-  }, [effectiveTheme, activeConversationId, conversations]);
-
-  const handleExportTxt = useCallback(() => {
-    setIsExporting(true);
-    const convoTitle = (activeConversationId && conversations[activeConversationId]?.title) || 'Cuộc trò chuyện';
-    
-    let textContent = `Chủ đề: ${convoTitle}\n`;
-    textContent += `Ngày xuất: ${new Date().toLocaleString('vi-VN')}\n`;
-    textContent += "========================================\n\n";
-
-    activeConversationMessages.forEach(msg => {
-        const prefix = msg.role === 'user' ? '[Người dùng]' : '[AI - V64]';
-        textContent += `${prefix}:\n${msg.content}\n\n`;
-        if (msg.role === 'model' && msg.sources && msg.sources.length > 0) {
-            textContent += 'Nguồn tham khảo:\n';
-            msg.sources.forEach(source => {
-                textContent += `- ${source.title}: ${source.uri}\n`;
-            });
-            textContent += '\n';
-        }
-    });
-
-    const blob = new Blob([textContent], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const safeTitle = convoTitle.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    link.download = `conversation-V64-${safeTitle}.txt`;
-    link.href = url;
-    link.click();
-    URL.revokeObjectURL(url);
-    
-    setIsExporting(false);
-    setIsExportDialogOpen(false);
-  }, [activeConversationId, conversations, activeConversationMessages]);
-
-  const handleSendAnalysis = useCallback((task: Task, params: Record<string, any>) => {
-    sendMessage('', undefined, { params, task });
-  }, [sendMessage]);
-  
-  // --- Group Handlers ---
-  const handleCreateGroup = async (name: string) => {
-    const newGroup = await apiService.createConversationGroup(name);
-    if (newGroup) {
-      setConversationGroups(prev => ({ ...prev, [newGroup.id]: newGroup }));
-    }
-  };
-
-  const handleRenameGroup = async (id: string, newName: string) => {
-    setConversationGroups(prev => ({ ...prev, [id]: { ...prev[id], name: newName } }));
-    await apiService.renameConversationGroup(id, newName);
-  };
-
-  const handleDeleteGroup = async (id: string) => {
-    // Optimistically update UI
-    const newGroups = { ...conversationGroups };
-    delete newGroups[id];
-    setConversationGroups(newGroups);
-    
-    const newConversations = { ...conversations };
-    // FIX: Changed iteration logic from Object.values to Object.keys to correctly
-    // modify the object properties and resolve the TypeScript error.
-    Object.keys(newConversations).forEach(convoId => {
-        if (newConversations[convoId].groupId === id) {
-            newConversations[convoId].groupId = null;
-        }
-    });
-    setConversations(newConversations);
-    
-    await apiService.deleteConversationGroup(id);
-    setIsConfirmDialogOpen(null);
-  };
-  
-  const handleAssignConversationToGroup = async (conversationId: string, groupId: string | null) => {
-    setConversations(prev => ({
-        ...prev,
-        [conversationId]: { ...prev[conversationId], groupId: groupId }
-    }));
-    await apiService.assignConversationToGroup(conversationId, groupId);
-  };
-
-  const uniqueSources = useMemo(() => {
-    const sourcesMap = new Map<string, string>();
-    activeConversationMessages.forEach(msg => {
-        if (msg.role === 'model' && msg.sources) {
-            msg.sources.forEach(source => {
-                if (!sourcesMap.has(source.uri)) {
-                    sourcesMap.set(source.uri, source.title);
-                }
-            });
-        }
-    });
-    return Array.from(sourcesMap, ([uri, title]) => ({ uri, title }));
-  }, [activeConversationMessages]);
-
-  const filteredMessages = useMemo(() => {
-    if (!sourceFilter) {
-        return activeConversationMessages;
-    }
-
-    const indicesToKeep = new Set<number>();
-    
-    activeConversationMessages.forEach((msg, index) => {
-        if (msg.role === 'model' && msg.sources?.some(source => source.uri === sourceFilter)) {
-            // Add the model message index
-            indicesToKeep.add(index);
-            // Look backward from the current model message to find the last user message
-            for (let i = index - 1; i >= 0; i--) {
-                if (activeConversationMessages[i].role === 'user') {
-                    indicesToKeep.add(i);
-                    break; // Found the user message, stop looking back
-                }
-            }
-        }
-    });
-
-    return activeConversationMessages.filter((_, index) => indicesToKeep.has(index));
+      return filtered;
   }, [activeConversationMessages, sourceFilter]);
 
-  const headerActionClass = "text-slate-500 dark:text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+  /* ===================== CALLBACKS & HANDLERS ===================== */
+  
+  // --- Conversation Management ---
+  const handleNewChat = useCallback(async () => {
+    const newConvo = await apiService.createNewConversation();
+    if (newConvo) {
+      setConversations(prev => ({ ...prev, [newConvo.id]: newConvo }));
+      setActiveConversationId(newConvo.id);
+      setActiveView('chat');
+    }
+  }, []);
 
-  const handleViewChange = (view: 'chat' | 'products') => {
-      setActiveView(view);
-      setIsSidebarOpen(false);
+  const handleSelectConversation = (id: string) => {
+    if (id !== activeConversationId) {
+      setComparisonSelection([]);
+      setSourceFilter(null);
+    }
+    setActiveConversationId(id);
+    setActiveView('chat');
+  };
+  
+  const handleRenameConversation = useCallback(async (id: string, newTitle: string) => {
+    if (!newTitle.trim()) return;
+    setConversations(prev => ({...prev, [id]: { ...prev[id], title: newTitle.trim() }}));
+    await apiService.saveConversationMeta(id, { title: newTitle.trim() });
+  }, []);
+
+  const handleDeleteConversation = useCallback(async (id: string) => {
+    if (Object.keys(conversations).length <= 1) return; // Can't delete the last one
+    
+    setConversations(prev => {
+      const newState = { ...prev };
+      delete newState[id];
+      return newState;
+    });
+
+    if (activeConversationId === id) {
+      const remainingIds = Object.keys(conversations).filter(cid => cid !== id);
+      setActiveConversationId(remainingIds[0] || null);
+    }
+    
+    await apiService.deleteConversation(id);
+  }, [conversations, activeConversationId]);
+  
+  const handleClearChat = () => {
+    if (activeConversationId) {
+        setActiveConversationMessages([]);
+        apiService.clearConversationMessages(activeConversationId);
+    }
+  };
+
+  // --- Group Management ---
+  const handleCreateGroup = useCallback(async (name: string) => {
+    const newGroup = await apiService.createConversationGroup(name);
+    if(newGroup) {
+      setConversationGroups(prev => ({...prev, [newGroup.id]: newGroup}));
+    }
+  }, []);
+
+  const handleRenameGroup = useCallback(async (id: string, newName: string) => {
+    setConversationGroups(prev => ({...prev, [id]: {...prev[id], name: newName}}));
+    await apiService.renameConversationGroup(id, newName);
+  }, []);
+
+  const handleDeleteGroup = useCallback(async (id: string) => {
+    setConversationGroups(prev => {
+      const newState = {...prev};
+      delete newState[id];
+      return newState;
+    });
+    setConversations(prev => {
+      const newState = {...prev};
+      Object.keys(newState).forEach(convoId => {
+        if (newState[convoId].groupId === id) {
+          newState[convoId].groupId = null;
+        }
+      });
+      return newState;
+    });
+    await apiService.deleteConversationGroup(id);
+  }, []);
+
+  const handleAssignConversationToGroup = useCallback(async (conversationId: string, groupId: string | null) => {
+    setConversations(prev => ({ ...prev, [conversationId]: { ...prev[conversationId], groupId }}));
+    await apiService.assignConversationToGroup(conversationId, groupId);
+  }, []);
+
+  // --- Chat Interaction ---
+  const handleStopGeneration = useCallback(() => {
+    abortControllerRef.current?.abort();
+    setIsLoading(false);
+  }, []);
+
+  const sendMessage = useCallback(
+    async (userInput: string, image?: { file: File; dataUrl: string }, analysisPayload?: { params: Record<string, any>; task: Task }) => {
+      if (isLoading) return;
+
+      let userMessage: ChatMessage = { role: 'user', content: userInput };
+      if (image) userMessage.image = image.dataUrl;
+      if(analysisPayload) {
+        userMessage.analysisParams = analysisPayload.params;
+        userMessage.task = analysisPayload.task;
+      }
+      
+      const updatedMessages = [...activeConversationMessages, userMessage];
+      setActiveConversationMessages(updatedMessages);
+      setIsLoading(true);
+
+      const modelResponse: ChatMessage = { role: 'model', content: '' };
+      setActiveConversationMessages(prev => [...prev, modelResponse]);
+      
+      // --- Special handling for Brand Positioning ---
+      if (analysisPayload?.task === 'brand-positioning') {
+          setActiveConversationMessages(prev => {
+              const newMessages = [...prev];
+              const lastMsg = newMessages[newMessages.length - 1];
+              if (lastMsg.role === 'model') {
+                lastMsg.content = `Đang tạo sơ đồ định vị thương hiệu...`;
+                lastMsg.component = <BrandPositioningMap />;
+                lastMsg.task = 'brand-positioning';
+              }
+              return newMessages;
+          });
+          setIsLoading(false);
+          playSound(messageAudio, soundEnabled);
+          return;
+      }
+      
+      const competitors = analysisPayload?.params?.competitors;
+      const hasCompetitors = competitors && Array.isArray(competitors) && competitors.length > 0;
+      
+      if(analysisPayload && !hasCompetitors) {
+          const { task, params } = analysisPayload;
+          let localResult: AnalysisResult | null = null;
+          
+          if (task === 'profit-analysis') localResult = businessService.buildProfitAnalysis(businessProfile, params);
+          if (task === 'promo-price') localResult = businessService.buildPromoAnalysis(businessProfile, params);
+          if (task === 'group-price') localResult = businessService.buildGroupPriceAnalysis(businessProfile, params);
+          
+          if (localResult) {
+              setActiveConversationMessages(prev => {
+                  const newMessages = [...prev];
+                  const lastMsg = newMessages[newMessages.length - 1];
+                  if (lastMsg.role === 'model') {
+                    lastMsg.content = localResult.analysis;
+                    lastMsg.charts = localResult.charts.map(c => ({...c, component: AnalysisChart}));
+                    lastMsg.analysisParams = params;
+                    lastMsg.task = task;
+                  }
+                  return newMessages;
+              });
+              setIsLoading(false);
+              playSound(messageAudio, soundEnabled);
+              return;
+          }
+      }
+      
+      let finalPrompt = userInput;
+      if (analysisPayload) {
+          finalPrompt = buildAnalysisPrompt(analysisPayload.task, analysisPayload.params);
+      }
+      
+      const userMessageForHistory = {...userMessage, content: finalPrompt};
+      
+      const translatedPrompt = await translateText(finalPrompt, 'vi', 'en');
+      if (translatedPrompt && translatedPrompt !== finalPrompt) {
+          userMessageForHistory.isTranslated = true;
+          userMessageForHistory.originalContent = finalPrompt;
+          userMessageForHistory.content = translatedPrompt;
+      }
+
+      abortControllerRef.current = new AbortController();
+      const signal = abortControllerRef.current.signal;
+      
+      try {
+        const stream = getChatResponseStream(
+            [...updatedMessages.slice(0, -1), userMessageForHistory],
+            signal,
+            { task: analysisPayload?.task, useCreativePersona: analysisPayload?.task === 'market-research' }
+        );
+
+        let accumulatedText = '';
+        let isFirstChunk = true;
+
+        for await (const chunk of stream) {
+          if (signal.aborted) break;
+
+          if (isFirstChunk) {
+            playSound(typingAudio, soundEnabled);
+            isFirstChunk = false;
+          }
+
+          if (chunk.textChunk) {
+            accumulatedText += chunk.textChunk;
+
+            setActiveConversationMessages(prev => {
+              const newMessages = [...prev];
+              const lastMsg = newMessages[newMessages.length - 1];
+              if (lastMsg.role === 'model') {
+                lastMsg.content = accumulatedText;
+              }
+              return newMessages;
+            });
+          }
+
+          if (chunk.isFinal) {
+            playSound(messageAudio, soundEnabled);
+            
+            let finalMessage: ChatMessage = {
+                role: 'model',
+                content: accumulatedText,
+                sources: chunk.sources,
+                performance: chunk.performanceMetrics,
+                analysisParams: analysisPayload?.params,
+                task: analysisPayload?.task,
+            };
+
+            // Post-process for JSON analysis
+            try {
+                if (finalMessage.role === 'model' && finalMessage.task && (finalMessage.content.includes('{') || finalMessage.content.includes('```json'))) {
+                    
+                    let jsonString = finalMessage.content.replace(/```json\n?/g, "").replace(/```/g, "").trim();
+
+                    if(finalMessage.task === 'market-research') {
+                        const marketData = JSON.parse(jsonString);
+                        finalMessage.content = `Đang tìm hình ảnh minh họa cho ${marketData.trend_sections?.length || 0} xu hướng...`;
+                        finalMessage.component = <MarketResearchReport data={marketData} theme={effectiveTheme} />;
+                        finalMessage.marketResearchData = marketData;
+                        
+                        // Async update message with found images
+                        setActiveConversationMessages(prev => prev.map((msg, i) => i === prev.length - 1 ? (finalMessage as ChatMessage) : msg));
+
+                        if (marketData.trend_sections && Array.isArray(marketData.trend_sections)) {
+                            for (const section of marketData.trend_sections) {
+                                if (section.key_items && Array.isArray(section.key_items)) {
+                                    await Promise.all(section.key_items.map(async (item: any) => {
+                                        if (item.image_search_query) {
+                                            const imageUrl = await findImageFromSearchQuery(item.image_search_query);
+                                            if (imageUrl) {
+                                                item.image_url = imageUrl;
+                                                // Re-render with the new image
+                                                setActiveConversationMessages(prev => {
+                                                    const newMessages = [...prev];
+                                                    const targetMsg = newMessages.find(m => m.id === finalMessage.id);
+                                                    if(targetMsg && targetMsg.role === 'model' && targetMsg.marketResearchData) {
+                                                        targetMsg.component = <MarketResearchReport data={targetMsg.marketResearchData} theme={effectiveTheme} />;
+                                                    }
+                                                    return newMessages;
+                                                });
+                                            }
+                                        }
+                                    }));
+                                }
+                            }
+                        }
+                         finalMessage.content = '';
+
+                    } else {
+                        const data = JSON.parse(jsonString);
+                        const unescapedSummary = data.summary ? data.summary.replace(/\\n/g, '\n') : '';
+                        const unescapedAnalysis = data.analysis ? data.analysis.replace(/\\n/g, '\n') : 'Không có phân tích.';
+                        finalMessage.summary = (await translateText(unescapedSummary, 'en', 'vi') || unescapedSummary);
+                        finalMessage.content = (await translateText(unescapedAnalysis, 'en', 'vi') || unescapedAnalysis);
+                        const translatedCharts = await translateChartData(data.charts);
+                        finalMessage.charts = translatedCharts.map((c: any) => ({...c, component: AnalysisChart}));
+                    }
+                } else {
+                     const translatedFinal = await translateText(finalMessage.content, 'en', 'vi');
+                     if (translatedFinal) {
+                         finalMessage.isTranslated = true;
+                         finalMessage.originalContent = finalMessage.content;
+                         finalMessage.content = translatedFinal;
+                     }
+                }
+
+            } catch(e) {
+                console.error("Error post-processing AI response:", e);
+                if (finalMessage.role === 'model') {
+                  finalMessage.content += "\n\n(Lỗi: Không thể phân tích dữ liệu trả về từ AI.)";
+                }
+            }
+            
+            setActiveConversationMessages(prev => {
+                const newMessages = [...prev];
+                newMessages[newMessages.length - 1] = finalMessage as ChatMessage;
+                return newMessages;
+            });
+            break;
+          }
+
+          if (chunk.error) {
+              setActiveConversationMessages(prev => {
+                  const newMessages = [...prev];
+                  const lastMsg = newMessages[newMessages.length-1];
+                  if(lastMsg.role === 'model') {
+                    lastMsg.content = chunk.error!;
+                  }
+                  return newMessages;
+              });
+              break;
+          }
+        }
+      } catch (error: any) {
+        if (error.name !== 'AbortError') {
+          console.error("Stream failed", error);
+          setActiveConversationMessages(prev => {
+              const newMessages = [...prev];
+              const lastMsg = newMessages[newMessages.length-1];
+              if(lastMsg.role === 'model') {
+                lastMsg.content = "Đã có lỗi xảy ra. Vui lòng thử lại.";
+              }
+              return newMessages;
+          });
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [isLoading, activeConversationMessages, soundEnabled, typingAudio, messageAudio, businessProfile, effectiveTheme]
+  );
+  
+  const handleSendAnalysis = (task: Task, params: Record<string, any>) => {
+      setActiveTool(null);
+      const userMessage = taskTitles[task];
+      sendMessage(userMessage, undefined, { task, params });
+  };
+  
+  const handleSuggestionClick = (suggestion: string) => {
+    sendMessage(suggestion);
+  };
+
+  const handleRegenerate = (index: number) => {
+    const userMessageIndex = index > 0 && activeConversationMessages[index - 1].role === 'user' ? index - 1 : -1;
+    if (userMessageIndex !== -1) {
+        const userMessage = activeConversationMessages[userMessageIndex];
+        const historyUpToUserMessage = activeConversationMessages.slice(0, userMessageIndex);
+        setActiveConversationMessages(historyUpToUserMessage);
+        sendMessage(userMessage.content, userMessage.image ? { file: new File([], ''), dataUrl: userMessage.image } : undefined, { task: userMessage.task!, params: userMessage.analysisParams! });
+    }
+  };
+  
+  const handleEditAnalysis = (message: ChatMessage) => {
+      if (message.task && message.analysisParams) {
+          setActiveTool({
+              task: message.task,
+              initialData: message.analysisParams
+          });
+      }
+  };
+
+  // --- Feedback & Fine-tuning ---
+  const handleOpenFeedbackDialog = (message: ChatMessage, index: number) => {
+      setFeedbackDialogState({ isOpen: true, message, index });
+  };
+  
+  const handleSaveFeedback = async (message: ChatMessage, feedback: Feedback) => {
+    if (feedbackDialogState.index === null) return;
+    
+    setActiveConversationMessages(prev => {
+        const newMessages = [...prev];
+        if(newMessages[feedbackDialogState.index!]) {
+            newMessages[feedbackDialogState.index!].feedback = feedback;
+        }
+        return newMessages;
+    });
+    setFeedbackDialogState({ isOpen: false, message: null, index: null });
+    
+    // Check if we should create a fine-tuning example
+    const prevUserMessage = activeConversationMessages[feedbackDialogState.index - 1];
+    const isCorrectionScenario = 
+      feedback.rating <= 3 && 
+      !feedback.correction && // User provides correction in next message
+      prevUserMessage?.role === 'user';
+      
+    if (isCorrectionScenario) {
+      // Logic to wait for next user message and then call createFineTuningExample
+      // This part is complex due to async nature and will be implemented if required.
+      // For now, we save the feedback. If a correction is provided directly, we can use it.
+    }
+    
+    if (feedback.correction) {
+       // A direct correction was provided in the dialog.
+       const prevUserMessage = activeConversationMessages[feedbackDialogState.index - 1];
+       if (prevUserMessage && prevUserMessage.role === 'user' && message.role === 'model') {
+           const idealResponse = await createFineTuningExampleFromCorrection(
+               prevUserMessage.content,
+               message.content,
+               feedback.correction
+           );
+           if (idealResponse) {
+               const newExample: FineTuningExample = {
+                   id: Date.now().toString(),
+                   originalPrompt: prevUserMessage.content,
+                   improvedResponse: idealResponse,
+               };
+               await apiService.saveFineTuningExample(newExample);
+               setFineTuningExamples(prev => [...prev, newExample]);
+           }
+       }
+    }
+  };
+
+  const handleFeedback = (messageIndex: number, feedback: 'positive') => {
+      setActiveConversationMessages(prev => {
+          const newMessages = [...prev];
+          if(newMessages[messageIndex]) {
+              newMessages[messageIndex].feedback = { rating: 5, issues: [] };
+          }
+          return newMessages;
+      });
+  };
+
+  // --- Comparison ---
+  const handleToggleCompare = (index: number) => {
+      setComparisonSelection(prev => {
+          if (prev.includes(index)) {
+              return prev.filter(i => i !== index);
+          }
+          if (prev.length < 2) {
+              return [...prev, index];
+          }
+          return [prev[1], index]; // Keep the last one and add the new one
+      });
+  };
+
+  // --- Export ---
+  const handleExportChat = () => setIsExportDialogOpen(true);
+
+  const exportChatAs = async (format: 'png' | 'txt') => {
+      if (!chatWindowRef.current) return;
+      setIsExporting(true);
+
+      const convoTitle = activeConversationId ? conversations[activeConversationId]?.title : "conversation";
+      const filename = `V64 Chat - ${convoTitle.replace(/[^a-z0-9]/gi, '_')}.${format}`;
+      
+      try {
+          if (format === 'png') {
+              const dataUrl = await toPng(chatWindowRef.current, { quality: 0.95, backgroundColor: effectiveTheme === 'dark' ? '#0f172a' : '#f8fafc' });
+              const link = document.createElement('a');
+              link.download = filename;
+              link.href = dataUrl;
+              link.click();
+          } else { // txt
+              const textContent = activeConversationMessages.map(msg => {
+                  const prefix = msg.role === 'user' ? '👤 You:' : '🤖 AI:';
+                  return `${prefix}\n${msg.content}\n\n${msg.sources ? 'Sources:\n' + msg.sources.map(s => `- ${s.title}: ${s.uri}`).join('\n') + '\n\n' : ''}`;
+              }).join('--------------------------------\n\n');
+              const blob = new Blob([textContent], { type: 'text/plain' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.download = filename;
+              link.href = url;
+              link.click();
+              URL.revokeObjectURL(url);
+          }
+      } catch (error) {
+          console.error(`Failed to export chat as ${format}`, error);
+          alert(`Đã xảy ra lỗi khi xuất file ${format}.`);
+      } finally {
+          setIsExporting(false);
+          setIsExportDialogOpen(false);
+      }
+  };
+  
+  // --- Profile & Settings ---
+  const handleUpdateProfile = (profile: UserProfile) => {
+    setUserProfile(profile);
+    apiService.saveUserProfile(profile);
+  };
+  
+  const handleSaveBusinessProfile = (profile: BusinessProfile) => {
+    setBusinessProfile(profile);
+    apiService.saveBusinessProfile(profile);
+  };
+
+  const handleForgetUser = () => {
+    if (window.confirm("Bạn có chắc chắn muốn xóa tất cả dữ liệu (hồ sơ, lịch sử chat) khỏi trình duyệt này không?")) {
+      localStorage.clear();
+      window.location.reload();
+    }
   };
 
   return (
-    <div className={`flex h-dvh bg-slate-100 dark:bg-[#0d1222] text-slate-800 dark:text-slate-200 transition-colors duration-300 font-sans`}>
-        <Sidebar 
-            conversations={Object.values(conversations)}
-            conversationGroups={conversationGroups}
-            activeConversationId={activeConversationId}
-            onNewChat={() => handleNewChat()}
-            onSelectConversation={(id) => setActiveConversationId(id)}
-            onDeleteConversation={(id) => setIsConfirmDialogOpen({ action: 'delete', id })}
-            onRenameConversation={handleRenameConversation}
-            onCreateGroup={handleCreateGroup}
-            onRenameGroup={handleRenameGroup}
-            onDeleteGroup={(id) => setIsConfirmDialogOpen({ action: 'delete-group', id })}
-            onAssignConversationToGroup={handleAssignConversationToGroup}
-            isOpen={isSidebarOpen}
-            setIsOpen={setIsSidebarOpen}
-            activeView={activeView}
-            onViewChange={handleViewChange}
+    <div className={`h-screen w-screen flex flex-col font-${font}`}>
+      <main className="flex-1 flex h-full overflow-hidden">
+        <Sidebar
+          conversations={Object.values(conversations)}
+          conversationGroups={conversationGroups}
+          activeConversationId={activeConversationId}
+          onNewChat={handleNewChat}
+          onSelectConversation={handleSelectConversation}
+          onDeleteConversation={(id) => setDeleteConfirmation({ type: 'convo', id })}
+          onRenameConversation={handleRenameConversation}
+          onCreateGroup={handleCreateGroup}
+          onRenameGroup={handleRenameGroup}
+          onDeleteGroup={(id) => setDeleteConfirmation({ type: 'group', id })}
+          onAssignConversationToGroup={handleAssignConversationToGroup}
+          isOpen={isSidebarOpen}
+          setIsOpen={setIsSidebarOpen}
+          activeView={activeView}
+          onViewChange={setActiveView}
         />
-        
-        <div className="flex flex-col flex-1 h-dvh relative">
-            <header className="flex items-center justify-between p-3 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-slate-900/50 backdrop-blur-sm shrink-0 z-10">
-                 <div className="flex items-center gap-2">
-                    <button onClick={() => setIsSidebarOpen(true)} className="p-2 -ml-2 text-slate-500 dark:text-slate-400 md:hidden">
-                        <MenuIcon className="w-6 h-6" />
-                    </button>
-                    <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100 truncate">
-                        {activeView === 'products'
-                            ? 'Danh mục Sản phẩm'
-                            : (activeConversationId && conversations[activeConversationId]?.title) || 'Trợ lý Kinh doanh'
-                        }
-                    </h1>
-                </div>
 
-                <div className="flex items-center gap-1">
-                    {activeView === 'chat' && uniqueSources.length > 0 && (
-                        <SourceFilterControl
-                            sources={uniqueSources}
-                            activeFilter={sourceFilter}
-                            onFilterChange={setSourceFilter}
-                        />
-                    )}
-                     {activeView === 'chat' && (
-                        <button onClick={() => setIsFindVisible(true)} className={headerActionClass} title="Tìm trong trang">
-                            <MagnifyingGlassIcon className="w-5 h-5" />
-                        </button>
-                     )}
-                    <button onClick={() => setIsExportDialogOpen(true)} disabled={activeView !== 'chat' || activeConversationMessages.length === 0} className={headerActionClass} title="Xuất cuộc trò chuyện">
-                        <ArrowDownTrayIcon className="w-5 h-5" />
-                    </button>
-                    <div className="hidden sm:flex items-center gap-1">
-                        <button onClick={() => setIsTestingGuideOpen(true)} className={headerActionClass} title="Hướng dẫn kiểm thử">
-                            <CheckBadgeIcon className="w-5 h-5" />
-                        </button>
-                        <button onClick={() => setIsWorkflowDialogOpen(true)} className={headerActionClass} title="Xem quy trình làm việc">
-                            <WorkflowIcon className="w-5 h-5" />
-                        </button>
-                    </div>
-                    <SettingsPopover 
-                        theme={theme}
-                        setTheme={setTheme}
-                        font={font}
-                        setFont={setFont}
-                        userProfile={userProfile}
-                        onUpdateProfile={handleProfileUpdate}
-                        onForgetUser={handleForgetUser}
-                        soundEnabled={soundEnabled}
-                        setSoundEnabled={setSoundEnabled}
-                        onOpenWorkflow={() => setIsWorkflowDialogOpen(true)}
-                        onOpenTestingGuide={() => setIsTestingGuideOpen(true)}
-                        onOpenBusinessProfile={() => setIsBusinessProfileOpen(true)}
+        <div className="flex-1 flex flex-col relative">
+          <header className="flex items-center justify-between p-2.5 border-b border-slate-200 dark:border-slate-800 bg-white/50 dark:bg-slate-900/50 backdrop-blur-md z-10">
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setIsSidebarOpen(true)}
+                className="p-2 text-slate-500 dark:text-slate-400 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 md:hidden"
+              >
+                <MenuIcon className="w-6 h-6" />
+              </button>
+              <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                {activeView === 'products' ? 'Quản lý Sản phẩm' : conversations[activeConversationId!]?.title || 'Trò chuyện'}
+              </h1>
+            </div>
+            <div className="flex items-center gap-2">
+                <SourceFilterControl sources={allSources} activeFilter={sourceFilter} onFilterChange={setSourceFilter} />
+                <button
+                    onClick={() => setIsFindBarVisible(v => !v)}
+                    className="text-slate-500 dark:text-slate-400 hover:text-blue-500 dark:hover:text-blue-400 transition-colors duration-200 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800"
+                    title="Tìm kiếm (Ctrl+F)"
+                >
+                    <MagnifyingGlassIcon className="w-5 h-5" />
+                </button>
+              <SettingsPopover
+                theme={theme} setTheme={setTheme}
+                font={font} setFont={setFont}
+                userProfile={userProfile} onUpdateProfile={handleUpdateProfile}
+                onForgetUser={handleForgetUser}
+                soundEnabled={soundEnabled} setSoundEnabled={setSoundEnabled}
+                onOpenWorkflow={() => setIsWorkflowOpen(true)}
+                onOpenTestingGuide={() => setIsTestingGuideOpen(true)}
+                onOpenBusinessProfile={() => setIsBusinessProfileOpen(true)}
+              />
+            </div>
+          </header>
+          
+          <FindBar isVisible={isFindBarVisible} onClose={() => setIsFindBarVisible(false)} containerRef={chatWindowRef} />
+
+          {activeView === 'chat' ? (
+              <>
+                 {activeConversationMessages.length === 0 && !isLoading ? (
+                    <Welcome onSuggestionClick={handleSuggestionClick} onToolSelect={(task) => setActiveTool({task})} />
+                ) : (
+                    <ChatWindow
+                      ref={chatWindowRef}
+                      messages={filteredMessages}
+                      isLoading={isLoading}
+                      onSuggestionClick={handleSuggestionClick}
+                      onFeedback={handleFeedback}
+                      onOpenFeedbackDialog={handleOpenFeedbackDialog}
+                      onRegenerate={handleRegenerate}
+                      comparisonSelection={comparisonSelection}
+                      onToggleCompare={handleToggleCompare}
+                      onEditAnalysis={handleEditAnalysis}
+                      sourceFilter={sourceFilter}
+                      effectiveTheme={effectiveTheme}
+                      onSourceFilterChange={setSourceFilter}
                     />
-                    <div className="relative sm:hidden" ref={headerMenuRef}>
-                        <button onClick={() => setIsHeaderMenuOpen(p => !p)} className={headerActionClass}>
-                            <DotsVerticalIcon className="w-5 h-5" />
-                        </button>
-                        {isHeaderMenuOpen && (
-                             <div className="absolute top-full right-0 mt-2 w-48 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg p-2 z-10 animate-popover-enter">
-                                <button onClick={() => { setIsWorkflowDialogOpen(true); setIsHeaderMenuOpen(false); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">
-                                    <WorkflowIcon className="w-4 h-4" />
-                                    <span>Quy trình</span>
-                                </button>
-                                <button onClick={() => { setIsTestingGuideOpen(true); setIsHeaderMenuOpen(false); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">
-                                    <CheckBadgeIcon className="w-4 h-4" />
-                                    <span>Kiểm thử</span>
-                                </button>
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </header>
-            
-            <FindBar 
-                isVisible={isFindVisible}
-                onClose={() => setIsFindVisible(false)}
-                containerRef={chatWindowRef}
-            />
-            
-            {activeView === 'products' ? (
-                <ProductCatalog
-                    profile={businessProfile}
-                    onSave={handleBusinessProfileSave}
+                )}
+                 {comparisonSelection.length > 0 && (
+                    <ComparisonToolbar 
+                        selection={comparisonSelection}
+                        messages={activeConversationMessages}
+                        onCompare={() => setIsComparisonDialogOpen(true)}
+                        onClear={() => setComparisonSelection([])}
+                    />
+                )}
+                <MessageInput
+                  onSendMessage={sendMessage}
+                  onSendAnalysis={handleSendAnalysis}
+                  isLoading={isLoading}
+                  onNewChat={handleNewChat}
+                  onClearChat={handleClearChat}
+                  onExportChat={handleExportChat}
+                  activeTool={activeTool}
+                  setActiveTool={setActiveTool}
+                  onStopGeneration={handleStopGeneration}
+                  businessProfile={businessProfile}
                 />
-            ) : (
-                <div className="flex-1 flex flex-col overflow-hidden">
-                    {activeConversationMessages.length === 0 && !isLoading ? (
-                        <Welcome onSuggestionClick={(prompt) => sendMessage(prompt)} onToolSelect={(task) => handleSendAnalysis(task, {})} />
-                    ) : (
-                        <ChatWindow 
-                            ref={chatWindowRef}
-                            messages={filteredMessages}
-                            isLoading={isLoading}
-                            onSuggestionClick={(prompt) => sendMessage(prompt)}
-                            onFeedback={handleFeedback}
-                            onOpenFeedbackDialog={(msg, index) => setFeedbackDialogData({ message: msg, index })}
-                            onRegenerate={handleRegenerate}
-                            comparisonSelection={comparisonSelection}
-                            onToggleCompare={handleToggleCompare}
-                            onEditAnalysis={handleEditAnalysis}
-                            sourceFilter={sourceFilter}
-                            effectiveTheme={effectiveTheme}
-                            onSourceFilterChange={setSourceFilter}
-                        />
-                    )}
+              </>
+          ) : (
+              <ProductCatalog
+                  profile={businessProfile}
+                  onSave={handleSaveBusinessProfile}
+              />
+          )}
 
-                    {comparisonSelection.length > 0 && (
-                        <ComparisonToolbar
-                            selection={comparisonSelection}
-                            messages={activeConversationMessages}
-                            onCompare={() => setIsComparisonOpen(true)}
-                            onClear={handleClearCompare}
-                        />
-                    )}
-
-                    <MessageInput 
-                        onSendMessage={(prompt, image) => sendMessage(prompt, image)}
-                        onSendAnalysis={handleSendAnalysis}
-                        isLoading={isLoading}
-                        onNewChat={() => handleNewChat()}
-                        onClearChat={() => activeConversationId && setIsConfirmDialogOpen({ action: 'clear', id: activeConversationId })}
-                        activeTool={activeTool}
-                        setActiveTool={(tool) => setActiveTool(tool ? { ...tool, businessProfile } : null)}
-                        onStopGeneration={handleStopGeneration}
-                    />
-                </div>
-            )}
         </div>
+      </main>
 
-        {isExportDialogOpen && (
-            <ExportDialog
-                isOpen={isExportDialogOpen}
-                onClose={() => setIsExportDialogOpen(false)}
-                onExportPng={handleExportPng}
-                onExportTxt={handleExportTxt}
-                isExporting={isExporting}
-            />
-        )}
-
-        {isWorkflowDialogOpen && (
-            <WorkflowDialog
-                isOpen={isWorkflowDialogOpen}
-                onClose={() => setIsWorkflowDialogOpen(false)}
-            />
-        )}
-        
-        {isTestingGuideOpen && (
-            <TestingGuideDialog
-                isOpen={isTestingGuideOpen}
-                onClose={() => setIsTestingGuideOpen(false)}
-            />
-        )}
-        
-        {businessProfile && (
-            <BusinessProfileDialog
-                isOpen={isBusinessProfileOpen}
-                onClose={() => setIsBusinessProfileOpen(false)}
-                profile={businessProfile}
-                onSave={handleBusinessProfileSave}
-            />
-        )}
-
-        {feedbackDialogData && (
-            <FeedbackDialog
-                isOpen={!!feedbackDialogData}
-                onClose={() => setFeedbackDialogData(null)}
-                message={feedbackDialogData.message}
-                onSave={(msg, feedback) => handleSaveFeedback(msg, feedback, feedbackDialogData.index)}
-            />
-        )}
-
-        {isComparisonOpen && comparisonSelection.length === 2 && (
+       {/* Dialogs */}
+        <WorkflowDialog isOpen={isWorkflowOpen} onClose={() => setIsWorkflowOpen(false)} />
+        <TestingGuideDialog isOpen={isTestingGuideOpen} onClose={() => setIsTestingGuideOpen(false)} />
+        {businessProfile && <BusinessProfileDialog isOpen={isBusinessProfileOpen} onClose={() => setIsBusinessProfileOpen(false)} profile={businessProfile} onSave={handleSaveBusinessProfile} />}
+        <ExportDialog isOpen={isExportDialogOpen} onClose={() => setIsExportDialogOpen(false)} onExportPng={() => exportChatAs('png')} onExportTxt={() => exportChatAs('txt')} isExporting={isExporting}/>
+        {comparisonSelection.length === 2 && (
             <SourceComparisonDialog
-                isOpen={isComparisonOpen}
-                onClose={() => setIsComparisonOpen(false)}
+                isOpen={isComparisonDialogOpen}
+                onClose={() => setIsComparisonDialogOpen(false)}
                 message1={activeConversationMessages[comparisonSelection[0]]}
                 message2={activeConversationMessages[comparisonSelection[1]]}
             />
         )}
-
-        {isConfirmDialogOpen && (
-            <ConfirmationDialog 
-                isOpen={!!isConfirmDialogOpen}
-                onClose={() => setIsConfirmDialogOpen(null)}
-                onConfirm={() => {
-                    if (isConfirmDialogOpen.action === 'clear' && isConfirmDialogOpen.id) {
-                        handleClearChat(isConfirmDialogOpen.id);
-                    } else if (isConfirmDialogOpen.action === 'delete' && isConfirmDialogOpen.id) {
-                        handleDeleteConversation(isConfirmDialogOpen.id);
-                    } else if (isConfirmDialogOpen.action === 'delete-group' && isConfirmDialogOpen.id) {
-                        handleDeleteGroup(isConfirmDialogOpen.id);
-                    }
-                }}
-                title={
-                    isConfirmDialogOpen.action === 'clear' ? "Xóa cuộc trò chuyện?" :
-                    isConfirmDialogOpen.action === 'delete' ? "Xóa vĩnh viễn?" :
-                    "Xóa nhóm này?"
-                }
-                message={
-                    isConfirmDialogOpen.action === 'clear' 
-                    ? "Bạn có chắc chắn muốn xóa tất cả tin nhắn trong cuộc trò chuyện này không? Hành động này không thể hoàn tác."
-                    : isConfirmDialogOpen.action === 'delete'
-                    ? "Bạn có chắc chắn muốn xóa vĩnh viễn cuộc trò chuyện này không? Hành động này không thể hoàn tác."
-                    : "Bạn có chắc chắn muốn xóa nhóm này không? Các cuộc trò chuyện bên trong sẽ không bị xóa."
-                }
-            />
-        )}
+         {feedbackDialogState.isOpen && feedbackDialogState.message && (
+             <FeedbackDialog
+                isOpen={feedbackDialogState.isOpen}
+                onClose={() => setFeedbackDialogState({isOpen: false, message: null, index: null})}
+                message={feedbackDialogState.message}
+                onSave={handleSaveFeedback}
+             />
+         )}
+        <ConfirmationDialog
+            isOpen={!!deleteConfirmation}
+            onClose={() => setDeleteConfirmation(null)}
+            onConfirm={() => {
+                if (deleteConfirmation?.type === 'convo') handleDeleteConversation(deleteConfirmation.id);
+                if (deleteConfirmation?.type === 'group') handleDeleteGroup(deleteConfirmation.id);
+                setDeleteConfirmation(null);
+            }}
+            title={deleteConfirmation?.type === 'convo' ? "Xóa cuộc trò chuyện?" : "Xóa nhóm?"}
+            message={deleteConfirmation?.type === 'convo' ? "Hành động này không thể hoàn tác." : "Các cuộc trò chuyện trong nhóm sẽ không bị xóa."}
+        />
     </div>
   );
 };

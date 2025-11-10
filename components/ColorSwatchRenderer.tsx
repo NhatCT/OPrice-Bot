@@ -7,8 +7,11 @@ interface ColorSwatchRendererProps {
 export const ColorSwatchRenderer: React.FC<ColorSwatchRendererProps> = ({ text }) => {
     if (!text) return null;
 
+    // Ensure text is a string before splitting to prevent errors
+    const safeText = String(text);
+
     // Regex to find hex codes (#RRGGBB or #RGB) with word boundaries
-    const parts = text.split(/(#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b)/g);
+    const parts = safeText.split(/(#[0-9a-fA-F]{6}\b|#[0-9a-fA-F]{3}\b)/g);
 
     return (
         <>

@@ -8,8 +8,6 @@ import { BriefcaseIcon } from './icons/BriefcaseIcon';
 import { WorkflowIcon } from './icons/WorkflowIcon';
 import { CheckBadgeIcon } from './icons/CheckBadgeIcon';
 import { CogIcon } from './icons/CogIcon';
-import { ArchiveBoxIcon } from './icons/ArchiveBoxIcon';
-import { GlobeAltIcon } from './icons/GlobeAltIcon';
 
 interface SettingsPopoverProps {
   theme: Theme;

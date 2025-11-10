@@ -1,4 +1,3 @@
-
 import type { ReactNode } from 'react';
 
 export type Theme = 'light' | 'dark' | 'system';
@@ -15,35 +14,32 @@ export interface Feedback {
   correction?: string;
 }
 
-// FIX: Define and export the MarketResearchData type to be used across components.
 export interface MarketResearchData {
-  global_analysis?: {
+  trend_sections?: {
     title: string;
-    sections: {
-      icon: string;
-      title: string;
-      content: string;
+    description: string;
+    key_items: {
+      brand_name: string;
+      image_search_query: string;
+      image_url?: string; 
+    }[];
+  }[];
+  wash_effect_summary?: {
+    title: string;
+    table: {
+      wash_type: string;
+      application_effect: string;
     }[];
   };
-  collection_concepts?: {
-    name: string;
-    description: string;
-    color_palette: string;
-    materials: string;
-  }[];
-  key_items?: {
-    item_name: string;
-    description: string;
-    image_url?: string;
-    image_base64?: string;
-  }[];
   charts?: any[];
 }
+
 
 interface BaseChatMessage {
   id?: number;
   content: string;
   image?: string; // base64 data URL
+  summary?: string;
   suggestions?: string[];
   sources?: {
     uri: string;
@@ -56,7 +52,6 @@ interface BaseChatMessage {
   };
   analysisParams?: Record<string, any>;
   charts?: any[]; // Store raw chart data for export
-  // FIX: Add the missing 'marketResearchData' property to the BaseChatMessage interface.
   marketResearchData?: MarketResearchData;
   task?: Task;
   isTranslated?: boolean; // For translation feature
@@ -89,6 +84,29 @@ export interface ConversationMeta {
   id:string;
   title: string;
   groupId?: string | null;
+}
+
+export interface CostSheetItem {
+  name: string;
+  category: string;
+  sku: string;
+  costOfGoods: number;
+  priceOnline: number;
+}
+
+
+// --- Local Analysis Types ---
+export interface Chart {
+  type: 'bar';
+  title: string;
+  data: { name: string; value: number }[];
+  unit?: string;
+  component?: React.FC<any>; 
+}
+
+export interface AnalysisResult {
+  analysis: string;
+  charts: Chart[];
 }
 
 // --- Business Profile Types ---

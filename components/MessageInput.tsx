@@ -1,3 +1,5 @@
+
+
 import React, { useState, useRef, useEffect } from 'react';
 import { PaperAirplaneIcon } from './icons/PaperAirplaneIcon';
 import { PlusIcon } from './icons/PlusIcon';
@@ -14,6 +16,7 @@ import { PaperclipIcon } from './icons/PaperclipIcon';
 import { XIcon } from './icons/XIcon';
 import { GlobeAltIcon } from './icons/GlobeAltIcon';
 import { MapIcon } from './icons/MapIcon';
+import { ArchiveBoxIcon } from './icons/ArchiveBoxIcon';
 
 
 // TypeScript declarations for the SpeechRecognition API
@@ -69,7 +72,6 @@ declare global {
 interface ActiveTool {
     task: Task;
     initialData?: Record<string, any>;
-    businessProfile: BusinessProfile | null;
 }
 
 interface MessageInputProps {
@@ -78,9 +80,11 @@ interface MessageInputProps {
   isLoading: boolean;
   onNewChat: () => void;
   onClearChat: () => void;
+  onExportChat: () => void;
   activeTool: ActiveTool | null;
   setActiveTool: (tool: ActiveTool | null) => void;
   onStopGeneration: () => void;
+  businessProfile: BusinessProfile | null;
 }
 
 export const MessageInput: React.FC<MessageInputProps> = ({ 
@@ -89,9 +93,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   isLoading, 
   onNewChat, 
   onClearChat, 
+  onExportChat,
   activeTool, 
   setActiveTool,
   onStopGeneration,
+  businessProfile,
 }) => {
   const [input, setInput] = useState('');
   const [image, setImage] = useState<{ file: File; dataUrl: string } | null>(null);
@@ -206,7 +212,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     if (task === 'brand-positioning') {
         onSendAnalysis(task, {});
     } else {
-        setActiveTool({ task, businessProfile: null });
+        setActiveTool({ task });
     }
   };
 
@@ -222,7 +228,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
             <GuidedInputForm 
                 task={activeTool.task}
                 initialData={activeTool.initialData}
-                businessProfile={activeTool.businessProfile}
+                businessProfile={businessProfile}
                 onSubmit={onSendAnalysis}
                 onCancel={() => setActiveTool(null)}
                 isLoading={isLoading}
@@ -262,14 +268,19 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                     <DotsVerticalIcon className="w-5 h-5" />
                 </button>
                 {isMenuOpen && (
-                    <div className="absolute bottom-full mb-2 w-48 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg p-2 z-10 animate-fade-in-up">
+                    <div className="absolute bottom-full mb-2 w-56 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg p-2 z-10 animate-fade-in-up">
                         <button onClick={() => { onNewChat(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">
                             <PlusIcon className="w-4 h-4" />
                             <span>Trò chuyện mới</span>
                         </button>
+                         <button onClick={() => { onExportChat(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">
+                            <ArchiveBoxIcon className="w-4 h-4" />
+                            <span>Xuất cuộc trò chuyện</span>
+                        </button>
+                        <div className="my-1 h-px bg-slate-200 dark:bg-slate-600"></div>
                         <button onClick={() => { onClearChat(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-md transition-colors duration-200">
                             <TrashIcon className="w-4 h-4" />
-                            <span>Xóa tin nhắn</span>
+                            <span>Xóa tin nhắn hiện tại</span>
                         </button>
                     </div>
                 )}
