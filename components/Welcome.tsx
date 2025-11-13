@@ -1,5 +1,4 @@
 import React from 'react';
-// FIX: The Task type should be imported from the central types file.
 import type { Task } from '../types';
 import { ChartBarIcon } from './icons/ChartBarIcon';
 import { TagIcon } from './icons/TagIcon';

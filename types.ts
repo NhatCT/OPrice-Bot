@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ReactNode, FC } from 'react';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type Font = 'sans' | 'serif' | 'mono';
@@ -21,7 +21,7 @@ export interface MarketResearchData {
     key_items: {
       brand_name: string;
       image_search_query: string;
-      image_url?: string; 
+      image_urls?: string[]; 
     }[];
   }[];
   wash_effect_summary?: {
@@ -54,13 +54,14 @@ interface BaseChatMessage {
   charts?: any[]; // Store raw chart data for export
   marketResearchData?: MarketResearchData;
   task?: Task;
-  isTranslated?: boolean; // For translation feature
-  originalContent?: string; // For translation feature
+  isTranslated?: boolean;
+  originalContent?: string;
 }
 
 export type ChatMessage =
   | (BaseChatMessage & {
       role: 'user';
+      rawPrompt?: string; // The full prompt sent to the API, for analysis tasks
     })
   | (BaseChatMessage & {
       role: 'model';
@@ -101,7 +102,7 @@ export interface Chart {
   title: string;
   data: { name: string; value: number }[];
   unit?: string;
-  component?: React.FC<any>; 
+  component?: FC<any>; 
 }
 
 export interface AnalysisResult {

@@ -55,6 +55,13 @@ export const TagInput: React.FC<TagInputProps> = ({ value, onChange, placeholder
     }
   };
 
+  const handleBlur = () => {
+    if (inputValue.trim()) {
+      addTag(inputValue);
+    }
+    setShowSuggestions(false);
+  };
+
   const filteredSuggestions = suggestions.filter(
     s => s.toLowerCase().includes(inputValue.toLowerCase()) && !value.includes(s)
   );
@@ -85,6 +92,7 @@ export const TagInput: React.FC<TagInputProps> = ({ value, onChange, placeholder
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           onFocus={() => setShowSuggestions(true)}
+          onBlur={handleBlur}
           placeholder={value.length === 0 ? placeholder : ''}
           className="flex-1 bg-transparent focus:outline-none min-w-[120px]"
         />

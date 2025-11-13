@@ -11,7 +11,7 @@ import React, {
 } from "react";
 import { ChatWindow } from "./components/ChatWindow";
 import { MessageInput } from "./components/MessageInput";
-import { getChatResponseStream, translateText, createFineTuningExampleFromCorrection, findImageFromSearchQuery } from "./services/geminiService";
+import { getChatResponseStream, createFineTuningExampleFromCorrection, findImageFromSearchQuery, translateText } from "./services/geminiService";
 import * as apiService from "./services/apiService";
 import * as businessService from "./services/businessService";
 import type {
@@ -49,6 +49,7 @@ import { FindBar } from "./components/FindBar";
 import { ProductCatalog } from "./components/ProductCatalog";
 import { BrandPositioningMap } from "./components/BrandPositioningMap";
 import { MarketResearchReport } from "./components/MarketResearchReport";
+import { BriefcaseIcon } from "./components/icons/BriefcaseIcon";
 
 /* ===========================================================
    ================= CONSTANTS & CONFIG ======================
@@ -66,6 +67,40 @@ const taskTitles: Record<Task, string> = {
   'brand-positioning': 'Định vị Thương hiệu'
 };
 
+const toNum = (v: any): number => {
+  if (v == null || v === "") return 0;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  const s = String(v).replace(/[^\d-]/g, ''); // Keep only digits and minus sign
+  if (s === '') return 0;
+  const n = parseInt(s, 10);
+  return Number.isFinite(n) ? n : 0;
+};
+
+const sanitizeChartData = (charts: any[]): any[] => {
+    if (!charts || !Array.isArray(charts)) return [];
+
+    return charts.map(chart => {
+        if (!chart.data || !Array.isArray(chart.data) || chart.data.length === 0) {
+            return chart;
+        }
+
+        // Find the data key (the one that's not 'name')
+        const dataKey = Object.keys(chart.data[0] || {}).find(key => key !== 'name');
+        if (!dataKey) return chart;
+
+        const sanitizedData = chart.data.map(point => {
+            if (point && point[dataKey] !== undefined) {
+                const numericValue = toNum(point[dataKey]);
+                return { ...point, [dataKey]: numericValue };
+            }
+            return point;
+        });
+
+        return { ...chart, data: sanitizedData };
+    });
+};
+
+
 const playSound = (audio: HTMLAudioElement, enabled: boolean) => {
   if (!enabled) return;
   try {
@@ -76,43 +111,13 @@ const playSound = (audio: HTMLAudioElement, enabled: boolean) => {
   } catch {}
 };
 
-const translateChartData = async (charts: any[]): Promise<any[]> => {
-    if (!charts || !Array.isArray(charts)) return [];
-
-    const translatedCharts = await Promise.all(
-        charts.map(async (chart) => {
-            // Translate chart title
-            const translatedTitle = chart.title ? await translateText(chart.title, 'en', 'vi') : chart.title;
-
-            // Translate data point names
-            const translatedData = chart.data && Array.isArray(chart.data)
-                ? await Promise.all(
-                    chart.data.map(async (dataPoint: any) => {
-                        if (typeof dataPoint.name === 'string') {
-                            const translatedName = await translateText(dataPoint.name, 'en', 'vi');
-                            return { ...dataPoint, name: translatedName || dataPoint.name };
-                        }
-                        return dataPoint;
-                    })
-                )
-                : chart.data; // Keep original if not an array
-
-            return {
-                ...chart,
-                title: translatedTitle || chart.title,
-                data: translatedData,
-            };
-        })
-    );
-
-    return translatedCharts;
-};
-
 const buildAnalysisPrompt = (task: Task, params: Record<string, any>): string => {
   if (task === 'market-research') {
         const competitors = Array.isArray(params.competitors) ? params.competitors.join(', ') : params.competitors || 'None';
         const useSearch = competitors && competitors.length > 0;
-        return `YÊU CẦU ĐỊNH DẠNG ĐẦU RA: JSON. You are a world-class Fashion Trend Analyst. Conduct a detailed fashion trend report based on the criteria below. ${useSearch ? 'Use Google Search extensively to gather real-time, relevant information from top sources like WGSN, Vogue Runway, and Business of Fashion.' : ''} The analysis must be structured like a professional presentation for a fashion brand's product development team.
+        return `REQUIRED OUTPUT FORMAT: JSON. You are a world-class Fashion Trend Analyst. Conduct a detailed fashion trend report based on the criteria below. The report MUST focus specifically on **denim trends**. ${useSearch ? 'Use Google Search extensively to gather real-time, relevant information from top sources like WGSN, Vogue Runway, and Business of Fashion to identify these denim trends.' : ''} The analysis must be structured like a professional presentation for a fashion brand's product development team.
+
+IMPORTANT: All text content MUST be in English.
 
 CRITERIA:
 - Season: ${params.season} ${params.year}
@@ -126,9 +131,9 @@ The JSON output MUST follow this exact structure:
   "trend_sections": [
     {
       "title": "1. Trend Core – [Name of Trend 1]",
-      "description": "- [Key characteristic 1 in Vietnamese]\\n- [Key characteristic 2 in Vietnamese]",
+      "description": "- [Key characteristic 1 in ENGLISH]\\n- [Key characteristic 2 in ENGLISH]",
       "key_items": [
-        { "brand_name": "[Brand Name 1]", "image_search_query": "[Concise English query for a real runway/studio photo of an item from this brand and trend]" },
+        { "brand_name": "[Brand Name 1]", "image_search_query": "[Concise ENGLISH prompt for an AI image generation model to create a realistic fashion photo]" },
         { "brand_name": "[Brand Name 2]", "image_search_query": "[...]" },
         { "brand_name": "[Brand Name 3]", "image_search_query": "[...]" },
         { "brand_name": "[Brand Name 4]", "image_search_query": "[...]" },
@@ -139,22 +144,26 @@ The JSON output MUST follow this exact structure:
   "wash_effect_summary": {
     "title": "4. Washing Effect – Hiệu ứng wash",
     "table": [
-      { "wash_type": "[Name of Wash 1]", "application_effect": "[Description in Vietnamese]" },
+      { "wash_type": "[Name of Wash 1]", "application_effect": "[Description in ENGLISH]" },
       { "wash_type": "[Name of Wash 2]", "application_effect": "[...]" }
     ]
   }
 }
-For 'image_search_query', create a concise, effective query for an image search engine to find a REAL runway, studio, or street style photo. Example: "runway photo of baggy stone wash jeans Nili Lotan Fall 2024".
+For 'image_search_query', create a concise, effective prompt for an AI image generation model to create a high-quality, realistic fashion photo. The prompt should describe the item, the style, and the context, referencing the brand. Example: "Studio photograph of a woman wearing high-waisted, baggy stone wash jeans, style of Nili Lotan Fall 2024 collection, minimalist background".
 `;
   }
     
   const intro = `REQUIRED OUTPUT FORMAT: JSON
 TASK: Perform a business analysis based on the following data.
-Analyze the data and provide a summary of key metrics, a detailed analysis text, and a data array for charts.
-The JSON output must contain three keys: "summary" (string), "analysis" (string), and "charts" (array of objects).
-The "summary" string MUST be a concise summary of the key metrics, with important numbers formatted in bold Markdown (e.g., **1,234,567 VND**).
-The "analysis" and "summary" strings must escape newlines as \\n.
-The "charts" array must contain objects with "type", "title", "unit", and "data" keys.
+Analyze the data and provide a summary, a detailed analysis, and chart data.
+
+**IMPORTANT RULES:**
+1. All textual output ('summary', 'analysis', chart 'title', and data 'name' keys) MUST be in **English**.
+2. The JSON output must contain three keys: "summary" (string), "analysis" (string), and "charts" (array of objects).
+3. The "charts" key is REQUIRED. If no charts are applicable, return an empty array: "charts": [].
+4. The "summary" string MUST be a concise summary in English, with important numbers formatted in bold Markdown (e.g., **1,234,567 VND**).
+5. The "analysis" and "summary" strings must escape newlines as \\n.
+6. Each object within the "data" array MUST have a "name" key (an English string for the X-axis label) and a "value" key (a raw number for the Y-axis value, not a string). Example: { "name": "Revenue", "value": 307750000 }.
 ---
 `;
 
@@ -207,7 +216,6 @@ The "charts" array must contain objects with "type", "title", "unit", and "data"
 
 const processMessagesWithComponents = (messages: ChatMessage[], effectiveTheme: 'light' | 'dark'): ChatMessage[] => {
     return messages.map(msg => {
-        // FIX: Added a role check to prevent assigning components to user messages
         if (msg.role === 'model' && !msg.component) {
             if (msg.task === 'brand-positioning') {
                 return { ...msg, component: <BrandPositioningMap /> };
@@ -236,6 +244,8 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [activeTool, setActiveTool] = useState<{ task: Task; initialData?: any; } | null>(null);
   const [activeView, setActiveView] = useState<'chat' | 'products'>('chat');
+  const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
+  const [input, setInput] = useState('');
 
   // --- UI State ---
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -245,6 +255,7 @@ const App: React.FC = () => {
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [businessProfile, setBusinessProfile] = useState<BusinessProfile | null>(null);
   const [fineTuningExamples, setFineTuningExamples] = useState<FineTuningExample[]>([]);
+  const [shouldFocusInput, setShouldFocusInput] = useState(false);
   
   // --- Dialogs & Popovers ---
   const [isWorkflowOpen, setIsWorkflowOpen] = useState(false);
@@ -328,7 +339,6 @@ const App: React.FC = () => {
       localStorage.setItem(ACTIVE_CONVERSATION_ID_KEY, activeConversationId);
       setIsLoading(true);
       apiService.loadMessages(activeConversationId).then(messages => {
-        // Process messages to re-attach non-serializable components
         const processedMessages = processMessagesWithComponents(messages, effectiveTheme);
         setActiveConversationMessages(processedMessages);
         setIsLoading(false);
@@ -352,6 +362,7 @@ const App: React.FC = () => {
       }
       if (e.key === 'Escape') {
         setIsFindBarVisible(false);
+        setEditingMessageId(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -377,19 +388,17 @@ const App: React.FC = () => {
   
   const filteredMessages = useMemo(() => {
       if (!sourceFilter) return activeConversationMessages;
-      // Show user messages that preceded a filtered model message, and the model messages themselves.
       const filtered: ChatMessage[] = [];
       for(let i = 0; i < activeConversationMessages.length; i++) {
           const msg = activeConversationMessages[i];
           if(msg.role === 'model' && msg.sources?.some(s => s.uri === sourceFilter)) {
-              // Find the preceding user message(s)
               for(let j = i - 1; j >= 0; j--) {
                   const prevMsg = activeConversationMessages[j];
                   if(prevMsg.role === 'user') {
                       if(!filtered.includes(prevMsg)) {
                           filtered.push(prevMsg);
                       }
-                      break; // Found the direct user prompt, stop searching back
+                      break; 
                   }
               }
               filtered.push(msg);
@@ -426,7 +435,7 @@ const App: React.FC = () => {
   }, []);
 
   const handleDeleteConversation = useCallback(async (id: string) => {
-    if (Object.keys(conversations).length <= 1) return; // Can't delete the last one
+    if (Object.keys(conversations).length <= 1) return; 
     
     setConversations(prev => {
       const newState = { ...prev };
@@ -495,11 +504,26 @@ const App: React.FC = () => {
     async (userInput: string, image?: { file: File; dataUrl: string }, analysisPayload?: { params: Record<string, any>; task: Task }) => {
       if (isLoading) return;
 
+      let finalPrompt = userInput;
       let userMessage: ChatMessage = { role: 'user', content: userInput };
+
       if (image) userMessage.image = image.dataUrl;
+      
+      const isAnalysis = !!analysisPayload;
+
       if(analysisPayload) {
         userMessage.analysisParams = analysisPayload.params;
         userMessage.task = analysisPayload.task;
+        finalPrompt = buildAnalysisPrompt(analysisPayload.task, analysisPayload.params);
+        userMessage.rawPrompt = finalPrompt;
+        // Don't translate analysis prompts as they are already built in English
+      } else {
+        const englishPrompt = await translateText(userInput, 'vi', 'en');
+        if (englishPrompt && englishPrompt.toLowerCase() !== userInput.toLowerCase()) {
+            finalPrompt = englishPrompt;
+            userMessage.isTranslated = true;
+            userMessage.originalContent = userInput;
+        }
       }
       
       const updatedMessages = [...activeConversationMessages, userMessage];
@@ -509,7 +533,6 @@ const App: React.FC = () => {
       const modelResponse: ChatMessage = { role: 'model', content: '' };
       setActiveConversationMessages(prev => [...prev, modelResponse]);
       
-      // --- Special handling for Brand Positioning ---
       if (analysisPayload?.task === 'brand-positioning') {
           setActiveConversationMessages(prev => {
               const newMessages = [...prev];
@@ -526,48 +549,7 @@ const App: React.FC = () => {
           return;
       }
       
-      const competitors = analysisPayload?.params?.competitors;
-      const hasCompetitors = competitors && Array.isArray(competitors) && competitors.length > 0;
-      
-      if(analysisPayload && !hasCompetitors) {
-          const { task, params } = analysisPayload;
-          let localResult: AnalysisResult | null = null;
-          
-          if (task === 'profit-analysis') localResult = businessService.buildProfitAnalysis(businessProfile, params);
-          if (task === 'promo-price') localResult = businessService.buildPromoAnalysis(businessProfile, params);
-          if (task === 'group-price') localResult = businessService.buildGroupPriceAnalysis(businessProfile, params);
-          
-          if (localResult) {
-              setActiveConversationMessages(prev => {
-                  const newMessages = [...prev];
-                  const lastMsg = newMessages[newMessages.length - 1];
-                  if (lastMsg.role === 'model') {
-                    lastMsg.content = localResult.analysis;
-                    lastMsg.charts = localResult.charts.map(c => ({...c, component: AnalysisChart}));
-                    lastMsg.analysisParams = params;
-                    lastMsg.task = task;
-                  }
-                  return newMessages;
-              });
-              setIsLoading(false);
-              playSound(messageAudio, soundEnabled);
-              return;
-          }
-      }
-      
-      let finalPrompt = userInput;
-      if (analysisPayload) {
-          finalPrompt = buildAnalysisPrompt(analysisPayload.task, analysisPayload.params);
-      }
-      
-      const userMessageForHistory = {...userMessage, content: finalPrompt};
-      
-      const translatedPrompt = await translateText(finalPrompt, 'vi', 'en');
-      if (translatedPrompt && translatedPrompt !== finalPrompt) {
-          userMessageForHistory.isTranslated = true;
-          userMessageForHistory.originalContent = finalPrompt;
-          userMessageForHistory.content = translatedPrompt;
-      }
+      const userMessageForHistory = {...userMessage, content: finalPrompt, rawPrompt: finalPrompt};
 
       abortControllerRef.current = new AbortController();
       const signal = abortControllerRef.current.signal;
@@ -606,77 +588,113 @@ const App: React.FC = () => {
           if (chunk.isFinal) {
             playSound(messageAudio, soundEnabled);
             
+            const originalEnglishResponse = accumulatedText;
+            
+            const suggestionRegex = /\[SUGGESTION\](.*?)\[\/SUGGESTION\]/g;
+            const englishSuggestions: string[] = [];
+            originalEnglishResponse.replace(suggestionRegex, (match, suggestionText) => {
+                if (suggestionText) englishSuggestions.push(suggestionText.trim());
+                return '';
+            });
+            
+            const translatedSuggestions = await Promise.all(
+                englishSuggestions.map(s => translateText(s, 'en', 'vi'))
+            );
+            const finalSuggestions = translatedSuggestions.filter((s): s is string => !!s);
+
             let finalMessage: ChatMessage = {
                 role: 'model',
-                content: accumulatedText,
+                content: '',
                 sources: chunk.sources,
                 performance: chunk.performanceMetrics,
                 analysisParams: analysisPayload?.params,
                 task: analysisPayload?.task,
+                suggestions: finalSuggestions.length > 0 ? finalSuggestions : undefined,
+                isTranslated: false,
+                originalContent: originalEnglishResponse.replace(suggestionRegex, '').trim(),
             };
-
-            // Post-process for JSON analysis
+            
+            let isJsonAnalysis = false;
             try {
-                if (finalMessage.role === 'model' && finalMessage.task && (finalMessage.content.includes('{') || finalMessage.content.includes('```json'))) {
-                    
-                    let jsonString = finalMessage.content.replace(/```json\n?/g, "").replace(/```/g, "").trim();
+                const containsJson = originalEnglishResponse.includes('{') && originalEnglishResponse.includes('}');
+                if (finalMessage.role === 'model' && finalMessage.task && containsJson) {
+                    isJsonAnalysis = true;
+                    let jsonString = originalEnglishResponse;
+                    const jsonBlockMatch = jsonString.match(/```(?:json)?\s*(\{[\s\S]*\})\s*```/);
+                    if (jsonBlockMatch && jsonBlockMatch[1]) {
+                        jsonString = jsonBlockMatch[1];
+                    } else {
+                        const firstBrace = jsonString.indexOf('{');
+                        const lastBrace = jsonString.lastIndexOf('}');
+                        if (firstBrace !== -1 && lastBrace > firstBrace) {
+                            jsonString = jsonString.substring(firstBrace, lastBrace + 1);
+                        } else {
+                            throw new Error("Valid JSON object not found in the AI response.");
+                        }
+                    }
 
                     if(finalMessage.task === 'market-research') {
                         const marketData = JSON.parse(jsonString);
-                        finalMessage.content = `Đang tìm hình ảnh minh họa cho ${marketData.trend_sections?.length || 0} xu hướng...`;
+                        
+                        if (marketData.trend_sections) {
+                            await Promise.all(marketData.trend_sections.map(async (section: any) => {
+                                if (section.description) {
+                                    section.description = (await translateText(section.description, 'en', 'vi')) || section.description;
+                                }
+                            }));
+                        }
+                        if (marketData.wash_effect_summary?.table) {
+                            await Promise.all(marketData.wash_effect_summary.table.map(async (row: any) => {
+                                if (row.application_effect) {
+                                    row.application_effect = (await translateText(row.application_effect, 'en', 'vi')) || row.application_effect;
+                                }
+                            }));
+                        }
+                        
+                        finalMessage.content = ''; // No main content, component will render
                         finalMessage.component = <MarketResearchReport data={marketData} theme={effectiveTheme} />;
                         finalMessage.marketResearchData = marketData;
-                        
-                        // Async update message with found images
-                        setActiveConversationMessages(prev => prev.map((msg, i) => i === prev.length - 1 ? (finalMessage as ChatMessage) : msg));
-
-                        if (marketData.trend_sections && Array.isArray(marketData.trend_sections)) {
-                            for (const section of marketData.trend_sections) {
-                                if (section.key_items && Array.isArray(section.key_items)) {
-                                    await Promise.all(section.key_items.map(async (item: any) => {
-                                        if (item.image_search_query) {
-                                            const imageUrl = await findImageFromSearchQuery(item.image_search_query);
-                                            if (imageUrl) {
-                                                item.image_url = imageUrl;
-                                                // Re-render with the new image
-                                                setActiveConversationMessages(prev => {
-                                                    const newMessages = [...prev];
-                                                    const targetMsg = newMessages.find(m => m.id === finalMessage.id);
-                                                    if(targetMsg && targetMsg.role === 'model' && targetMsg.marketResearchData) {
-                                                        targetMsg.component = <MarketResearchReport data={targetMsg.marketResearchData} theme={effectiveTheme} />;
-                                                    }
-                                                    return newMessages;
-                                                });
-                                            }
-                                        }
-                                    }));
-                                }
-                            }
-                        }
-                         finalMessage.content = '';
-
-                    } else {
+                        finalMessage.isTranslated = true;
+                    } else { 
                         const data = JSON.parse(jsonString);
-                        const unescapedSummary = data.summary ? data.summary.replace(/\\n/g, '\n') : '';
-                        const unescapedAnalysis = data.analysis ? data.analysis.replace(/\\n/g, '\n') : 'Không có phân tích.';
-                        finalMessage.summary = (await translateText(unescapedSummary, 'en', 'vi') || unescapedSummary);
-                        finalMessage.content = (await translateText(unescapedAnalysis, 'en', 'vi') || unescapedAnalysis);
-                        const translatedCharts = await translateChartData(data.charts);
-                        finalMessage.charts = translatedCharts.map((c: any) => ({...c, component: AnalysisChart}));
-                    }
-                } else {
-                     const translatedFinal = await translateText(finalMessage.content, 'en', 'vi');
-                     if (translatedFinal) {
-                         finalMessage.isTranslated = true;
-                         finalMessage.originalContent = finalMessage.content;
-                         finalMessage.content = translatedFinal;
-                     }
-                }
+                        
+                        const [translatedSummary, translatedAnalysis] = await Promise.all([
+                            translateText(data.summary, 'en', 'vi'),
+                            translateText(data.analysis, 'en', 'vi')
+                        ]);
+                        
+                        finalMessage.summary = (translatedSummary || data.summary)?.replace(/\\n/g, '\n');
+                        finalMessage.content = (translatedAnalysis || data.analysis)?.replace(/\\n/g, '\n');
 
+                        const translatedCharts = await Promise.all((data.charts || []).map(async (chart: any) => {
+                            const translatedTitle = await translateText(chart.title, 'en', 'vi');
+                            const translatedData = await Promise.all((chart.data || []).map(async (point: any) => ({
+                                ...point,
+                                name: (await translateText(point.name, 'en', 'vi')) || point.name
+                            })));
+                            return { ...chart, title: translatedTitle || chart.title, data: translatedData };
+                        }));
+
+                        const sanitizedCharts = sanitizeChartData(translatedCharts);
+                        finalMessage.charts = sanitizedCharts.map((c: any) => ({...c, component: AnalysisChart}));
+                        finalMessage.isTranslated = true;
+                    }
+                }
             } catch(e) {
-                console.error("Error post-processing AI response:", e);
-                if (finalMessage.role === 'model') {
-                  finalMessage.content += "\n\n(Lỗi: Không thể phân tích dữ liệu trả về từ AI.)";
+                console.error("Error post-processing AI JSON response:", e);
+                isJsonAnalysis = false; // Fallback to plain text handling
+            }
+            
+            if (!isJsonAnalysis) {
+                const textToTranslate = originalEnglishResponse.replace(suggestionRegex, '').trim();
+                const vietnameseResponse = await translateText(textToTranslate, 'en', 'vi');
+                if (vietnameseResponse && vietnameseResponse.toLowerCase() !== textToTranslate.toLowerCase()) {
+                    finalMessage.content = vietnameseResponse;
+                    finalMessage.isTranslated = true;
+                } else {
+                    finalMessage.content = textToTranslate;
+                    finalMessage.isTranslated = false;
+                    finalMessage.originalContent = undefined; // No original if it's not translated
                 }
             }
             
@@ -716,9 +734,14 @@ const App: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [isLoading, activeConversationMessages, soundEnabled, typingAudio, messageAudio, businessProfile, effectiveTheme]
+    [isLoading, activeConversationMessages, soundEnabled, typingAudio, messageAudio, effectiveTheme]
   );
   
+  const handleOnMessageSend = (message: string, image?: { file: File; dataUrl: string }) => {
+    sendMessage(message, image);
+    setInput('');
+  };
+
   const handleSendAnalysis = (task: Task, params: Record<string, any>) => {
       setActiveTool(null);
       const userMessage = taskTitles[task];
@@ -735,9 +758,15 @@ const App: React.FC = () => {
         const userMessage = activeConversationMessages[userMessageIndex];
         const historyUpToUserMessage = activeConversationMessages.slice(0, userMessageIndex);
         setActiveConversationMessages(historyUpToUserMessage);
-        sendMessage(userMessage.content, userMessage.image ? { file: new File([], ''), dataUrl: userMessage.image } : undefined, { task: userMessage.task!, params: userMessage.analysisParams! });
+        const originalUserInput = userMessage.originalContent || userMessage.content;
+        sendMessage(originalUserInput, userMessage.image ? { file: new File([], ''), dataUrl: userMessage.image } : undefined, userMessage.task ? { task: userMessage.task!, params: userMessage.analysisParams! } : undefined);
     }
   };
+  
+  const handleRefine = useCallback(() => {
+    setInput("Dựa trên câu trả lời trên: ");
+    setShouldFocusInput(true);
+  }, []);
   
   const handleEditAnalysis = (message: ChatMessage) => {
       if (message.task && message.analysisParams) {
@@ -746,6 +775,39 @@ const App: React.FC = () => {
               initialData: message.analysisParams
           });
       }
+  };
+
+  // --- User Message Editing ---
+  const handleInitiateEdit = (messageId: number) => {
+    setEditingMessageId(messageId);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+  };
+
+  const handleSaveAndSubmitEdit = (messageId: number, newContent: string) => {
+    const messageIndex = activeConversationMessages.findIndex(m => m.id === messageId);
+    if (messageIndex === -1) return;
+
+    const originalMessage = activeConversationMessages[messageIndex];
+    if (originalMessage.role === 'user' && originalMessage.content === newContent) {
+        setEditingMessageId(null);
+        return; // No change
+    }
+
+    const historyBeforeEdit = activeConversationMessages.slice(0, messageIndex);
+    
+    setActiveConversationMessages(historyBeforeEdit);
+    setEditingMessageId(null);
+
+    if (originalMessage.role === 'user') {
+        sendMessage(
+            newContent,
+            originalMessage.image ? { file: new File([], ''), dataUrl: originalMessage.image } : undefined,
+            originalMessage.task && originalMessage.analysisParams ? { task: originalMessage.task, params: originalMessage.analysisParams } : undefined
+        );
+    }
   };
 
   // --- Feedback & Fine-tuning ---
@@ -765,21 +827,17 @@ const App: React.FC = () => {
     });
     setFeedbackDialogState({ isOpen: false, message: null, index: null });
     
-    // Check if we should create a fine-tuning example
     const prevUserMessage = activeConversationMessages[feedbackDialogState.index - 1];
     const isCorrectionScenario = 
       feedback.rating <= 3 && 
-      !feedback.correction && // User provides correction in next message
+      !feedback.correction &&
       prevUserMessage?.role === 'user';
       
     if (isCorrectionScenario) {
-      // Logic to wait for next user message and then call createFineTuningExample
-      // This part is complex due to async nature and will be implemented if required.
-      // For now, we save the feedback. If a correction is provided directly, we can use it.
+      // Logic for future implementation
     }
     
     if (feedback.correction) {
-       // A direct correction was provided in the dialog.
        const prevUserMessage = activeConversationMessages[feedbackDialogState.index - 1];
        if (prevUserMessage && prevUserMessage.role === 'user' && message.role === 'model') {
            const idealResponse = await createFineTuningExampleFromCorrection(
@@ -819,7 +877,7 @@ const App: React.FC = () => {
           if (prev.length < 2) {
               return [...prev, index];
           }
-          return [prev[1], index]; // Keep the last one and add the new one
+          return [prev[1], index];
       });
   };
 
@@ -840,7 +898,7 @@ const App: React.FC = () => {
               link.download = filename;
               link.href = dataUrl;
               link.click();
-          } else { // txt
+          } else { 
               const textContent = activeConversationMessages.map(msg => {
                   const prefix = msg.role === 'user' ? '👤 You:' : '🤖 AI:';
                   return `${prefix}\n${msg.content}\n\n${msg.sources ? 'Sources:\n' + msg.sources.map(s => `- ${s.title}: ${s.uri}`).join('\n') + '\n\n' : ''}`;
@@ -910,9 +968,17 @@ const App: React.FC = () => {
               >
                 <MenuIcon className="w-6 h-6" />
               </button>
-              <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                {activeView === 'products' ? 'Quản lý Sản phẩm' : conversations[activeConversationId!]?.title || 'Trò chuyện'}
-              </h1>
+              <div className="flex items-center gap-3">
+                <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                  {activeView === 'products' ? 'Quản lý Sản phẩm' : conversations[activeConversationId!]?.title || 'Trò chuyện'}
+                </h1>
+                {activeView === 'chat' && (
+                  <div className="hidden sm:flex items-center gap-1.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full px-2 py-0.5 text-xs font-semibold">
+                      <BriefcaseIcon className="w-3.5 h-3.5" />
+                      <span>Business AI</span>
+                  </div>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-2">
                 <SourceFilterControl sources={allSources} activeFilter={sourceFilter} onFilterChange={setSourceFilter} />
@@ -951,12 +1017,17 @@ const App: React.FC = () => {
                       onFeedback={handleFeedback}
                       onOpenFeedbackDialog={handleOpenFeedbackDialog}
                       onRegenerate={handleRegenerate}
+                      onRefine={handleRefine}
                       comparisonSelection={comparisonSelection}
                       onToggleCompare={handleToggleCompare}
                       onEditAnalysis={handleEditAnalysis}
                       sourceFilter={sourceFilter}
                       effectiveTheme={effectiveTheme}
                       onSourceFilterChange={setSourceFilter}
+                      editingMessageId={editingMessageId}
+                      onInitiateEdit={handleInitiateEdit}
+                      onCancelEdit={handleCancelEdit}
+                      onSaveEdit={handleSaveAndSubmitEdit}
                     />
                 )}
                  {comparisonSelection.length > 0 && (
@@ -968,7 +1039,9 @@ const App: React.FC = () => {
                     />
                 )}
                 <MessageInput
-                  onSendMessage={sendMessage}
+                  input={input}
+                  setInput={setInput}
+                  onSendMessage={handleOnMessageSend}
                   onSendAnalysis={handleSendAnalysis}
                   isLoading={isLoading}
                   onNewChat={handleNewChat}
@@ -978,6 +1051,8 @@ const App: React.FC = () => {
                   setActiveTool={setActiveTool}
                   onStopGeneration={handleStopGeneration}
                   businessProfile={businessProfile}
+                  shouldFocusInput={shouldFocusInput}
+                  setShouldFocusInput={setShouldFocusInput}
                 />
               </>
           ) : (

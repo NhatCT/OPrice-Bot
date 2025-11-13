@@ -8,15 +8,11 @@ import { GuidedInputForm } from './GuidedInputForm';
 import type { Task, BusinessProfile } from '../types';
 import { DotsVerticalIcon } from './icons/DotsVerticalIcon';
 import { StopIcon } from './icons/StopIcon';
-import { ChartBarIcon } from './icons/ChartBarIcon';
-import { TagIcon } from './icons/TagIcon';
-import { CollectionIcon } from './icons/CollectionIcon';
 import { MicrophoneIcon } from './icons/MicrophoneIcon';
 import { PaperclipIcon } from './icons/PaperclipIcon';
 import { XIcon } from './icons/XIcon';
-import { GlobeAltIcon } from './icons/GlobeAltIcon';
-import { MapIcon } from './icons/MapIcon';
 import { ArchiveBoxIcon } from './icons/ArchiveBoxIcon';
+import { BriefcaseIcon } from './icons/BriefcaseIcon';
 
 
 // TypeScript declarations for the SpeechRecognition API
@@ -75,6 +71,8 @@ interface ActiveTool {
 }
 
 interface MessageInputProps {
+  input: string;
+  setInput: (value: string) => void;
   onSendMessage: (message: string, image?: { file: File; dataUrl: string }) => void;
   onSendAnalysis: (task: Task, params: Record<string, any>) => void;
   isLoading: boolean;
@@ -85,9 +83,13 @@ interface MessageInputProps {
   setActiveTool: (tool: ActiveTool | null) => void;
   onStopGeneration: () => void;
   businessProfile: BusinessProfile | null;
+  shouldFocusInput: boolean;
+  setShouldFocusInput: (value: boolean) => void;
 }
 
 export const MessageInput: React.FC<MessageInputProps> = ({ 
+  input,
+  setInput,
   onSendMessage,
   onSendAnalysis,
   isLoading, 
@@ -98,18 +100,29 @@ export const MessageInput: React.FC<MessageInputProps> = ({
   setActiveTool,
   onStopGeneration,
   businessProfile,
+  shouldFocusInput,
+  setShouldFocusInput,
 }) => {
-  const [input, setInput] = useState('');
   const [image, setImage] = useState<{ file: File; dataUrl: string } | null>(null);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [isToolsMenuOpen, setIsToolsMenuOpen] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [isSpeechSupported, setIsSpeechSupported] = useState(false);
 
   const menuRef = useRef<HTMLDivElement>(null);
+  const toolsMenuRef = useRef<HTMLDivElement>(null);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
   const baseTextOnRecordStart = useRef('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (shouldFocusInput) {
+        inputRef.current?.focus();
+        setShouldFocusInput(false);
+    }
+  }, [shouldFocusInput, setShouldFocusInput]);
+  
   useEffect(() => {
     const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (SpeechRecognitionAPI) {
@@ -124,7 +137,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
         const transcript = lastResult[0].transcript;
 
         if (lastResult.isFinal) {
-          setInput(prev => (baseTextOnRecordStart.current + ' ' + transcript).trim());
+          setInput((baseTextOnRecordStart.current + ' ' + transcript).trim());
         } else {
           setInput((baseTextOnRecordStart.current + ' ' + transcript).trim() + '…');
         }
@@ -132,20 +145,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
 
       recognition.onend = () => {
         setIsRecording(false);
-        setInput(prev => prev.endsWith('…') ? prev.slice(0, -1) : prev);
+        setInput(input.endsWith('…') ? input.slice(0, -1) : input);
       };
 
       recognition.onerror = (event: SpeechRecognitionErrorEvent) => {
-        // Handle specific, expected events first.
         if (event.error === 'no-speech') {
-          // This is a common event when the user clicks the mic but doesn't speak.
-          // Log it for debugging but avoid treating it as a critical error.
           console.log('Speech recognition ended: No speech was detected.');
         } else if (event.error === 'not-allowed') {
           console.error('Speech recognition error: Permission denied.');
           alert('Quyền truy cập micro đã bị từ chối. Vui lòng cho phép trong cài đặt trình duyệt của bạn.');
         } else {
-          // Log any other unexpected errors.
           console.error('Speech recognition error:', event.error);
         }
         setIsRecording(false);
@@ -155,7 +164,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     } else {
       console.warn("Speech recognition not supported in this browser.");
     }
-  }, []);
+  }, [input, setInput]);
 
   const handleToggleRecording = () => {
     if (!recognitionRef.current || isLoading) return;
@@ -188,14 +197,9 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     e.preventDefault();
     if ((input.trim() || image) && !isLoading) {
       onSendMessage(input.trim(), image || undefined);
-      setInput('');
       setImage(null);
       if(fileInputRef.current) fileInputRef.current.value = '';
     }
-  };
-  
-  const handleQuickAction = (prompt: string) => {
-    setInput(prompt);
   };
 
   useEffect(() => {
@@ -203,20 +207,22 @@ export const MessageInput: React.FC<MessageInputProps> = ({
       if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setIsMenuOpen(false);
       }
+      if (toolsMenuRef.current && !toolsMenuRef.current.contains(event.target as Node)) {
+        setIsToolsMenuOpen(false);
+      }
     };
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
   const handleToolSelect = (task: Task) => {
+    setIsToolsMenuOpen(false);
     if (task === 'brand-positioning') {
         onSendAnalysis(task, {});
     } else {
         setActiveTool({ task });
     }
   };
-
-  const quickActionClass = "flex items-center space-x-2 text-sm text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-800/60 hover:bg-slate-100 dark:hover:bg-slate-700/60 rounded-lg px-3 py-2 transition-all duration-200 border border-slate-200 dark:border-slate-700/80 disabled:opacity-50 disabled:cursor-not-allowed hover:shadow-sm hover:-translate-y-0.5";
   
   const baseInputClass = "flex-1 w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 rounded-full px-5 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300 shadow-sm pr-12";
   const recordingInputClass = "border-2 border-blue-500 animate-listening";
@@ -237,31 +243,16 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     );
   }
 
+  const toolMenuItems = [
+    { task: 'profit-analysis', label: 'Phân tích Lợi nhuận', icon: <BriefcaseIcon className="w-5 h-5 text-blue-500" /> },
+    { task: 'promo-price', label: 'Phân tích Khuyến mãi', icon: <BriefcaseIcon className="w-5 h-5 text-green-500" /> },
+    { task: 'group-price', label: 'Phân tích Đồng giá', icon: <BriefcaseIcon className="w-5 h-5 text-purple-500" /> },
+    { task: 'brand-positioning', label: 'Định vị Thương hiệu', icon: <BriefcaseIcon className="w-5 h-5 text-teal-500" /> },
+    { task: 'market-research', label: 'Nghiên cứu Xu hướng', icon: <BriefcaseIcon className="w-5 h-5 text-orange-500" /> },
+  ];
+
   return (
     <div className="p-4 bg-white/70 dark:bg-slate-800/50 backdrop-blur-md border-t border-slate-200 dark:border-slate-700 shrink-0">
-        <div className="flex flex-wrap justify-center gap-2 mb-3">
-             <button onClick={() => handleToolSelect('profit-analysis')} className={quickActionClass} disabled={isLoading}>
-                <ChartBarIcon className="w-4 h-4 text-blue-500" />
-                <span>Phân tích Lợi nhuận</span>
-            </button>
-            <button onClick={() => handleToolSelect('promo-price')} className={quickActionClass} disabled={isLoading}>
-                <TagIcon className="w-4 h-4 text-green-500" />
-                <span>Phân tích Khuyến mãi</span>
-            </button>
-             <button onClick={() => handleToolSelect('group-price')} className={quickActionClass} disabled={isLoading}>
-                <CollectionIcon className="w-4 h-4 text-purple-500" />
-                <span>Phân tích Đồng giá</span>
-            </button>
-             <button onClick={() => handleToolSelect('brand-positioning')} className={quickActionClass} disabled={isLoading}>
-                <MapIcon className="w-4 h-4 text-teal-500" />
-                <span>Định vị Thương hiệu</span>
-            </button>
-            <button onClick={() => handleToolSelect('market-research')} className={quickActionClass} disabled={isLoading}>
-                <GlobeAltIcon className="w-4 h-4 text-orange-500" />
-                <span>Nghiên cứu Xu hướng</span>
-            </button>
-        </div>
-
         <form onSubmit={handleSubmit} className="flex items-center space-x-3">
             <div className="relative" ref={menuRef}>
                 <button type="button" onClick={() => setIsMenuOpen(p => !p)} className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-700/50">
@@ -285,6 +276,22 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                     </div>
                 )}
             </div>
+             <div className="relative" ref={toolsMenuRef}>
+                 <button type="button" onClick={() => setIsToolsMenuOpen(p => !p)} className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-700/50" title="Công cụ Phân tích">
+                     <BriefcaseIcon className="w-5 h-5" />
+                 </button>
+                 {isToolsMenuOpen && (
+                     <div className="absolute bottom-full mb-2 w-64 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg p-2 z-10 animate-fade-in-up">
+                        {toolMenuItems.map(item => (
+                             <button key={item.task} onClick={() => handleToolSelect(item.task as Task)} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">
+                                 {item.icon}
+                                 <span>{item.label}</span>
+                             </button>
+                        ))}
+                     </div>
+                 )}
+             </div>
+
              <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
               <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-700/50" disabled={isLoading} title="Đính kèm ảnh">
                 <PaperclipIcon className="w-5 h-5" />
@@ -306,6 +313,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                     </div>
                 )}
                 <input
+                    ref={inputRef}
                     type="text"
                     value={input}
                     onChange={(e) => setInput(e.target.value)}

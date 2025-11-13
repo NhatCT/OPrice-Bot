@@ -13,17 +13,21 @@ interface ChatWindowProps {
   onFeedback: (messageIndex: number, feedback: 'positive') => void;
   onOpenFeedbackDialog: (message: ChatMessage, index: number) => void;
   onRegenerate: (index: number) => void;
+  onRefine: () => void;
   comparisonSelection: number[];
   onToggleCompare: (index: number) => void;
   onEditAnalysis: (message: ChatMessage) => void;
   sourceFilter: string | null;
-  // FIX: `effectiveTheme` is always resolved to 'light' or 'dark' in the App component. The type `Theme` (which includes 'system') was incorrect.
   effectiveTheme: 'light' | 'dark';
   onSourceFilterChange: (uri: string | null) => void;
+  editingMessageId: number | null;
+  onInitiateEdit: (messageId: number) => void;
+  onSaveEdit: (messageId: number, newContent: string) => void;
+  onCancelEdit: () => void;
 }
 
 export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
-  ({ messages, isLoading, onSuggestionClick, onFeedback, onOpenFeedbackDialog, onRegenerate, comparisonSelection, onToggleCompare, onEditAnalysis, sourceFilter, effectiveTheme, onSourceFilterChange }, ref) => {
+  ({ messages, isLoading, onSuggestionClick, onFeedback, onOpenFeedbackDialog, onRegenerate, onRefine, comparisonSelection, onToggleCompare, onEditAnalysis, sourceFilter, effectiveTheme, onSourceFilterChange, editingMessageId, onInitiateEdit, onSaveEdit, onCancelEdit }, ref) => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -41,6 +45,7 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
               onFeedback={(feedback) => onFeedback(index, feedback)}
               onOpenFeedbackDialog={onOpenFeedbackDialog}
               onRegenerate={onRegenerate}
+              onRefine={onRefine}
               onToggleCompare={onToggleCompare}
               isSelectedForCompare={comparisonSelection.includes(index)}
               onEditAnalysis={onEditAnalysis}
@@ -49,6 +54,10 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
               isLastMessage={index === messages.length - 1}
               isLoading={isLoading}
               onSourceFilterChange={onSourceFilterChange}
+              isEditing={editingMessageId === msg.id}
+              onInitiateEdit={onInitiateEdit}
+              onSaveEdit={onSaveEdit}
+              onCancelEdit={onCancelEdit}
           />
         ))}
         {isLoading && messages[messages.length - 1]?.role !== 'model' && (

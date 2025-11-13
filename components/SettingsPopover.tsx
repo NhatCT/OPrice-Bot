@@ -131,9 +131,6 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                                 <span>Hồ sơ Kinh doanh</span>
                             </button>
                         </div>
-                         <div className="mt-2 text-xs text-slate-500 dark:text-slate-400 p-2">
-                           Tính năng dịch thuật tự động (Việt-Anh) luôn được bật để đảm bảo chất lượng phản hồi tốt nhất từ AI.
-                         </div>
                       </div>
                     </div>
                 )}

@@ -210,7 +210,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const { groups: groupedConversations, ungrouped } = useMemo(() => {
     const groups: Record<string, ConversationMeta[]> = {};
-    const ungrouped: ConversationMeta[] = [];
+    const ungroupedConversations: ConversationMeta[] = [];
 
     filteredConversations.forEach(convo => {
       if (convo.groupId && conversationGroups[convo.groupId]) {
@@ -219,11 +219,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
         }
         groups[convo.groupId].push(convo);
       } else {
-        ungrouped.push(convo);
+        ungroupedConversations.push(convo);
       }
     });
 
-    return { groups, ungrouped };
+    return { groups, ungrouped: ungroupedConversations };
   }, [filteredConversations, conversationGroups]);
 
   const sidebarContent = (
@@ -264,9 +264,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
       <div className="flex-1 overflow-y-auto px-3 space-y-1 pb-3" onDrop={(e) => handleDrop(e, null)} onDragOver={(e) => handleDragOver(e, 'ungrouped')} onDragLeave={handleDragLeave}>
         {/* Render Groups */}
-        {Object.values(conversationGroups).map(group => {
+        {Object.values(conversationGroups).map((group: ConversationGroup) => {
           const convosInGroup = groupedConversations[group.id] || [];
-          if (searchQuery.trim() && convosInGroup.length === 0) return null;
+          if (searchQuery.trim() && convosInGroup.length === 0 && !group.name.toLowerCase().includes(searchQuery.toLowerCase())) return null;
           const isExpanded = expandedGroups[group.id] ?? true;
 
           return (

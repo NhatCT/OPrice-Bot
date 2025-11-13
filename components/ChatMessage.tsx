@@ -21,6 +21,10 @@ import { EllipsisHorizontalIcon } from './icons/EllipsisHorizontalIcon';
 import { TypingIndicator } from './TypingIndicator';
 import { FunnelIcon } from './icons/FunnelIcon';
 import { InformationCircleIcon } from './icons/InformationCircleIcon';
+import { ColorSwatchRenderer } from './ColorSwatchRenderer';
+import { PencilIcon } from './icons/PencilIcon';
+import { DocumentDuplicateIcon } from './icons/DocumentDuplicateIcon';
+import { WandIcon } from './icons/WandIcon';
 
 interface ChatMessageProps {
   message: ChatMessage;
@@ -28,6 +32,7 @@ interface ChatMessageProps {
   onFeedback: (feedback: 'positive') => void;
   onOpenFeedbackDialog: (message: ChatMessage, index: number) => void;
   onRegenerate: (index: number) => void;
+  onRefine: () => void;
   index: number;
   onToggleCompare: (index: number) => void;
   isSelectedForCompare: boolean;
@@ -37,28 +42,97 @@ interface ChatMessageProps {
   isLastMessage: boolean;
   isLoading: boolean;
   onSourceFilterChange: (uri: string | null) => void;
+  isEditing: boolean;
+  onInitiateEdit: (messageId: number) => void;
+  onSaveEdit: (messageId: number, newContent: string) => void;
+  onCancelEdit: () => void;
 }
 
-export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSuggestionClick, onFeedback, onOpenFeedbackDialog, onRegenerate, index, onToggleCompare, isSelectedForCompare, onEditAnalysis, sourceFilter, effectiveTheme, isLastMessage, isLoading, onSourceFilterChange }) => {
+const renderWithColorSwatches = (children: React.ReactNode): React.ReactNode => {
+    return React.Children.map(children, child => {
+        if (typeof child === 'string' && child.match(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/)) {
+            return <ColorSwatchRenderer text={child} />;
+        }
+        if (React.isValidElement(child)) {
+            const props = child.props as { children?: React.ReactNode; [key: string]: any };
+            if (props.children) {
+                const newProps = {
+                    ...props,
+                    children: renderWithColorSwatches(props.children)
+                };
+                return React.cloneElement(child, newProps);
+            }
+        }
+        return child;
+    });
+};
+
+export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSuggestionClick, onFeedback, onOpenFeedbackDialog, onRegenerate, onRefine, index, onToggleCompare, isSelectedForCompare, onEditAnalysis, sourceFilter, effectiveTheme, isLastMessage, isLoading, onSourceFilterChange, isEditing, onInitiateEdit, onSaveEdit, onCancelEdit }) => {
   const [isCopied, setIsCopied] = useState(false);
-  const [isOriginalCopied, setIsOriginalCopied] = useState(false);
+  const [isRawPromptCopied, setIsRawPromptCopied] = useState(false);
   const [feedbackSent, setFeedbackSent] = useState(false);
   const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+  const [editText, setEditText] = useState(message.content);
+  const [showOriginal, setShowOriginal] = useState(false);
   const messageContentRef = useRef<HTMLDivElement>(null);
   const actionsButtonRef = useRef<HTMLDivElement>(null);
+  const editTextAreaRef = useRef<HTMLTextAreaElement>(null);
   
+  useEffect(() => {
+    setEditText(message.content);
+  }, [message.content]);
+  
+  useEffect(() => {
+      if (isEditing && editTextAreaRef.current) {
+          const textarea = editTextAreaRef.current;
+          textarea.focus();
+          textarea.style.height = 'auto';
+          textarea.style.height = `${textarea.scrollHeight}px`;
+      }
+  }, [isEditing]);
+
+  const handleEditTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setEditText(e.target.value);
+      const textarea = e.target;
+      textarea.style.height = 'auto';
+      textarea.style.height = `${textarea.scrollHeight}px`;
+  };
+
+  const handleSaveEdit = () => {
+      if (message.id != null && editText.trim() !== '') {
+          onSaveEdit(message.id, editText);
+      }
+  };
+  
+  const contentToDisplay = showOriginal && message.originalContent ? message.originalContent : message.content;
+  const languageToggleTitle = showOriginal ? "Hiển thị bản dịch" : "Hiển thị bản gốc";
+
   const isModel = message.role === 'model';
-  const hasSuggestions = isModel && message.suggestions && message.suggestions.length > 0;
+  const hasSuggestions = isModel && message.suggestions && message.suggestions.length > 0 && !isLoading && isLastMessage;
   const hasSources = isModel && message.sources && message.sources.length > 0;
   const hasPerformance = isModel && message.performance && message.performance.totalTime > 0;
   const feedbackGiven = !!message.feedback;
   const canCompare = isModel && message.sources && message.sources.length > 0;
   const canEdit = isModel && !!message.analysisParams && !!message.task;
   const canExport = isModel && (!!message.analysisParams || !!message.marketResearchData) && !!message.task;
-  const canCopyOriginal = message.isTranslated && message.originalContent;
   const hasSummary = message.summary && message.summary.trim() !== '';
   const showTypingIndicator = isModel && isLastMessage && isLoading && !message.content && !message.component;
   const showCursor = isModel && isLastMessage && isLoading && !message.component && !!message.content;
+  const isAnalysisTask = isModel && !!message.task && message.task !== 'market-research' && message.task !== 'brand-positioning';
+  
+  const chartsWithData = message.charts?.filter(chart => {
+    if (!chart.data || !Array.isArray(chart.data) || chart.data.length === 0) {
+        return false;
+    }
+    const firstPoint = chart.data[0];
+    if (typeof firstPoint !== 'object' || firstPoint === null) return false;
+    
+    const dataKey = Object.keys(firstPoint).find(key => key !== 'name');
+    if (!dataKey) return false;
+    
+    return chart.data.some((point: any) => point && typeof point[dataKey] === 'number' && Number.isFinite(point[dataKey]));
+  });
+  const noChartsGenerated = isAnalysisTask && (!chartsWithData || chartsWithData.length === 0) && !message.component && !showTypingIndicator;
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -71,23 +145,21 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
   }, []);
 
   const handleCopy = () => {
-    if (!message.content) return;
-    navigator.clipboard.writeText(message.content).then(() => {
+    const textToCopy = showOriginal && message.originalContent ? message.originalContent : message.content;
+    if (!textToCopy) return;
+    navigator.clipboard.writeText(textToCopy).then(() => {
         setIsCopied(true);
         setTimeout(() => setIsCopied(false), 2000);
     }).catch(err => {
         console.error('Failed to copy text: ', err);
     });
   };
-
-  const handleCopyOriginal = () => {
-    if (!canCopyOriginal) return;
-    navigator.clipboard.writeText(message.originalContent!).then(() => {
-        setIsOriginalCopied(true);
-        setIsActionsMenuOpen(false);
-        setTimeout(() => setIsOriginalCopied(false), 2000);
-    }).catch(err => {
-        console.error('Failed to copy original text: ', err);
+  
+  const handleCopyRawPrompt = () => {
+    if (message.role !== 'user' || !message.rawPrompt) return;
+    navigator.clipboard.writeText(message.rawPrompt).then(() => {
+        setIsRawPromptCopied(true);
+        setTimeout(() => setIsRawPromptCopied(false), 2000);
     });
   };
 
@@ -105,15 +177,12 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
     const contentEl = messageContentRef.current;
     if (!contentEl) return '';
     
-    // Temporarily clone the node to modify styles for export without affecting the UI
     const clone = contentEl.cloneNode(true) as HTMLDivElement;
     document.body.appendChild(clone);
     clone.style.width = '800px';
     clone.style.backgroundColor = '#ffffff';
     clone.querySelectorAll('.dark').forEach(el => el.classList.remove('dark'));
 
-
-    // Find and convert all charts to images
     const chartElements = clone.querySelectorAll('.analysis-chart-wrapper');
     const chartImagePromises = Array.from(chartElements).map(async chartEl => {
         try {
@@ -147,7 +216,6 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
               h1 { font-size: 2em; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
               h2 { font-size: 1.5em; margin-top: 30px; }
               .summary { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px; }
-              /* Add styles from MarketResearchReport for consistency */
               .report-section { margin-bottom: 2rem; }
               .report-section-header { display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem; margin-bottom: 1rem; }
               .report-section-header h3 { font-size: 1.25rem; font-weight: 600; margin: 0; }
@@ -219,24 +287,23 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
     URL.revokeObjectURL(url);
   };
 
-
   const markdownComponents: any = {
-      p: ({node, ...props}: any) => <p className="mb-3 last:mb-0 leading-relaxed" {...props} />,
-      h1: ({node, ...props}: any) => <h1 className="text-2xl font-bold mb-4 mt-2" {...props} />,
-      h2: ({node, ...props}: any) => <h2 className="text-xl font-semibold mb-3 mt-1" {...props} />,
-      h3: ({node, ...props}: any) => <h3 className="text-lg font-semibold mb-2" {...props} />,
+      p: ({node, ...props}: any) => <p className="mb-3 last:mb-0 leading-relaxed" {...props}>{renderWithColorSwatches(props.children)}</p>,
+      h1: ({node, ...props}: any) => <h1 className="text-2xl font-bold mb-4 mt-2" {...props}>{renderWithColorSwatches(props.children)}</h1>,
+      h2: ({node, ...props}: any) => <h2 className="text-xl font-semibold mb-3 mt-1" {...props}>{renderWithColorSwatches(props.children)}</h2>,
+      h3: ({node, ...props}: any) => <h3 className="text-lg font-semibold mb-2" {...props}>{renderWithColorSwatches(props.children)}</h3>,
       ul: ({node, ...props}: any) => <ul className="list-disc list-outside space-y-2 mb-3 pl-6" {...props} />,
       ol: ({node, ...props}: any) => <ol className="list-decimal list-outside space-y-2 mb-3 pl-6" {...props} />,
-      li: ({node, ...props}: any) => <li className="pl-1" {...props} />,
+      li: ({node, ...props}: any) => <li className="pl-1" {...props}>{renderWithColorSwatches(props.children)}</li>,
       table: ({node, ...props}: any) => <div className="overflow-x-auto my-4"><table className="table-auto w-full border-collapse border border-slate-300 dark:border-slate-600" {...props} /></div>,
       thead: ({node, ...props}: any) => <thead className="bg-slate-100 dark:bg-slate-700" {...props} />,
       tbody: ({node, ...props}: any) => <tbody {...props} />,
       tr: ({node, ...props}: any) => <tr className="border-b border-slate-200 dark:border-slate-600 last:border-b-0" {...props} />,
-      th: ({node, ...props}: any) => <th className="border border-slate-200 dark:border-slate-600 px-4 py-2 text-left font-semibold text-slate-800 dark:text-slate-200" {...props} />,
-      td: ({node, ...props}: any) => <td className="border border-slate-200 dark:border-slate-600 px-4 py-2 text-slate-700 dark:text-slate-300" {...props} />,
+      th: ({node, ...props}: any) => <th className="border border-slate-200 dark:border-slate-600 px-4 py-2 text-left font-semibold text-slate-800 dark:text-slate-200" {...props}>{renderWithColorSwatches(props.children)}</th>,
+      td: ({node, ...props}: any) => <td className="border border-slate-200 dark:border-slate-600 px-4 py-2 text-slate-700 dark:text-slate-300" {...props}>{renderWithColorSwatches(props.children)}</td>,
       code: ({node, inline, ...props}: any) => {
         if (inline) {
-            return <code className="bg-slate-200 dark:bg-slate-600/50 rounded-sm px-1.5 py-0.5 text-sm font-mono text-blue-800 dark:text-blue-300" {...props} />;
+            return <code className="bg-slate-200 dark:bg-slate-600/50 rounded-sm px-1.5 py-0.5 text-sm font-mono text-blue-800 dark:text-blue-300" {...props}>{renderWithColorSwatches(props.children)}</code>;
         }
         return <code className="font-mono text-sm" {...props} />;
       },
@@ -244,28 +311,65 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
       a: ({node, ...props}: any) => <a className="text-blue-600 dark:text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
   };
   
-  if (!isModel) {
-      return (
-        <div className="flex flex-col items-end animate-message-in">
-          <div className="flex items-end gap-2 flex-row-reverse">
-            <div className="max-w-xl lg:max-w-3xl px-5 py-4 rounded-2xl rounded-br-md text-white shadow-md relative" style={{ background: 'var(--brand-gradient)' }}>
-              {message.isTranslated && (
-                <div className="absolute top-2 right-2 opacity-70" title="Yêu cầu đã được dịch tự động">
-                    <GlobeAltIcon className="w-4 h-4 text-white" />
+  if (message.role === 'user') {
+    return (
+        <div className="flex flex-col items-end animate-message-in group relative">
+            <div className={`flex items-end gap-2 flex-row-reverse ${isEditing ? 'w-full max-w-xl lg:max-w-3xl' : ''}`}>
+                <div 
+                    className={`max-w-xl lg:max-w-3xl rounded-2xl shadow-md relative ${isEditing ? 'w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3' : 'px-5 py-4 rounded-br-md text-white'}`}
+                    style={!isEditing ? { background: 'var(--brand-gradient)' } : {}}
+                >
+                    {isEditing ? (
+                        <>
+                            <textarea
+                                ref={editTextAreaRef}
+                                value={editText}
+                                onChange={handleEditTextChange}
+                                className="w-full bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none resize-none text-sm leading-relaxed"
+                                rows={1}
+                            />
+                            <div className="flex justify-end items-center gap-2 mt-2">
+                                <button onClick={onCancelEdit} className="px-3 py-1 text-sm font-semibold rounded-md bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors">Hủy</button>
+                                <button onClick={handleSaveEdit} className="px-3 py-1 text-sm font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-500 transition-colors">Lưu & Gửi</button>
+                            </div>
+                        </>
+                    ) : (
+                        <>
+                            {message.image && (
+                                <img src={message.image} alt="User upload" className="mb-3 rounded-lg max-h-60" />
+                            )}
+                            <div className="prose prose-sm prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none text-white leading-relaxed">
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ ...markdownComponents, a: ({ node, ...props }: any) => <a className="text-blue-200 hover:underline" target="_blank" rel="noopener noreferrer" {...props}>{renderWithColorSwatches(props.children)}</a> }}>
+                                    {contentToDisplay}
+                                </ReactMarkdown>
+                            </div>
+                        </>
+                    )}
                 </div>
-              )}
-              {message.image && (
-                <img src={message.image} alt="User upload" className="mb-3 rounded-lg max-h-60" />
-              )}
-              <div className="prose prose-sm prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none text-white leading-relaxed">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{...markdownComponents, a: ({node, ...props}: any) => <a className="text-blue-200 hover:underline" target="_blank" rel="noopener noreferrer" {...props} /> }}>
-                  {message.content}
-                </ReactMarkdown>
-              </div>
             </div>
-          </div>
+            {!isEditing && (message.id != null || message.rawPrompt || message.isTranslated) && (
+                <div className="absolute -bottom-1 right-0 w-full h-12 flex items-start justify-end pr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                     <div className="flex items-center gap-1 bg-white/50 dark:bg-slate-700/50 backdrop-blur-md border border-slate-200 dark:border-slate-600 rounded-full shadow-sm px-2 py-1">
+                          {message.isTranslated && (
+                            <button onClick={() => setShowOriginal(p => !p)} className="p-1.5 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label={languageToggleTitle} title={languageToggleTitle}>
+                                <GlobeAltIcon className="w-5 h-5" />
+                            </button>
+                          )}
+                          {message.rawPrompt && (
+                             <button onClick={handleCopyRawPrompt} className={`p-1.5 rounded-full transition-all duration-200 ${isRawPromptCopied ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'}`} aria-label={isRawPromptCopied ? "Đã sao chép" : "Sao chép câu lệnh"} title={isRawPromptCopied ? "Đã sao chép!" : "Sao chép câu lệnh"}>
+                                {isRawPromptCopied ? <CheckIcon className="w-5 h-5" /> : <DocumentDuplicateIcon className="w-5 h-5" />}
+                            </button>
+                          )}
+                         {message.id != null && (
+                            <button onClick={() => onInitiateEdit(message.id!)} className="p-1.5 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Chỉnh sửa" title="Chỉnh sửa">
+                                <PencilIcon className="w-5 h-5" />
+                            </button>
+                         )}
+                    </div>
+                </div>
+            )}
         </div>
-      );
+    );
   }
 
   // --- RENDER MODEL MESSAGE ---
@@ -275,11 +379,6 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
 
         <div className="flex flex-col w-full items-start max-w-xl lg:max-w-4xl group relative">
             <div className="w-full bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700/60 rounded-2xl shadow-sm relative">
-                 {message.isTranslated && (
-                    <div className="absolute top-2 right-2" title="Phản hồi đã được dịch tự động">
-                        <GlobeAltIcon className="w-4 h-4 text-slate-400 dark:text-slate-500" />
-                    </div>
-                )}
                  <div className="p-5" ref={messageContentRef}>
                     {showTypingIndicator ? (
                         <TypingIndicator />
@@ -299,21 +398,27 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                                 </div>
                             )}
                             {message.component}
-                            {message.charts && message.charts.length > 0 && (
+                            {chartsWithData && chartsWithData.length > 0 && (
                                 <div className="my-4 space-y-4">
-                                    {message.charts.map((chart: any, i: number) =>
+                                    {chartsWithData.map((chart: any, i: number) =>
                                         chart.component ? (
                                             <chart.component key={i} chart={chart} theme={effectiveTheme} />
                                         ) : null
                                     )}
                                 </div>
                             )}
-                            {(message.content || showCursor) && (
+                            {(contentToDisplay || showCursor) && (
                                 <div className="prose prose-sm dark:prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none">
                                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                                        {message.content || ''}
+                                        {contentToDisplay || ''}
                                     </ReactMarkdown>
                                     {showCursor && <span className="blinking-cursor">▋</span>}
+                                </div>
+                            )}
+                            {noChartsGenerated && (
+                                <div className="mt-4 p-3 bg-slate-100 dark:bg-slate-700/50 border border-dashed border-slate-300 dark:border-slate-600 rounded-lg flex items-center gap-3 text-sm text-slate-600 dark:text-slate-400">
+                                    <InformationCircleIcon className="w-5 h-5 flex-shrink-0" />
+                                    <span>Không có biểu đồ nào được tạo cho phân tích này.</span>
                                 </div>
                             )}
                         </>
@@ -386,6 +491,11 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
              {/* Actions Toolbar */}
             <div className="absolute -bottom-1 left-0 w-full h-12 flex items-start justify-start pl-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                 <div className="flex items-center gap-1 bg-white/50 dark:bg-slate-700/50 backdrop-blur-md border border-slate-200 dark:border-slate-600 rounded-full shadow-sm px-2 py-1">
+                    {message.isTranslated && (
+                        <button onClick={() => setShowOriginal(p => !p)} className="p-1.5 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label={languageToggleTitle} title={languageToggleTitle}>
+                            <GlobeAltIcon className="w-5 h-5" />
+                        </button>
+                    )}
                     <button onClick={() => handleThumbClick('positive')} disabled={feedbackGiven} className={`p-1.5 rounded-full transition-colors duration-200 ${message.feedback ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Phản hồi tốt" title="Phản hồi tốt">
                         <ThumbUpIcon className="w-5 h-5" />
                     </button>
@@ -399,21 +509,15 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                     <button onClick={() => onRegenerate(index)} className="p-1.5 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Tạo lại" title="Tạo lại">
                         <ArrowPathIcon className="w-5 h-5" />
                     </button>
+                     <button onClick={onRefine} className="p-1.5 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Chỉnh sửa câu trả lời" title="Chỉnh sửa câu trả lời">
+                        <WandIcon className="w-5 h-5" />
+                    </button>
                      <div className="relative" ref={actionsButtonRef}>
                         <button onClick={() => setIsActionsMenuOpen(p => !p)} className="p-1.5 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Hành động khác" title="Hành động khác">
                             <EllipsisHorizontalIcon className="w-5 h-5" />
                         </button>
                         {isActionsMenuOpen && (
                              <div className="absolute bottom-full right-0 mb-2 w-64 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg p-2 z-10 animate-popover-enter">
-                                {canCopyOriginal && (
-                                     <button onClick={handleCopyOriginal} className="w-full flex items-start gap-3 text-left px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-600/70 rounded-md transition-colors">
-                                      <GlobeAltIcon className="w-5 h-5 mt-0.5 text-slate-500 dark:text-slate-400" />
-                                      <div>
-                                          <p className="text-sm font-semibold">{isOriginalCopied ? 'Đã sao chép!' : 'Sao chép Nội dung Gốc'}</p>
-                                          <p className="text-xs text-slate-500 dark:text-slate-400">Sao chép phản hồi gốc (tiếng Anh).</p>
-                                      </div>
-                                  </button>
-                                )}
                                 {canEdit && (
                                   <button onClick={() => {onEditAnalysis(message); setIsActionsMenuOpen(false);}} className="w-full flex items-start gap-3 text-left px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-600/70 rounded-md transition-colors">
                                       <PencilSquareIcon className="w-5 h-5 mt-0.5 text-slate-500 dark:text-slate-400" />

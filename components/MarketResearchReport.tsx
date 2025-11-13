@@ -29,52 +29,78 @@ const ReportSection: React.FC<{
     );
 };
 
-const ImageWithStatus: React.FC<{ src?: string; alt: string }> = ({ src, alt }) => {
-  const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
+interface ImageWithStatusProps {
+    srcs?: string[];
+    alt: string;
+}
 
-  useEffect(() => {
-    if (src) {
-        setStatus('loading');
-    } else {
-        // If no src is provided initially, it's in a pre-loading state
-        setStatus('loading');
-    }
-  }, [src]);
+const ImageWithStatus: React.FC<ImageWithStatusProps> = ({ srcs, alt }) => {
+    const [currentSrcIndex, setCurrentSrcIndex] = useState(0);
+    const [status, setStatus] = useState<'loading' | 'loaded' | 'error'>('loading');
 
-  if (!src) {
-      return (
-        <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/50">
-            <div className="animate-pulse flex flex-col items-center justify-center">
-                <PhotoIcon className="w-12 h-12 opacity-50" />
-                <p className="text-xs mt-2">Đang tìm ảnh...</p>
+    const currentSrc = srcs?.[currentSrcIndex];
+
+    useEffect(() => {
+        // Reset state when srcs array changes
+        setCurrentSrcIndex(0);
+        if (srcs && srcs.length > 0) {
+            setStatus('loading');
+        } else {
+            setStatus('error'); // No sources provided
+        }
+    }, [srcs]);
+
+    const handleError = () => {
+        // If there's another source to try, switch to it
+        if (srcs && currentSrcIndex < srcs.length - 1) {
+            setCurrentSrcIndex(prevIndex => prevIndex + 1);
+            setStatus('loading'); // Set to loading for the new source
+        } else {
+            // No more sources to try
+            setStatus('error');
+        }
+    };
+
+    if (!srcs || srcs.length === 0) {
+        return (
+            <div className="w-full h-full flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 bg-slate-100 dark:bg-slate-800/50">
+                <div className="animate-pulse flex flex-col items-center justify-center">
+                    <PhotoIcon className="w-12 h-12 opacity-50" />
+                    <p className="text-xs mt-2">Đang chuẩn bị ảnh...</p>
+                </div>
             </div>
-        </div>
-      )
-  }
+        );
+    }
 
-  return (
-    <div className="w-full h-full flex items-center justify-center relative bg-slate-100 dark:bg-slate-800/50">
-      {status === 'loading' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 animate-pulse">
-          <PhotoIcon className="w-12 h-12" />
-          <p className="text-xs mt-2">Đang tải ảnh...</p>
+    if (status === 'error') {
+        return (
+            <div className="w-full h-full flex flex-col items-center justify-center text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-4 text-center">
+                <XCircleIcon className="w-12 h-12 opacity-60" />
+                <p className="text-xs mt-2 font-medium">Không tìm thấy ảnh</p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="w-full h-full flex items-center justify-center relative bg-slate-100 dark:bg-slate-800/50">
+            {status === 'loading' && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 dark:text-slate-500 animate-pulse">
+                    <PhotoIcon className="w-12 h-12" />
+                    <p className="text-xs mt-2">Đang tải ảnh...</p>
+                </div>
+            )}
+            {currentSrc && (
+                <img
+                    key={currentSrc} // Add key to force re-render when src changes
+                    src={currentSrc}
+                    alt={alt}
+                    onLoad={() => setStatus('loaded')}
+                    onError={handleError}
+                    className={`w-full h-full object-cover transition-opacity duration-300 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
+                />
+            )}
         </div>
-      )}
-      {status === 'error' && (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-red-500 dark:text-red-400 bg-red-50 dark:bg-red-900/20 p-4 text-center">
-          <XCircleIcon className="w-12 h-12 opacity-60" />
-          <p className="text-xs mt-2 font-medium">Không tìm thấy ảnh</p>
-        </div>
-      )}
-      <img
-        src={src}
-        alt={alt}
-        onLoad={() => setStatus('loaded')}
-        onError={() => setStatus('error')}
-        className={`w-full h-full object-cover transition-opacity duration-300 ${status === 'loaded' ? 'opacity-100' : 'opacity-0'}`}
-      />
-    </div>
-  );
+    );
 };
 
 
@@ -96,7 +122,7 @@ export const MarketResearchReport: React.FC<MarketResearchReportProps> = ({ data
                 >
                   <div className="aspect-[3/4]">
                     <ImageWithStatus
-                        src={item.image_url}
+                        srcs={item.image_urls}
                         alt={item.brand_name}
                     />
                   </div>

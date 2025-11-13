@@ -121,13 +121,13 @@ export const saveMessages = async (id: string, messages: ChatMessage[]): Promise
      try {
         const conversations = getAllConversations();
         if (!conversations[id]) {
-            conversations[id] = { meta: { id, title: "Cuộc trò chuyện mới" }, messages: [] };
+            conversations[id] = { meta: { id, title: "Cuộc trò chuyện mới", groupId: null }, messages: [] };
         };
 
         let nextMessageId = 1;
-        const existingIds = messages.map(m => m.id).filter(Boolean);
+        const existingIds = messages.map(m => m.id).filter(id => id != null) as number[];
         if(existingIds.length > 0) {
-            nextMessageId = Math.max(...existingIds as number[]) + 1;
+            nextMessageId = Math.max(...existingIds) + 1;
         }
 
         const messagesWithIds = messages.map(msg => {
@@ -135,7 +135,7 @@ export const saveMessages = async (id: string, messages: ChatMessage[]): Promise
             
             let finalMsg: Partial<ChatMessage> = {
                 ...restOfMsg,
-                id: msg.id ?? (msg.role ==='model' ? nextMessageId++ : undefined)
+                id: msg.id ?? nextMessageId++
             };
 
             // Strip large, non-essential data before saving to prevent quota errors
