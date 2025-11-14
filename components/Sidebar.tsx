@@ -234,6 +234,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <h1 className="font-bold text-2xl">V64 Assistant</h1>
         </div>
         <button
+          id="tour-step-1-new-chat"
           onClick={onNewChat}
           className="p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
           title="Trò chuyện mới"
@@ -255,7 +256,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      <div className="p-3">
+      <div className="p-3" id="tour-step-3-view-switcher">
         <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-lg">
             <button onClick={() => onViewChange('chat')} className={`w-1/3 py-3 text-2xl font-semibold rounded-md transition-colors ${activeView === 'chat' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'hover:bg-slate-300/50 dark:hover:bg-slate-700/50'}`}>Trò chuyện</button>
             <button onClick={() => onViewChange('products')} className={`w-1/3 py-3 text-2xl font-semibold rounded-md transition-colors ${activeView === 'products' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'hover:bg-slate-300/50 dark:hover:bg-slate-700/50'}`}>Sản phẩm</button>
@@ -263,7 +264,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-3 space-y-1 pb-3" onDrop={(e) => handleDrop(e, null)} onDragOver={(e) => handleDragOver(e, 'ungrouped')} onDragLeave={handleDragLeave}>
+      <div id="tour-step-2-convo-list" className="flex-1 overflow-y-auto px-3 space-y-1 pb-3" onDrop={(e) => handleDrop(e, null)} onDragOver={(e) => handleDragOver(e, 'ungrouped')} onDragLeave={handleDragLeave}>
         {/* Render Groups */}
         {Object.values(conversationGroups).map((group: ConversationGroup) => {
           const convosInGroup = groupedConversations[group.id] || [];
@@ -289,67 +290,65 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   <ChevronDownIcon className={`w-5 h-5 transition-transform ${isExpanded ? '' : '-rotate-90'}`} />
                 </div>
               </div>
-              {isExpanded && (
-                <div className="pl-4 space-y-1">
-                  {convosInGroup.map(convo => (
-                    <ConversationItem 
-                      key={convo.id}
-                      convo={convo}
-                      isActive={convo.id === activeConversationId}
-                      isEditing={editingConvoId === convo.id}
-                      renameInput={renameInput}
-                      inputRef={inputRef}
-                      onSelect={() => onSelectConversation(convo.id)}
-                      onRename={handleRenameConvo}
-                      setRenameInput={setRenameInput}
-                      handleKeyDown={handleKeyDown}
-                      onStartRename={() => handleStartRenameConvo(convo.id, convo.title)}
-                      onDelete={() => onDeleteConversation(convo.id)}
-                      setEditingConvoId={setEditingConvoId}
-                      onDragStart={handleDragStart}
-                    />
-                  ))}
-                </div>
-              )}
+              {isExpanded && convosInGroup.map(convo => (
+                <ConversationItem
+                  key={convo.id}
+                  convo={convo}
+                  isActive={convo.id === activeConversationId}
+                  isEditing={editingConvoId === convo.id}
+                  renameInput={renameInput}
+                  inputRef={inputRef}
+                  onSelect={() => onSelectConversation(convo.id)}
+                  onRename={handleRenameConvo}
+                  setRenameInput={setRenameInput}
+                  handleKeyDown={handleKeyDown}
+                  onStartRename={() => handleStartRenameConvo(convo.id, convo.title)}
+                  onDelete={() => onDeleteConversation(convo.id)}
+                  setEditingConvoId={setEditingConvoId}
+                  onDragStart={handleDragStart}
+                />
+              ))}
             </div>
-          )
+          );
         })}
-
-        {/* Render Ungrouped Conversations */}
-        <div className={`p-1 rounded-lg ${dragOverTarget === 'ungrouped' ? 'bg-blue-100 dark:bg-blue-900/40' : ''}`}>
-            {ungrouped.map(convo => (
-            <ConversationItem 
-                key={convo.id}
-                convo={convo}
-                isActive={convo.id === activeConversationId}
-                isEditing={editingConvoId === convo.id}
-                renameInput={renameInput}
-                inputRef={inputRef}
-                onSelect={() => onSelectConversation(convo.id)}
-                onRename={handleRenameConvo}
-                setRenameInput={setRenameInput}
-                handleKeyDown={handleKeyDown}
-                onStartRename={() => handleStartRenameConvo(convo.id, convo.title)}
-                onDelete={() => onDeleteConversation(convo.id)}
-                setEditingConvoId={setEditingConvoId}
-                onDragStart={handleDragStart}
+        
+        {/* Render Ungrouped */}
+        {ungrouped.map(convo => (
+            <ConversationItem
+              key={convo.id}
+              convo={convo}
+              isActive={convo.id === activeConversationId}
+              isEditing={editingConvoId === convo.id}
+              renameInput={renameInput}
+              inputRef={inputRef}
+              onSelect={() => onSelectConversation(convo.id)}
+              onRename={handleRenameConvo}
+              setRenameInput={setRenameInput}
+              handleKeyDown={handleKeyDown}
+              onStartRename={() => handleStartRenameConvo(convo.id, convo.title)}
+              onDelete={() => onDeleteConversation(convo.id)}
+              setEditingConvoId={setEditingConvoId}
+              onDragStart={handleDragStart}
             />
-            ))}
-        </div>
+        ))}
+        {dragOverTarget === 'ungrouped' && (
+          <div className="h-10 bg-blue-100 dark:bg-blue-900/40 rounded-lg border-2 border-dashed border-blue-400" />
+        )}
+
       </div>
-      
+
       <div className="p-3 border-t border-slate-200 dark:border-slate-800">
         {isCreatingGroup ? (
-            <form onSubmit={handleCreateGroupSubmit} className="flex items-center gap-2">
-                <input ref={inputRef} type="text" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="Tên nhóm mới..." className="flex-1 bg-white dark:bg-slate-700 text-2xl px-2 py-1.5 rounded-md focus:outline-none"/>
-                <button type="submit" className="p-1.5 rounded-md hover:bg-slate-300 dark:hover:bg-slate-700"><CheckIcon className="w-5 h-5 text-green-500" /></button>
-                <button type="button" onClick={() => setIsCreatingGroup(false)} className="p-1.5 rounded-md hover:bg-slate-300 dark:hover:bg-slate-700"><XIcon className="w-5 h-5 text-red-500" /></button>
-            </form>
+          <form onSubmit={handleCreateGroupSubmit} className="flex items-center gap-2">
+            <input ref={inputRef} type="text" value={newGroupName} onChange={(e) => setNewGroupName(e.target.value)} onKeyDown={handleKeyDown} onBlur={() => setIsCreatingGroup(false)} placeholder="Tên nhóm mới..." className="flex-1 bg-white dark:bg-slate-700 px-2 py-1 rounded text-2xl"/>
+            <button type="submit" className="p-1 rounded hover:bg-slate-300 dark:hover:bg-slate-700"><CheckIcon className="w-4 h-4 text-green-500"/></button>
+            <button type="button" onClick={() => setIsCreatingGroup(false)} className="p-1 rounded hover:bg-slate-300 dark:hover:bg-slate-700"><XIcon className="w-4 h-4 text-red-500"/></button>
+          </form>
         ) : (
-            <button onClick={() => setIsCreatingGroup(true)} className="w-full flex items-center gap-2 p-2 rounded-lg text-2xl font-semibold hover:bg-slate-200 dark:hover:bg-slate-800">
-                <ArchiveBoxIcon className="w-5 h-5" />
-                <span>Tạo nhóm mới</span>
-            </button>
+          <button onClick={() => setIsCreatingGroup(true)} className="w-full flex items-center gap-2 p-2 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors text-slate-500 dark:text-slate-400">
+            <FolderIcon className="w-5 h-5"/>
+            <span className="text-2xl">Tạo nhóm mới</span>
+          </button>
         )}
       </div>
     </div>
@@ -357,10 +356,17 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   return (
     <>
-      <div className={`fixed inset-y-0 left-0 w-72 z-40 transform transition-transform md:relative md:translate-x-0 ${isOpen ? 'translate-x-0' : '-translate-x-full'} md:shrink-0`}>
+      <div className="hidden md:block w-80 flex-shrink-0">
         {sidebarContent}
       </div>
-      {isOpen && <div onClick={() => setIsOpen(false)} className="fixed inset-0 bg-black/30 z-30 md:hidden" />}
+      {isOpen && (
+        <div className="fixed inset-0 z-40 md:hidden" onClick={() => setIsOpen(false)}>
+            <div className="absolute inset-0 bg-black/50" />
+            <div className="relative w-80 h-full" onClick={e => e.stopPropagation()}>
+                {sidebarContent}
+            </div>
+        </div>
+      )}
     </>
   );
 };
