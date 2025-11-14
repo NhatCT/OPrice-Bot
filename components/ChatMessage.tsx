@@ -329,8 +329,8 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                                 rows={1}
                             />
                             <div className="flex justify-end items-center gap-2 mt-2">
-                                <button onClick={onCancelEdit} className="px-3 py-1 text-xl font-semibold rounded-md bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors">Hủy</button>
-                                <button onClick={handleSaveEdit} className="px-3 py-1 text-xl font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-500 transition-colors">Lưu & Gửi</button>
+                                <button onClick={onCancelEdit} className="px-3 py-1 text-lg sm:text-xl font-semibold rounded-md bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors">Hủy</button>
+                                <button onClick={handleSaveEdit} className="px-3 py-1 text-lg sm:text-xl font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-500 transition-colors">Lưu & Gửi</button>
                             </div>
                         </>
                     ) : (
@@ -338,7 +338,7 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                             {message.image && (
                                 <img src={message.image} alt="User upload" className="mb-3 rounded-lg max-h-60" />
                             )}
-                            <div className="prose prose-xl prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none text-white leading-relaxed">
+                            <div className="prose prose-lg sm:prose-xl prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none text-white leading-relaxed">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ ...markdownComponents, a: ({ node, ...props }: any) => <a className="text-blue-200 hover:underline" target="_blank" rel="noopener noreferrer" {...props}>{renderWithColorSwatches(props.children)}</a> }}>
                                     {contentToDisplay}
                                 </ReactMarkdown>
@@ -349,20 +349,20 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
             </div>
             {!isEditing && (message.id != null || message.rawPrompt || message.isTranslated) && (
                 <div className="absolute -bottom-2 right-0 w-full flex items-start justify-end pr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                     <div className="flex items-center gap-1 bg-white/50 dark:bg-slate-700/50 backdrop-blur-md border border-slate-200 dark:border-slate-600 rounded-full shadow-sm px-5 py-2">
+                     <div className="flex items-center gap-1 bg-white/50 dark:bg-slate-700/50 backdrop-blur-md border border-slate-200 dark:border-slate-600 rounded-full shadow-sm px-3 py-1 sm:px-5 sm:py-2">
                           {message.isTranslated && (
-                            <button onClick={() => setShowOriginal(p => !p)} className="p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label={languageToggleTitle} title={languageToggleTitle}>
-                                <GlobeAltIcon className="w-8 h-8" />
+                            <button onClick={() => setShowOriginal(p => !p)} className="p-1 sm:p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label={languageToggleTitle} title={languageToggleTitle}>
+                                <GlobeAltIcon className="w-6 h-6 sm:w-8 sm:h-8" />
                             </button>
                           )}
                           {message.rawPrompt && (
-                             <button onClick={handleCopyRawPrompt} className={`p-2 rounded-full transition-all duration-200 ${isRawPromptCopied ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'}`} aria-label={isRawPromptCopied ? "Đã sao chép" : "Sao chép câu lệnh"} title={isRawPromptCopied ? "Đã sao chép!" : "Sao chép câu lệnh"}>
-                                {isRawPromptCopied ? <CheckIcon className="w-8 h-8" /> : <DocumentDuplicateIcon className="w-8 h-8" />}
+                             <button onClick={handleCopyRawPrompt} className={`p-1 sm:p-2 rounded-full transition-all duration-200 ${isRawPromptCopied ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'}`} aria-label={isRawPromptCopied ? "Đã sao chép" : "Sao chép câu lệnh"} title={isRawPromptCopied ? "Đã sao chép!" : "Sao chép câu lệnh"}>
+                                {isRawPromptCopied ? <CheckIcon className="w-6 h-6 sm:w-8 sm:h-8" /> : <DocumentDuplicateIcon className="w-6 h-6 sm:w-8 sm:h-8" />}
                             </button>
                           )}
                          {message.id != null && (
-                            <button onClick={() => onInitiateEdit(message.id!)} className="p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Chỉnh sửa" title="Chỉnh sửa">
-                                <PencilIcon className="w-8 h-8" />
+                            <button onClick={() => onInitiateEdit(message.id!)} className="p-1 sm:p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Chỉnh sửa" title="Chỉnh sửa">
+                                <PencilIcon className="w-6 h-6 sm:w-8 sm:h-8" />
                             </button>
                          )}
                     </div>
@@ -390,7 +390,7 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                                         <InformationCircleIcon className="w-5 h-5" />
                                         Tóm tắt
                                     </h4>
-                                    <div className="prose prose-xl dark:prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none">
+                                    <div className="prose prose-lg sm:prose-xl dark:prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none">
                                         <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                                             {message.summary!}
                                         </ReactMarkdown>
@@ -408,7 +408,7 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                                 </div>
                             )}
                             {(contentToDisplay || showCursor) && (
-                                <div className="prose prose-xl dark:prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none">
+                                <div className="prose prose-lg sm:prose-xl dark:prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none">
                                     <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
                                         {contentToDisplay || ''}
                                     </ReactMarkdown>
@@ -498,49 +498,49 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
 
              {/* Actions Toolbar */}
             <div className="absolute -bottom-2 left-0 w-full flex items-start justify-start pl-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <div className="flex items-center gap-1 bg-white/50 dark:bg-slate-700/50 backdrop-blur-md border border-slate-200 dark:border-slate-600 rounded-full shadow-sm px-5 py-2">
+                <div className="flex items-center gap-1 bg-white/50 dark:bg-slate-700/50 backdrop-blur-md border border-slate-200 dark:border-slate-600 rounded-full shadow-sm px-3 py-1 sm:px-5 sm:py-2">
                     {message.isTranslated && (
-                        <button onClick={() => setShowOriginal(p => !p)} className="p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label={languageToggleTitle} title={languageToggleTitle}>
-                            <GlobeAltIcon className="w-8 h-8" />
+                        <button onClick={() => setShowOriginal(p => !p)} className="p-1 sm:p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label={languageToggleTitle} title={languageToggleTitle}>
+                            <GlobeAltIcon className="w-6 h-6 sm:w-8 sm:h-8" />
                         </button>
                     )}
-                    <button onClick={() => handleThumbClick('positive')} disabled={feedbackGiven} className={`p-2 rounded-full transition-colors duration-200 ${message.feedback ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Phản hồi tốt" title="Phản hồi tốt">
-                        <ThumbUpIcon className="w-8 h-8" />
+                    <button onClick={() => handleThumbClick('positive')} disabled={feedbackGiven} className={`p-1 sm:p-2 rounded-full transition-colors duration-200 ${message.feedback ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Phản hồi tốt" title="Phản hồi tốt">
+                        <ThumbUpIcon className="w-6 h-6 sm:w-8 sm:h-8" />
                     </button>
-                    <button onClick={() => handleThumbClick('negative')} disabled={feedbackGiven} className={`p-2 rounded-full transition-colors duration-200 ${message.feedback ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Phản hồi chưa tốt" title="Phản hồi chưa tốt">
-                        <ThumbDownIcon className="w-8 h-8" />
+                    <button onClick={() => handleThumbClick('negative')} disabled={feedbackGiven} className={`p-1 sm:p-2 rounded-full transition-colors duration-200 ${message.feedback ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Phản hồi chưa tốt" title="Phản hồi chưa tốt">
+                        <ThumbDownIcon className="w-6 h-6 sm:w-8 sm:h-8" />
                     </button>
                     <div className="h-4 w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
-                    <button onClick={handleCopy} className={`p-2 rounded-full transition-all duration-200 ${isCopied ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'}`} aria-label={isCopied ? "Đã sao chép" : "Sao chép"} title={isCopied ? "Đã sao chép!" : "Sao chép"} >
-                        {isCopied ? <CheckIcon className="w-8 h-8" /> : <ClipboardIcon className="w-8 h-8" />}
+                    <button onClick={handleCopy} className={`p-1 sm:p-2 rounded-full transition-all duration-200 ${isCopied ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'}`} aria-label={isCopied ? "Đã sao chép" : "Sao chép"} title={isCopied ? "Đã sao chép!" : "Sao chép"} >
+                        {isCopied ? <CheckIcon className="w-6 h-6 sm:w-8 sm:h-8" /> : <ClipboardIcon className="w-6 h-6 sm:w-8 sm:h-8" />}
                     </button>
-                    <button onClick={() => onRegenerate(index)} className="p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Tạo lại" title="Tạo lại">
-                        <ArrowPathIcon className="w-8 h-8" />
+                    <button onClick={() => onRegenerate(index)} className="p-1 sm:p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Tạo lại" title="Tạo lại">
+                        <ArrowPathIcon className="w-6 h-6 sm:w-8 sm:h-8" />
                     </button>
-                     <button onClick={onRefine} className="p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Chỉnh sửa câu trả lời" title="Chỉnh sửa câu trả lời">
-                        <WandIcon className="w-8 h-8" />
+                     <button onClick={onRefine} className="p-1 sm:p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Chỉnh sửa câu trả lời" title="Chỉnh sửa câu trả lời">
+                        <WandIcon className="w-6 h-6 sm:w-8 sm:h-8" />
                     </button>
                      <div className="relative" ref={actionsButtonRef}>
-                        <button onClick={() => setIsActionsMenuOpen(p => !p)} className="p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Hành động khác" title="Hành động khác">
-                            <EllipsisHorizontalIcon className="w-8 h-8" />
+                        <button onClick={() => setIsActionsMenuOpen(p => !p)} className="p-1 sm:p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Hành động khác" title="Hành động khác">
+                            <EllipsisHorizontalIcon className="w-6 h-6 sm:w-8 sm:h-8" />
                         </button>
                         {isActionsMenuOpen && (
                              <div className="absolute bottom-full right-0 mb-2 w-72 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg p-2 z-10 animate-popover-enter">
                                 {canEdit && (
                                   <button onClick={() => {onEditAnalysis(message); setIsActionsMenuOpen(false);}} className="w-full flex items-start gap-3 text-left px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-600/70 rounded-md transition-colors">
-                                      <PencilSquareIcon className="w-8 h-8 mt-0.5 text-slate-500 dark:text-slate-400" />
+                                      <PencilSquareIcon className="w-6 h-6 sm:w-8 sm:h-8 mt-0.5 text-slate-500 dark:text-slate-400" />
                                       <div>
-                                          <p className="text-xl font-semibold">Chỉnh sửa & Tính lại</p>
-                                          <p className="text-lg text-slate-500 dark:text-slate-400">Thay đổi các thông số đầu vào.</p>
+                                          <p className="text-lg sm:text-xl font-semibold">Chỉnh sửa & Tính lại</p>
+                                          <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400">Thay đổi các thông số đầu vào.</p>
                                       </div>
                                   </button>
                                 )}
                                 {canCompare && (
                                      <button onClick={() => { onToggleCompare(index); setIsActionsMenuOpen(false);}} className={`w-full flex items-start gap-3 text-left px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-600/70 rounded-md transition-colors ${isSelectedForCompare ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400' : ''}`}>
-                                      <ScaleIcon className="w-8 h-8 mt-0.5 text-slate-500 dark:text-slate-400" />
+                                      <ScaleIcon className="w-6 h-6 sm:w-8 sm:h-8 mt-0.5 text-slate-500 dark:text-slate-400" />
                                       <div>
-                                          <p className="text-xl font-semibold">So sánh Nguồn</p>
-                                          <p className="text-lg text-slate-500 dark:text-slate-400">So sánh với một câu trả lời khác.</p>
+                                          <p className="text-lg sm:text-xl font-semibold">So sánh Nguồn</p>
+                                          <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400">So sánh với một câu trả lời khác.</p>
                                       </div>
                                   </button>
                                 )}
@@ -548,17 +548,17 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
                                     <>
                                         <div className="my-1 h-px bg-slate-200 dark:bg-slate-600"></div>
                                         <button onClick={handleExportReport} className="w-full flex items-start gap-3 text-left px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-600/70 rounded-md transition-colors">
-                                            <DocumentArrowDownIcon className="w-8 h-8 mt-0.5 text-blue-500" />
+                                            <DocumentArrowDownIcon className="w-6 h-6 sm:w-8 sm:h-8 mt-0.5 text-blue-500" />
                                             <div>
-                                                <p className="text-xl font-semibold">Tải Báo cáo (.html)</p>
-                                                <p className="text-lg text-slate-500 dark:text-slate-400">Tương thích với Word, trình duyệt.</p>
+                                                <p className="text-lg sm:text-xl font-semibold">Tải Báo cáo (.html)</p>
+                                                <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400">Tương thích với Word, trình duyệt.</p>
                                             </div>
                                         </button>
                                         <button onClick={handleExportData} className="w-full flex items-start gap-3 text-left px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-600/70 rounded-md transition-colors">
-                                            <TableCellsIcon className="w-8 h-8 mt-0.5 text-green-500" />
+                                            <TableCellsIcon className="w-6 h-6 sm:w-8 sm:h-8 mt-0.5 text-green-500" />
                                             <div>
-                                                <p className="text-xl font-semibold">Tải Dữ liệu (.csv)</p>
-                                                <p className="text-lg text-slate-500 dark:text-slate-400">Tương thích với Excel, Sheets.</p>
+                                                <p className="text-lg sm:text-xl font-semibold">Tải Dữ liệu (.csv)</p>
+                                                <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400">Tương thích với Excel, Sheets.</p>
                                             </div>
                                         </button>
                                     </>
@@ -578,7 +578,7 @@ export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSu
             {hasSuggestions && (
                 <div className="flex flex-wrap gap-3 mt-4 w-full">
                   {message.suggestions!.map((suggestion, i) => (
-                    <button key={i} onClick={() => onSuggestionClick(suggestion)} className="bg-white dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-600/50 text-blue-700 dark:text-blue-300 text-xl font-medium py-3 px-7 rounded-full transition-colors duration-200 border border-slate-200 dark:border-slate-600/80 hover:border-slate-300 dark:hover:border-slate-500" aria-label={`Gửi gợi ý: ${suggestion}`}>
+                    <button key={i} onClick={() => onSuggestionClick(suggestion)} className="bg-white dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-600/50 text-blue-700 dark:text-blue-300 text-lg sm:text-xl font-medium py-2 px-5 sm:py-3 sm:px-7 rounded-full transition-colors duration-200 border border-slate-200 dark:border-slate-600/80 hover:border-slate-300 dark:hover:border-slate-500" aria-label={`Gửi gợi ý: ${suggestion}`}>
                       {suggestion}
                     </button>
                   ))}
