@@ -51,7 +51,6 @@ import { BrandPositioningMap } from "./components/BrandPositioningMap";
 import { MarketResearchReport } from "./components/MarketResearchReport";
 import { BriefcaseIcon } from "./components/icons/BriefcaseIcon";
 import { PowerBIReport } from "./components/PowerBIReport";
-import { OnboardingPrompt } from "./components/OnboardingPrompt";
 import { GuidedTour, TourStep } from "./components/GuidedTour";
 
 
