@@ -1050,13 +1050,13 @@ const App: React.FC = () => {
                 <MenuIcon className="w-6 h-6" />
               </button>
               <div className="flex items-center gap-3">
-                <h1 className="text-3xl font-semibold text-slate-800 dark:text-slate-100">
+                <h1 className="text-2xl sm:text-3xl font-semibold text-slate-800 dark:text-slate-100">
                   {activeView === 'products' ? 'Quản lý Sản phẩm'
                     : activeView === 'report' ? 'Báo cáo Power BI'
                     : conversations[activeConversationId!]?.title || 'Trò chuyện'}
                 </h1>
                 {activeView === 'chat' && (
-                  <div className="hidden sm:flex items-center gap-1.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full px-2 py-0.5 text-lg font-semibold">
+                  <div className="hidden sm:flex items-center gap-1.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full px-2 py-0.5 text-base sm:text-lg font-semibold">
                       <BriefcaseIcon className="w-5 h-5" />
                       <span>Business AI</span>
                   </div>
