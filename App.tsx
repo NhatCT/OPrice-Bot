@@ -1223,12 +1223,6 @@ const App: React.FC = () => {
             onClose={() => setShowGuidedTour(false)}
             steps={tourSteps}
         />
-        {showOnboardingPrompt && (
-            <OnboardingPrompt
-                onConfirm={handleConfirmOnboarding}
-                onDecline={handleDeclineOnboarding}
-            />
-        )}
         <WorkflowDialog isOpen={isWorkflowOpen} onClose={() => setIsWorkflowOpen(false)} />
         <TestingGuideDialog isOpen={isTestingGuideOpen} onClose={() => setIsTestingGuideOpen(false)} />
         {businessProfile && <BusinessProfileDialog isOpen={isBusinessProfileOpen} onClose={() => setIsBusinessProfileOpen(false)} profile={businessProfile} onSave={handleSaveBusinessProfile} />}
