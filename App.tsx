@@ -51,6 +51,9 @@ import { BrandPositioningMap } from "./components/BrandPositioningMap";
 import { MarketResearchReport } from "./components/MarketResearchReport";
 import { BriefcaseIcon } from "./components/icons/BriefcaseIcon";
 import { PowerBIReport } from "./components/PowerBIReport";
+import { OnboardingPrompt } from "./components/OnboardingPrompt";
+import { GuidedTour, TourStep } from "./components/GuidedTour";
+
 
 /* ===========================================================
    ================= CONSTANTS & CONFIG ======================
@@ -59,6 +62,45 @@ const THEME_KEY = "theme";
 const FONT_KEY = "font";
 const SOUND_ENABLED_KEY = "soundEnabled";
 const ACTIVE_CONVERSATION_ID_KEY = "activeConversationId";
+
+const tourSteps: TourStep[] = [
+    {
+        elementId: 'tour-step-1-new-chat',
+        title: 'Bắt đầu Hội thoại mới',
+        description: 'Nhấn vào đây để bắt đầu một cuộc trò chuyện mới bất cứ lúc nào.',
+        position: 'right',
+    },
+    {
+        elementId: 'tour-step-2-convo-list',
+        title: 'Quản lý các Hội thoại',
+        description: 'Tất cả các cuộc trò chuyện của bạn sẽ được lưu ở đây. Bạn có thể đổi tên, xóa, hoặc kéo-thả để sắp xếp chúng vào các nhóm.',
+        position: 'right',
+    },
+    {
+        elementId: 'tour-step-3-view-switcher',
+        title: 'Chuyển đổi Chế độ xem',
+        description: 'Chuyển đổi giữa giao diện Trò chuyện, quản lý Sản phẩm, hoặc xem Báo cáo Power BI.',
+        position: 'right',
+    },
+    {
+        elementId: 'tour-step-4-message-input',
+        title: 'Gửi Yêu cầu của bạn',
+        description: 'Đây là nơi bạn nhập câu hỏi, đính kèm hình ảnh hoặc ghi âm giọng nói để tương tác với AI.',
+        position: 'top',
+    },
+    {
+        elementId: 'tour-step-5-tools-button',
+        title: 'Các Công cụ Phân tích',
+        description: 'Mở menu các công cụ phân tích chuyên sâu như Lợi nhuận, Khuyến mãi, hoặc Nghiên cứu Xu hướng.',
+        position: 'top',
+    },
+    {
+        elementId: 'tour-step-6-settings-button',
+        title: 'Cài đặt & Tùy chỉnh',
+        description: 'Thay đổi giao diện, quản lý hồ sơ kinh doanh và truy cập các hướng dẫn tại đây.',
+        position: 'left',
+    },
+];
 
 const taskTitles: Record<Task, string> = {
   'profit-analysis': 'Phân tích Lợi nhuận & Lập kế hoạch Kinh doanh',
@@ -282,6 +324,8 @@ const App: React.FC = () => {
   const [comparisonSelection, setComparisonSelection] = useState<number[]>([]);
   const [isComparisonDialogOpen, setIsComparisonDialogOpen] = useState(false);
   const [deleteConfirmation, setDeleteConfirmation] = useState<{ type: 'convo' | 'group', id: string } | null>(null);
+  const [showOnboardingPrompt, setShowOnboardingPrompt] = useState(false);
+  const [showGuidedTour, setShowGuidedTour] = useState(false);
 
   // --- Refs ---
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -293,6 +337,18 @@ const App: React.FC = () => {
 
   /* ===================== EFFECTS (LIFECYCLE) ===================== */
   // --- Initial Data Load ---
+  useEffect(() => {
+    // Check if onboarding prompt has been seen in this session
+    const hasSeenPrompt = sessionStorage.getItem('v64_onboarding_prompt_seen');
+    if (!hasSeenPrompt) {
+        // Use a timeout to avoid showing the prompt immediately on load
+        const timer = setTimeout(() => {
+            setShowOnboardingPrompt(true);
+        }, 1500); // 1.5-second delay
+        return () => clearTimeout(timer);
+    }
+  }, []);
+
   useEffect(() => {
     const loadInitialData = async () => {
       const [profile, convos, groups, busProfile, ftExamples] = await Promise.all([
@@ -422,6 +478,16 @@ const App: React.FC = () => {
   }, [activeConversationMessages, sourceFilter]);
 
   /* ===================== CALLBACKS & HANDLERS ===================== */
+  const handleConfirmOnboarding = useCallback(() => {
+    setShowOnboardingPrompt(false);
+    setShowGuidedTour(true);
+    sessionStorage.setItem('v64_onboarding_prompt_seen', 'true');
+  }, []);
+
+  const handleDeclineOnboarding = useCallback(() => {
+      setShowOnboardingPrompt(false);
+      sessionStorage.setItem('v64_onboarding_prompt_seen', 'true');
+  }, []);
   
   // --- Conversation Management ---
   const handleNewChat = useCallback(async () => {
@@ -1072,16 +1138,18 @@ const App: React.FC = () => {
                 >
                     <MagnifyingGlassIcon className="w-5 h-5" />
                 </button>
-              <SettingsPopover
-                theme={theme} setTheme={setTheme}
-                font={font} setFont={setFont}
-                userProfile={userProfile} onUpdateProfile={handleUpdateProfile}
-                onForgetUser={handleForgetUser}
-                soundEnabled={soundEnabled} setSoundEnabled={setSoundEnabled}
-                onOpenWorkflow={() => setIsWorkflowOpen(true)}
-                onOpenTestingGuide={() => setIsTestingGuideOpen(true)}
-                onOpenBusinessProfile={() => setIsBusinessProfileOpen(true)}
-              />
+                <div id="tour-step-6-settings-button">
+                  <SettingsPopover
+                    theme={theme} setTheme={setTheme}
+                    font={font} setFont={setFont}
+                    userProfile={userProfile} onUpdateProfile={handleUpdateProfile}
+                    onForgetUser={handleForgetUser}
+                    soundEnabled={soundEnabled} setSoundEnabled={setSoundEnabled}
+                    onOpenWorkflow={() => setIsWorkflowOpen(true)}
+                    onOpenTestingGuide={() => setIsTestingGuideOpen(true)}
+                    onOpenBusinessProfile={() => setIsBusinessProfileOpen(true)}
+                  />
+                </div>
             </div>
           </header>
           
@@ -1151,6 +1219,17 @@ const App: React.FC = () => {
       </main>
 
        {/* Dialogs */}
+        <GuidedTour
+            isOpen={showGuidedTour}
+            onClose={() => setShowGuidedTour(false)}
+            steps={tourSteps}
+        />
+        {showOnboardingPrompt && (
+            <OnboardingPrompt
+                onConfirm={handleConfirmOnboarding}
+                onDecline={handleDeclineOnboarding}
+            />
+        )}
         <WorkflowDialog isOpen={isWorkflowOpen} onClose={() => setIsWorkflowOpen(false)} />
         <TestingGuideDialog isOpen={isTestingGuideOpen} onClose={() => setIsTestingGuideOpen(false)} />
         {businessProfile && <BusinessProfileDialog isOpen={isBusinessProfileOpen} onClose={() => setIsBusinessProfileOpen(false)} profile={businessProfile} onSave={handleSaveBusinessProfile} />}
