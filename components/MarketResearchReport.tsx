@@ -123,12 +123,12 @@ export const MarketResearchReport: React.FC<MarketResearchReportProps> = ({ data
                   <div className="aspect-[3/4]">
                     <ImageWithStatus
                         srcs={item.image_urls}
-                        alt={item.brand_name}
+                        alt={item.inspiration_source}
                     />
                   </div>
                   <div className="p-3 text-center">
                     <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
-                      {item.brand_name}
+                      {item.inspiration_source}
                     </h4>
                   </div>
                 </div>

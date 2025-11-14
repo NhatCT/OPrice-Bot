@@ -104,7 +104,10 @@ export const TagInput: React.FC<TagInputProps> = ({ value, onChange, placeholder
               <li key={suggestion}>
                 <button
                   type="button"
-                  onClick={() => addTag(suggestion)}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    addTag(suggestion);
+                  }}
                   className="w-full flex items-center justify-between text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600"
                 >
                   <span>{suggestion}</span>

@@ -49,11 +49,16 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave 
         alert("Không có dữ liệu hợp lệ. Hãy upload file hoặc dán link Google Sheet.");
         return;
       }
-      if (importMode === "replace" || products.length === 0) {
-        setProducts(costSheetToProducts(items));
+      
+      let finalProducts: Product[];
+      if (importMode === "replace" || !profile?.products?.length) {
+        finalProducts = costSheetToProducts(items);
       } else {
-        setProducts(mergeBySheetOrder(products, items));
+        finalProducts = mergeBySheetOrder(profile.products, items);
       }
+
+      onSave({ ...(profile || { defaultCosts: {}, products: [] }), products: finalProducts });
+
     } catch (e) {
       console.error(e);
       alert("Không thể đọc dữ liệu. Vui lòng kiểm tra file/link.");
@@ -76,17 +81,17 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave 
   const onChange = (id: string, field: keyof Omit<Product, 'id'>, value: string) =>
     setProducts((prev) => prev.map((p) => (p.id === id ? { ...p, [field]: value } : p)));
 
-  const th = "px-4 py-3 text-left text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider";
+  const th = "px-4 py-3 text-left text-lg font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider";
   const td = "px-4 py-3 border-t border-slate-200 dark:border-slate-700";
   const input =
-    "w-full bg-transparent text-sm text-slate-800 dark:text-slate-200 rounded-md p-1 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-slate-100 dark:focus:bg-slate-700";
+    "w-full bg-transparent text-xl text-slate-800 dark:text-slate-200 rounded-md p-1 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-slate-100 dark:focus:bg-slate-700";
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-slate-900">
       <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
         <div>
-          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">Quản lý Sản phẩm</h2>
-          <p className="text-sm text-slate-500 dark:text-slate-400">Nhập giá vốn / giá bán từ file Excel/CSV hoặc Google Sheet.</p>
+          <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Quản lý Sản phẩm</h2>
+          <p className="text-xl text-slate-500 dark:text-slate-400">Nhập giá vốn / giá bán từ file Excel/CSV hoặc Google Sheet.</p>
         </div>
 
         <div className="flex items-center gap-3">
@@ -100,7 +105,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave 
             </div>
           )}
 
-          <label className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 cursor-pointer">
+          <label className="flex items-center gap-2 px-4 py-2 text-xl font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 cursor-pointer">
             <input
               type="file"
               accept=".xlsx,.xls,.csv"
@@ -115,12 +120,12 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave 
             <span>{isImporting ? "Đang nhập..." : "Import File"}</span>
           </label>
 
-          <button onClick={clearAll} className="px-4 py-2 text-sm font-semibold text-white bg-red-600 rounded-lg hover:bg-red-500">
+          <button onClick={clearAll} className="px-4 py-2 text-xl font-semibold text-white bg-red-600 rounded-lg hover:bg-red-500">
             Xóa toàn bộ
           </button>
 
-          <button onClick={addProduct} className="px-4 py-2 text-sm font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 flex items-center gap-2">
-            <PlusIcon className="w-4 h-4" />
+          <button onClick={addProduct} className="px-4 py-2 text-xl font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 flex items-center gap-2">
+            <PlusIcon className="w-5 h-5" />
             Thêm sản phẩm
           </button>
         </div>
@@ -132,12 +137,12 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave 
           placeholder="Dán link Google Sheet (tùy chọn)..."
           value={sheetLink}
           onChange={(e) => setSheetLink(e.target.value)}
-          className="flex-1 text-sm border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+          className="flex-1 text-xl border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
         />
         <select
           value={importMode}
           onChange={(e) => setImportMode(e.target.value as "replace" | "merge")}
-          className="text-sm border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+          className="text-xl border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
           title="Chế độ nhập"
         >
           <option value="replace">Thay thế (khuyên dùng)</option>
@@ -146,14 +151,14 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave 
         <button
           onClick={() => handleImport()}
           disabled={isImporting}
-          className="px-4 py-2 text-sm font-semibold text-white bg-green-600 rounded-lg hover:bg-green-500"
+          className="px-4 py-2 text-xl font-semibold text-white bg-green-600 rounded-lg hover:bg-green-500"
         >
           {isImporting ? "Đang tải..." : "Tải từ Google Sheet"}
         </button>
       </div>
 
       <div className="flex-1 overflow-y-auto">
-        <table className="w-full text-sm">
+        <table className="w-full text-lg">
           <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800/80 backdrop-blur-sm">
             <tr>
               <th className={th}>SKU</th>

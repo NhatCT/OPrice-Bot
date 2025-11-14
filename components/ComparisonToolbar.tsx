@@ -31,10 +31,10 @@ export const ComparisonToolbar: React.FC<ComparisonToolbarProps> = ({ selection,
         <div className="flex items-center gap-3 min-w-0">
           <ScaleIcon className="w-6 h-6 text-purple-500 flex-shrink-0" />
           <div className="min-w-0">
-            <p className="font-semibold text-sm text-slate-800 dark:text-slate-100">
+            <p className="font-semibold text-xl text-slate-800 dark:text-slate-100">
               {canCompare ? 'Sẵn sàng so sánh nguồn' : `Đã chọn ${selectionCount}/2 phản hồi`}
             </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+            <p className="text-lg text-slate-500 dark:text-slate-400 truncate">
               {canCompare
                 ? `So sánh các nguồn được sử dụng trong 2 phản hồi đã chọn.`
                 : 'Chọn một phản hồi khác để so sánh nguồn tham khảo.'}
@@ -45,7 +45,7 @@ export const ComparisonToolbar: React.FC<ComparisonToolbarProps> = ({ selection,
           <button
             onClick={onCompare}
             disabled={!canCompare}
-            className="px-4 py-1.5 text-sm font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-500 transition-colors disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed"
+            className="px-4 py-1.5 text-xl font-semibold text-white bg-blue-600 rounded-md hover:bg-blue-500 transition-colors disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed"
           >
             So sánh
           </button>

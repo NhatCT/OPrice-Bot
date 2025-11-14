@@ -62,12 +62,12 @@ export const AnalysisChart: React.FC<AnalysisChartProps> = ({ chart, theme }) =>
             <h4 className="text-center font-semibold text-slate-700 dark:text-slate-200 mb-3">{chart.title}</h4>
             <div className="h-64">
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={chart.data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }} barGap={10} isAnimationActive={true}>
+                    <BarChart data={chart.data} margin={{ top: 5, right: 20, left: 10, bottom: 5 }} barGap={10}>
                         <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} />
                         <XAxis dataKey="name" stroke={tickColor} fontSize={12} tickLine={false} axisLine={false} />
                         <YAxis stroke={tickColor} fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => formatValue(value, chart.unit)} />
                         <Tooltip content={<CustomTooltip unit={chart.unit} />} cursor={{ fill: theme === 'dark' ? 'rgba(148, 163, 184, 0.1)' : 'rgba(100, 116, 139, 0.1)' }} />
-                        <Bar dataKey={dataKey} name="Giá trị" barSize={40} radius={[4, 4, 0, 0]}>
+                        <Bar dataKey={dataKey} name="Giá trị" barSize={40} radius={[4, 4, 0, 0]} isAnimationActive={true}>
                              {chart.data.map((entry, idx) => (
                                 <Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />
                             ))}

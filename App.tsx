@@ -50,6 +50,7 @@ import { ProductCatalog } from "./components/ProductCatalog";
 import { BrandPositioningMap } from "./components/BrandPositioningMap";
 import { MarketResearchReport } from "./components/MarketResearchReport";
 import { BriefcaseIcon } from "./components/icons/BriefcaseIcon";
+import { PowerBIReport } from "./components/PowerBIReport";
 
 /* ===========================================================
    ================= CONSTANTS & CONFIG ======================
@@ -66,6 +67,16 @@ const taskTitles: Record<Task, string> = {
   'market-research': 'Nghiên cứu Xu hướng & Lên ý tưởng Bộ sưu tập',
   'brand-positioning': 'Định vị Thương hiệu'
 };
+
+const detectFallbackTask = (prompt: string): Task | null => {
+    if (!prompt) return null;
+    const p = prompt.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    if (p.includes('loi nhuan')) return 'profit-analysis';
+    if (p.includes('khuyen mai')) return 'promo-price';
+    if (p.includes('dong gia')) return 'group-price';
+    return null;
+};
+
 
 const toNum = (v: any): number => {
   if (v == null || v === "") return 0;
@@ -115,9 +126,11 @@ const buildAnalysisPrompt = (task: Task, params: Record<string, any>): string =>
   if (task === 'market-research') {
         const competitors = Array.isArray(params.competitors) ? params.competitors.join(', ') : params.competitors || 'None';
         const useSearch = competitors && competitors.length > 0;
-        return `REQUIRED OUTPUT FORMAT: JSON. You are a world-class Fashion Trend Analyst. Conduct a detailed fashion trend report based on the criteria below. The report MUST focus specifically on **denim trends**. ${useSearch ? 'Use Google Search extensively to gather real-time, relevant information from top sources like WGSN, Vogue Runway, and Business of Fashion to identify these denim trends.' : ''} The analysis must be structured like a professional presentation for a fashion brand's product development team.
+        return `REQUIRED OUTPUT FORMAT: JSON. You are a world-class Fashion Trend Analyst. Conduct a detailed fashion trend report based on the criteria below. The report MUST focus specifically on **denim trends**. ${useSearch ? 'Use Google Search extensively to gather real-time, relevant information from top industry sources like WGSN, Vogue Runway, Sourcing Journal, WWD, Tagwalk, and Business of Fashion to identify these denim trends.' : ''} The analysis must be structured like a professional presentation for a fashion brand's product development team.
 
 IMPORTANT: All text content MUST be in English.
+
+**IMAGE INSPIRATION SOURCE:** For the 'key_items', you MUST find inspiration from the major Fashion Weeks: Milan, London, Paris, New York, Seoul, and Shanghai. Do NOT use competitor brands as the primary inspiration source for images.
 
 CRITERIA:
 - Season: ${params.season} ${params.year}
@@ -133,11 +146,12 @@ The JSON output MUST follow this exact structure:
       "title": "1. Trend Core – [Name of Trend 1]",
       "description": "- [Key characteristic 1 in ENGLISH]\\n- [Key characteristic 2 in ENGLISH]",
       "key_items": [
-        { "brand_name": "[Brand Name 1]", "image_search_query": "[Concise ENGLISH prompt for an AI image generation model to create a realistic fashion photo]" },
-        { "brand_name": "[Brand Name 2]", "image_search_query": "[...]" },
-        { "brand_name": "[Brand Name 3]", "image_search_query": "[...]" },
-        { "brand_name": "[Brand Name 4]", "image_search_query": "[...]" },
-        { "brand_name": "[Brand Name 5]", "image_search_query": "[...]" }
+        { "inspiration_source": "Milan Fashion Week", "image_search_query": "[Concise ENGLISH prompt for an AI image generation model to create a realistic fashion photo]" },
+        { "inspiration_source": "Paris Fashion Week", "image_search_query": "[...]" },
+        { "inspiration_source": "New York Fashion Week", "image_search_query": "[...]" },
+        { "inspiration_source": "London Fashion Week", "image_search_query": "[...]" },
+        { "inspiration_source": "Seoul Fashion Week", "image_search_query": "[...]" },
+        { "inspiration_source": "Shanghai Fashion Week", "image_search_query": "[...]" }
       ]
     }
   ],
@@ -149,7 +163,7 @@ The JSON output MUST follow this exact structure:
     ]
   }
 }
-For 'image_search_query', create a concise, effective prompt for an AI image generation model to create a high-quality, realistic fashion photo. The prompt should describe the item, the style, and the context, referencing the brand. Example: "Studio photograph of a woman wearing high-waisted, baggy stone wash jeans, style of Nili Lotan Fall 2024 collection, minimalist background".
+For 'image_search_query', create a concise, effective prompt for an AI image generation model to create a high-quality, realistic fashion photo. The prompt should describe the item, the style, and the context, referencing the specified Fashion Week. Example: "Street style photo from Paris Fashion Week FW24, a model wearing oversized, dark-wash denim jacket with exaggerated shoulders, cinematic lighting".
 `;
   }
     
@@ -243,7 +257,7 @@ const App: React.FC = () => {
   const [activeConversationMessages, setActiveConversationMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [activeTool, setActiveTool] = useState<{ task: Task; initialData?: any; } | null>(null);
-  const [activeView, setActiveView] = useState<'chat' | 'products'>('chat');
+  const [activeView, setActiveView] = useState<'chat' | 'products' | 'report'>('chat');
   const [editingMessageId, setEditingMessageId] = useState<number | null>(null);
   const [input, setInput] = useState('');
 
@@ -615,6 +629,8 @@ const App: React.FC = () => {
             };
             
             let isJsonAnalysis = false;
+            let stateSetForMarketResearch = false;
+
             try {
                 const containsJson = originalEnglishResponse.includes('{') && originalEnglishResponse.includes('}');
                 if (finalMessage.role === 'model' && finalMessage.task && containsJson) {
@@ -634,8 +650,35 @@ const App: React.FC = () => {
                     }
 
                     if(finalMessage.task === 'market-research') {
+                        stateSetForMarketResearch = true;
                         const marketData = JSON.parse(jsonString);
-                        
+
+                        const fetchImagesAndUpdateState = async (data: any) => {
+                            const updatedData = JSON.parse(JSON.stringify(data));
+                            if (updatedData.trend_sections) {
+                                await Promise.all(updatedData.trend_sections.flatMap((section: any) =>
+                                    section.key_items?.map(async (item: any) => {
+                                        if (item.image_search_query) {
+                                            item.image_urls = await findImageFromSearchQuery(item.image_search_query);
+                                        }
+                                    }) || []
+                                ));
+                            }
+                            setActiveConversationMessages(prev => {
+                                const newMessages = [...prev];
+                                const lastMessage = newMessages[newMessages.length - 1];
+                                if (lastMessage?.role === 'model' && lastMessage.task === 'market-research') {
+                                    newMessages[newMessages.length - 1] = {
+                                        ...lastMessage,
+                                        marketResearchData: updatedData,
+                                        component: <MarketResearchReport data={updatedData} theme={effectiveTheme} />,
+                                    };
+                                    return newMessages;
+                                }
+                                return prev;
+                            });
+                        };
+
                         if (marketData.trend_sections) {
                             await Promise.all(marketData.trend_sections.map(async (section: any) => {
                                 if (section.description) {
@@ -651,10 +694,21 @@ const App: React.FC = () => {
                             }));
                         }
                         
-                        finalMessage.content = ''; // No main content, component will render
-                        finalMessage.component = <MarketResearchReport data={marketData} theme={effectiveTheme} />;
-                        finalMessage.marketResearchData = marketData;
-                        finalMessage.isTranslated = true;
+                        const initialMessage: ChatMessage = {
+                            ...finalMessage,
+                            content: '',
+                            component: <MarketResearchReport data={marketData} theme={effectiveTheme} />,
+                            marketResearchData: marketData,
+                            isTranslated: true,
+                        };
+
+                        setActiveConversationMessages(prev => {
+                            const newMessages = [...prev];
+                            newMessages[newMessages.length - 1] = initialMessage;
+                            return newMessages;
+                        });
+
+                        fetchImagesAndUpdateState(marketData);
                     } else { 
                         const data = JSON.parse(jsonString);
                         
@@ -698,24 +752,51 @@ const App: React.FC = () => {
                 }
             }
             
-            setActiveConversationMessages(prev => {
-                const newMessages = [...prev];
-                newMessages[newMessages.length - 1] = finalMessage as ChatMessage;
-                return newMessages;
-            });
+            if (!stateSetForMarketResearch) {
+                setActiveConversationMessages(prev => {
+                    const newMessages = [...prev];
+                    newMessages[newMessages.length - 1] = finalMessage as ChatMessage;
+                    return newMessages;
+                });
+            }
             break;
           }
 
           if (chunk.error) {
-              setActiveConversationMessages(prev => {
-                  const newMessages = [...prev];
-                  const lastMsg = newMessages[newMessages.length-1];
-                  if(lastMsg.role === 'model') {
-                    lastMsg.content = chunk.error!;
-                  }
-                  return newMessages;
-              });
-              break;
+              const isQuotaError = chunk.error.includes("hạn ngạch");
+              
+              if (isQuotaError && isAnalysis) {
+                  const summary = `**[Lỗi Hạn ngạch]** Phân tích không thể hoàn thành.`;
+                  const content = `Yêu cầu phân tích đã thất bại do bạn đã vượt quá hạn ngạch sử dụng API. Biểu đồ không thể được tạo.\n\n- **Để theo dõi mức sử dụng:** [Truy cập Google AI Studio](https://ai.dev/usage)\n- **Để tìm hiểu thêm về giới hạn:** [Xem tài liệu Gemini API](https://ai.google.dev/gemini-api/docs/rate-limits)`;
+                  
+                  const fallbackMessage: ChatMessage = {
+                      role: 'model',
+                      summary: summary,
+                      content: content,
+                      task: analysisPayload?.task,
+                      analysisParams: analysisPayload?.params,
+                      charts: [], 
+                      chartError: 'quota' 
+                  };
+
+                  setActiveConversationMessages(prev => {
+                      const newMessages = [...prev];
+                      newMessages[newMessages.length - 1] = fallbackMessage;
+                      return newMessages;
+                  });
+                  playSound(messageAudio, soundEnabled);
+              } else {
+                  // For all other errors (including quota errors on non-analysis tasks), just display the error.
+                  setActiveConversationMessages(prev => {
+                      const newMessages = [...prev];
+                      const lastMsg = newMessages[newMessages.length - 1];
+                      if (lastMsg?.role === 'model') {
+                          lastMsg.content = chunk.error!;
+                      }
+                      return newMessages;
+                  });
+              }
+              break; 
           }
         }
       } catch (error: any) {
@@ -734,7 +815,7 @@ const App: React.FC = () => {
         setIsLoading(false);
       }
     },
-    [isLoading, activeConversationMessages, soundEnabled, typingAudio, messageAudio, effectiveTheme]
+    [isLoading, activeConversationMessages, soundEnabled, typingAudio, messageAudio, effectiveTheme, businessProfile]
   );
   
   const handleOnMessageSend = (message: string, image?: { file: File; dataUrl: string }) => {
@@ -969,12 +1050,14 @@ const App: React.FC = () => {
                 <MenuIcon className="w-6 h-6" />
               </button>
               <div className="flex items-center gap-3">
-                <h1 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                  {activeView === 'products' ? 'Quản lý Sản phẩm' : conversations[activeConversationId!]?.title || 'Trò chuyện'}
+                <h1 className="text-3xl font-semibold text-slate-800 dark:text-slate-100">
+                  {activeView === 'products' ? 'Quản lý Sản phẩm'
+                    : activeView === 'report' ? 'Báo cáo Power BI'
+                    : conversations[activeConversationId!]?.title || 'Trò chuyện'}
                 </h1>
                 {activeView === 'chat' && (
-                  <div className="hidden sm:flex items-center gap-1.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full px-2 py-0.5 text-xs font-semibold">
-                      <BriefcaseIcon className="w-3.5 h-3.5" />
+                  <div className="hidden sm:flex items-center gap-1.5 bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-full px-2 py-0.5 text-lg font-semibold">
+                      <BriefcaseIcon className="w-5 h-5" />
                       <span>Business AI</span>
                   </div>
                 )}
@@ -1055,11 +1138,13 @@ const App: React.FC = () => {
                   setShouldFocusInput={setShouldFocusInput}
                 />
               </>
-          ) : (
+          ) : activeView === 'products' ? (
               <ProductCatalog
                   profile={businessProfile}
                   onSave={handleSaveBusinessProfile}
               />
+          ) : (
+              <PowerBIReport />
           )}
 
         </div>

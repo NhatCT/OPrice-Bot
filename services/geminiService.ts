@@ -55,23 +55,139 @@ interface StreamChunk {
 
 const handleGeminiError = (e: any): string => {
     console.error("Gemini API call failed:", e);
-    let errorMessage = "Đã có lỗi xảy ra khi gọi Gemini API. Vui lòng thử lại sau.";
-    if (e instanceof Error || (typeof e === 'object' && e !== null && 'message' in e)) {
-        const message = (e as Error).message;
-        // Check for specific rate-limit error messages
-        if (message.includes('RESOURCE_EXHAUSTED') || message.includes('429')) {
-             errorMessage = `Bạn đã vượt quá hạn ngạch sử dụng API miễn phí. Vui lòng kiểm tra gói cước và chi tiết thanh toán của bạn.\n\n- **Để theo dõi mức sử dụng:** [Truy cập Google AI Studio](https://ai.dev/usage)\n- **Để tìm hiểu thêm về giới hạn:** [Xem tài liệu Gemini API](https://ai.google.dev/gemini-api/docs/rate-limits)`;
-        } else if (e.name === 'AbortError') {
-            errorMessage = 'Yêu cầu đã bị hủy.';
+    const quotaErrorMessage = `Bạn đã vượt quá hạn ngạch sử dụng API miễn phí. Vui lòng kiểm tra gói cước và chi tiết thanh toán của bạn.\n\n- **Để theo dõi mức sử dụng:** [Truy cập Google AI Studio](https://ai.dev/usage)\n- **Để tìm hiểu thêm về giới hạn:** [Xem tài liệu Gemini API](https://ai.google.dev/gemini-api/docs/rate-limits)`;
+    
+    if (e?.name === 'AbortError') {
+        return 'Yêu cầu đã bị hủy.';
+    }
+
+    // Try to find the error object, whether it's the top-level `e` or inside `e.message`
+    let errorDetails = null;
+    if (e?.error) {
+        errorDetails = e.error;
+    } else if (typeof e?.message === 'string' && e.message.trim().startsWith('{')) {
+        try {
+            const parsed = JSON.parse(e.message);
+            errorDetails = parsed.error || parsed;
+        } catch {}
+    }
+
+    // Check the found error object for quota details
+    if (errorDetails && (errorDetails.code === 429 || errorDetails.status === 'RESOURCE_EXHAUSTED')) {
+        return quotaErrorMessage;
+    }
+    
+    // If structured checks fail, fall back to broad string matching on the entire error
+    let fullErrorString = '';
+    try {
+        fullErrorString = JSON.stringify(e);
+    } catch {
+        fullErrorString = String(e);
+    }
+
+    if (fullErrorString.includes('RESOURCE_EXHAUSTED') || fullErrorString.includes('429')) {
+        return quotaErrorMessage;
+    }
+
+    return "Đã có lỗi xảy ra khi gọi Gemini API. Vui lòng thử lại sau.";
+};
+
+
+async function* streamFromGemini(contents: Content[], systemInstruction: string, signal: AbortSignal, isJsonTask: boolean): AsyncGenerator<StreamChunk> {
+    const config: any = { systemInstruction };
+    // For analysis tasks, explicitly request JSON output. This is more reliable than parsing from markdown.
+    // The googleSearch tool is incompatible with responseMimeType, so it's disabled for JSON tasks.
+    if (isJsonTask) {
+        config.responseMimeType = 'application/json';
+    } else {
+        config.tools = [{googleSearch: {}}];
+    }
+    
+    const stream = await ai.models.generateContentStream({
+        model: 'gemini-2.5-flash',
+        contents,
+        config,
+    });
+
+    let groundingChunks: any[] = [];
+    for await (const chunk of stream) {
+        if (signal.aborted) throw new Error("Aborted");
+        if (chunk.candidates?.[0]?.groundingMetadata?.groundingChunks) {
+            groundingChunks.push(...chunk.candidates[0].groundingMetadata.groundingChunks);
+        }
+        if(chunk.text) {
+          yield { textChunk: chunk.text };
         }
     }
-    return errorMessage;
-};
+    
+    const sources = groundingChunks
+        .map(c => c.web).filter(Boolean)
+        .map(s => ({ uri: s.uri, title: s.title }))
+        .filter((s, i, arr) => arr.findIndex(t => t.uri === s.uri) === i);
+
+    yield { sources };
+}
+
+async function* streamFromOpenAICompat(
+    apiUrl: string,
+    apiKey: string,
+    modelName: string,
+    contents: Content[],
+    systemInstruction: string,
+    signal: AbortSignal
+): AsyncGenerator<StreamChunk> {
+    const messages = contents.map(msg => ({
+        role: msg.role === 'model' ? 'assistant' : 'user',
+        content: msg.parts[0].text,
+    }));
+
+    const body = {
+        model: modelName,
+        messages: [{ role: 'system', content: systemInstruction }, ...messages],
+        stream: true,
+    };
+
+    const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify(body),
+        signal,
+    });
+
+    if (!response.ok || !response.body) throw new Error(`API Error: ${response.status} ${response.statusText}`);
+
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+            if (line.startsWith('data: ')) {
+                const data = line.substring(6).trim();
+                if (data === '[DONE]') break;
+                try {
+                    const json = JSON.parse(data);
+                    const textChunk = json.choices[0]?.delta?.content;
+                    if (textChunk) yield { textChunk };
+                } catch(e) {
+                    console.warn("Could not parse SSE JSON:", data, e);
+                }
+            }
+        }
+    }
+}
 
 export async function* getChatResponseStream(
     history: ChatMessage[],
     signal: AbortSignal,
-    options: { task?: Task; useCreativePersona?: boolean } = {}
+    options: { task?: Task; useCreativePersona?: boolean; } = {}
 ): AsyncGenerator<StreamChunk> {
     const startTime = Date.now();
     let firstChunkTime: number | null = null;
@@ -83,60 +199,64 @@ export async function* getChatResponseStream(
     
     const systemInstruction = options.useCreativePersona ? CREATIVE_SYSTEM_INSTRUCTION : HARDCODED_SYSTEM_INSTRUCTION;
 
-    try {
-        const chat = ai.chats.create({
-            model: 'gemini-2.5-flash',
-            config: {
-                systemInstruction,
-                tools: [{googleSearch: {}}]
-            },
-            history: contents.slice(0, -1)
-        });
+    const isJsonTask = !!options.task && ['profit-analysis', 'promo-price', 'group-price', 'market-research'].includes(options.task);
 
-        const lastMessage = contents[contents.length-1];
-        if (!lastMessage) throw new Error("No message to send");
-
-        const stream = await chat.sendMessageStream({ message: lastMessage.parts[0].text ?? '' });
-
-        let groundingChunks: any[] = [];
-
-        for await (const chunk of stream) {
-            if (signal.aborted) {
-                console.log("Stream aborted by user.");
-                return;
+    const providers = [
+        { name: 'Gemini', fn: () => streamFromGemini(contents, systemInstruction, signal, isJsonTask) },
+        { name: 'GPT-Mirror', fn: () => streamFromOpenAICompat('https://api.pawan.krd/v1/chat/completions', 'pawan-guest', 'pai-001-light-beta', contents, systemInstruction, signal) },
+        { name: 'DeepSeek', fn: () => streamFromOpenAICompat('https://api.deepseek.com/chat/completions', 'deepseek-guest', 'deepseek-chat', contents, systemInstruction, signal) },
+    ];
+    
+    let lastError: any = null;
+    
+    for (const provider of providers) {
+        try {
+            let sources: StreamChunk['sources'] | undefined;
+            for await (const chunk of provider.fn()) {
+                if (signal.aborted) {
+                    console.log("Stream aborted by user.");
+                    return;
+                }
+                if (!firstChunkTime) {
+                    firstChunkTime = Date.now() - startTime;
+                }
+                // Handle sources chunk separately
+                if (chunk.sources) {
+                    sources = chunk.sources;
+                }
+                if (chunk.textChunk) {
+                    yield { textChunk: chunk.textChunk };
+                }
             }
-            if (!firstChunkTime) {
-                firstChunkTime = Date.now() - startTime;
-            }
+            
+            // If we got here, the stream was successful.
+            const totalTime = Date.now() - startTime;
+            yield {
+                isFinal: true,
+                performanceMetrics: { timeToFirstChunk: firstChunkTime || totalTime, totalTime },
+                sources: sources, // Will be undefined for non-Gemini providers, which is correct
+            };
+            return; // Exit the generator successfully
 
-            if (chunk.candidates?.[0]?.groundingMetadata?.groundingChunks) {
-                groundingChunks.push(...chunk.candidates[0].groundingMetadata.groundingChunks);
+        } catch (e: any) {
+            if (e.name === 'AbortError') {
+                return; // User aborted, exit gracefully
             }
-
-            yield { textChunk: chunk.text };
+            console.warn(`${provider.name} failed, falling back. Error:`, e);
+            lastError = e;
+            firstChunkTime = null; // Reset for next provider attempt
         }
-        
-        const totalTime = Date.now() - startTime;
-        
-        const sources = groundingChunks
-            .map(c => c.web)
-            .filter(Boolean)
-            .map(s => ({ uri: s.uri, title: s.title }))
-            .filter((s, i, arr) => arr.findIndex(t => t.uri === s.uri) === i); // Deduplicate
+    }
 
-        yield {
-            isFinal: true,
-            performanceMetrics: { timeToFirstChunk: firstChunkTime || totalTime, totalTime },
-            sources: sources,
-        };
-
-    } catch (e: any) {
-         if (e.name === 'AbortError') {
-            return; // Don't yield an error chunk if the user aborted
-        }
-        yield { error: handleGeminiError(e), isFinal: true };
+    // If all providers failed
+    if (lastError) {
+        const finalError = (lastError.message && lastError.message.includes('quota')) 
+            ? handleGeminiError(lastError) 
+            : `Tất cả các nhà cung cấp AI đều thất bại. Lỗi cuối cùng: ${lastError.message}`;
+        yield { error: finalError, isFinal: true };
     }
 }
+
 
 export async function translateText(text: string, sourceLang: string, targetLang: string): Promise<string | null> {
     if (!text) return null;
@@ -149,7 +269,9 @@ export async function translateText(text: string, sourceLang: string, targetLang
     } catch (e) {
         console.warn("Gemini translation failed, falling back to MyMemory API. Error:", e);
         try {
-            const response = await fetch(`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sourceLang}|${targetLang}`);
+            const apiUrl = `https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${sourceLang}|${targetLang}`;
+            const proxyUrl = `https://api.allorigins.win/raw?url=${encodeURIComponent(apiUrl)}`;
+            const response = await fetch(proxyUrl);
             if (!response.ok) throw new Error('MyMemory API request failed');
             const data = await response.json();
             if (data.responseData?.translatedText) {

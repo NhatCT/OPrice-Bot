@@ -26,8 +26,8 @@ interface SidebarProps {
   onAssignConversationToGroup: (conversationId: string, groupId: string | null) => void;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
-  activeView: 'chat' | 'products';
-  onViewChange: (view: 'chat' | 'products') => void;
+  activeView: 'chat' | 'products' | 'report';
+  onViewChange: (view: 'chat' | 'products' | 'report') => void;
 }
 
 const ConversationItem: React.FC<{
@@ -51,7 +51,7 @@ const ConversationItem: React.FC<{
 }) => {
     return (
         <div 
-            className={`group flex items-center justify-between p-2 rounded-lg cursor-pointer transition-colors duration-200 ${isActive ? 'bg-blue-100 dark:bg-blue-900/40' : 'hover:bg-slate-200 dark:hover:bg-slate-800'}`}
+            className={`group flex items-center justify-between p-2.5 rounded-lg cursor-pointer transition-colors duration-200 ${isActive ? 'bg-blue-100 dark:bg-blue-900/40' : 'hover:bg-slate-200 dark:hover:bg-slate-800'}`}
             onClick={onSelect}
             draggable
             onDragStart={(e) => onDragStart(e, convo.id)}
@@ -65,13 +65,13 @@ const ConversationItem: React.FC<{
                         onChange={(e) => setRenameInput(e.target.value)}
                         onBlur={onRename}
                         onKeyDown={handleKeyDown}
-                        className="w-full bg-white dark:bg-slate-700 text-sm px-2 py-1 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        className="w-full bg-white dark:bg-slate-700 text-2xl px-2 py-1 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                     />
                 </form>
             ) : (
                 <div className="flex items-center gap-2 min-w-0">
-                    <ChatBubbleIcon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`} />
-                    <span className="text-sm truncate">{convo.title}</span>
+                    <ChatBubbleIcon className={`w-6 h-6 flex-shrink-0 ${isActive ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400'}`} />
+                    <span className="text-2xl truncate">{convo.title}</span>
                 </div>
             )}
             {!isEditing && (
@@ -231,7 +231,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-2">
             <V64Logo className="w-8 h-8"/>
-            <h1 className="font-bold text-lg">V64 Assistant</h1>
+            <h1 className="font-bold text-2xl">V64 Assistant</h1>
         </div>
         <button
           onClick={onNewChat}
@@ -250,15 +250,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
             placeholder="Tìm kiếm..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full bg-slate-200 dark:bg-slate-800 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full bg-slate-200 dark:bg-slate-800 rounded-lg pl-10 pr-4 py-4 text-2xl focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
         </div>
       </div>
 
       <div className="p-3">
         <div className="flex bg-slate-200 dark:bg-slate-800 p-1 rounded-lg">
-            <button onClick={() => onViewChange('chat')} className={`w-1/2 py-1.5 text-sm font-semibold rounded-md transition-colors ${activeView === 'chat' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'hover:bg-slate-300/50 dark:hover:bg-slate-700/50'}`}>Trò chuyện</button>
-            <button onClick={() => onViewChange('products')} className={`w-1/2 py-1.5 text-sm font-semibold rounded-md transition-colors ${activeView === 'products' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'hover:bg-slate-300/50 dark:hover:bg-slate-700/50'}`}>Sản phẩm</button>
+            <button onClick={() => onViewChange('chat')} className={`w-1/3 py-3 text-2xl font-semibold rounded-md transition-colors ${activeView === 'chat' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'hover:bg-slate-300/50 dark:hover:bg-slate-700/50'}`}>Trò chuyện</button>
+            <button onClick={() => onViewChange('products')} className={`w-1/3 py-3 text-2xl font-semibold rounded-md transition-colors ${activeView === 'products' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'hover:bg-slate-300/50 dark:hover:bg-slate-700/50'}`}>Sản phẩm</button>
+            <button onClick={() => onViewChange('report')} className={`w-1/3 py-3 text-2xl font-semibold rounded-md transition-colors ${activeView === 'report' ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-sm' : 'hover:bg-slate-300/50 dark:hover:bg-slate-700/50'}`}>Báo cáo</button>
         </div>
       </div>
 
@@ -271,15 +272,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
           return (
             <div key={group.id} onDrop={(e) => { e.stopPropagation(); handleDrop(e, group.id); }} onDragOver={(e) => { e.stopPropagation(); handleDragOver(e, group.id); }} onDragLeave={handleDragLeave} className={`rounded-lg transition-colors ${dragOverTarget === group.id ? 'bg-blue-100 dark:bg-blue-900/40' : ''}`}>
-              <div className="group flex items-center justify-between p-2 rounded-lg cursor-pointer" onClick={() => toggleGroup(group.id)}>
+              <div className="group flex items-center justify-between p-2.5 rounded-lg cursor-pointer" onClick={() => toggleGroup(group.id)}>
                 <div className="flex items-center gap-2 min-w-0">
-                  <FolderIcon className="w-4 h-4 text-slate-500 dark:text-slate-400"/>
+                  <FolderIcon className="w-5 h-5 text-slate-500 dark:text-slate-400"/>
                   {editingGroupId === group.id ? (
                       <form onSubmit={handleRenameGroupSubmit} className="flex-1">
-                          <input ref={inputRef} type="text" value={renameInput} onChange={(e) => setRenameInput(e.target.value)} onBlur={handleRenameGroupSubmit} onKeyDown={handleKeyDown} className="w-full bg-white dark:bg-slate-700 text-sm px-2 py-1 rounded-md focus:outline-none"/>
+                          <input ref={inputRef} type="text" value={renameInput} onChange={(e) => setRenameInput(e.target.value)} onBlur={handleRenameGroupSubmit} onKeyDown={handleKeyDown} className="w-full bg-white dark:bg-slate-700 text-2xl px-2 py-1 rounded-md focus:outline-none"/>
                       </form>
                   ) : (
-                      <span className="text-sm font-semibold truncate">{group.name}</span>
+                      <span className="text-2xl font-semibold truncate">{group.name}</span>
                   )}
                 </div>
                 <div className="flex items-center opacity-0 group-hover:opacity-100">
@@ -340,13 +341,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="p-3 border-t border-slate-200 dark:border-slate-800">
         {isCreatingGroup ? (
             <form onSubmit={handleCreateGroupSubmit} className="flex items-center gap-2">
-                <input ref={inputRef} type="text" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="Tên nhóm mới..." className="flex-1 bg-white dark:bg-slate-700 text-sm px-2 py-1.5 rounded-md focus:outline-none"/>
+                <input ref={inputRef} type="text" value={newGroupName} onChange={e => setNewGroupName(e.target.value)} placeholder="Tên nhóm mới..." className="flex-1 bg-white dark:bg-slate-700 text-2xl px-2 py-1.5 rounded-md focus:outline-none"/>
                 <button type="submit" className="p-1.5 rounded-md hover:bg-slate-300 dark:hover:bg-slate-700"><CheckIcon className="w-5 h-5 text-green-500" /></button>
                 <button type="button" onClick={() => setIsCreatingGroup(false)} className="p-1.5 rounded-md hover:bg-slate-300 dark:hover:bg-slate-700"><XIcon className="w-5 h-5 text-red-500" /></button>
             </form>
         ) : (
-            <button onClick={() => setIsCreatingGroup(true)} className="w-full flex items-center gap-2 p-2 rounded-lg text-sm font-semibold hover:bg-slate-200 dark:hover:bg-slate-800">
-                <ArchiveBoxIcon className="w-4 h-4" />
+            <button onClick={() => setIsCreatingGroup(true)} className="w-full flex items-center gap-2 p-2 rounded-lg text-2xl font-semibold hover:bg-slate-200 dark:hover:bg-slate-800">
+                <ArchiveBoxIcon className="w-5 h-5" />
                 <span>Tạo nhóm mới</span>
             </button>
         )}

@@ -55,7 +55,7 @@ Phân tích lợi nhuận (Local)
 • Sản phẩm: ${productName || fromCat?.name || "(Chưa đặt tên)"}
 • Giá vốn/sp: ${formatVND(c)}
 • Giá bán/sp: ${formatVND(p)}
-• Doanh số dự kiến: ${q.toLocaleString("vi-VN")} sp
+• Số lượng bán dự kiến: ${q.toLocaleString("vi-VN")} sp
 • Doanh thu: ${formatVND(revenue)}
 • Tổng vốn: ${formatVND(totalCost)}
 • Lợi nhuận: ${formatVND(profit)}
@@ -109,7 +109,7 @@ Phân tích khuyến mãi (Local)
 • Giá vốn: ${formatVND(cost)}
 • Giá gốc: ${formatVND(price)}
 • Giảm giá: ${discount}% → Giá sau KM: ${formatVND(priceAfter)}
-• Doanh số: ${q0} → ${q1} (ước tính)
+• Số lượng bán: ${q0} → ${q1} (ước tính)
 • Doanh thu: ${formatVND(rev0)} → ${formatVND(rev1)}
 • Lợi nhuận: ${formatVND(profit0)} → ${formatVND(profit1)}
 `;
@@ -183,7 +183,7 @@ export const buildGroupPriceAnalysis = (
 Phân tích chính sách Đồng giá (Local)
 • Số sản phẩm: ${items.length}
 • Giá đồng giá áp dụng: ${formatVND(toNum(flatPrice))}
-• Tăng trưởng doanh số/sp: ${salesIncrease}%
+• Tăng trưởng số lượng bán/sp: ${salesIncrease}%
 • Doanh thu: ${formatVND(rev0)} → ${formatVND(rev1)}
 • Lợi nhuận: ${formatVND(profit0)} → ${formatVND(profit1)}
 `;

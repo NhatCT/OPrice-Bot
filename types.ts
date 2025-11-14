@@ -19,7 +19,7 @@ export interface MarketResearchData {
     title: string;
     description: string;
     key_items: {
-      brand_name: string;
+      inspiration_source: string;
       image_search_query: string;
       image_urls?: string[]; 
     }[];
@@ -52,6 +52,7 @@ interface BaseChatMessage {
   };
   analysisParams?: Record<string, any>;
   charts?: any[]; // Store raw chart data for export
+  chartError?: 'quota';
   marketResearchData?: MarketResearchData;
   task?: Task;
   isTranslated?: boolean;

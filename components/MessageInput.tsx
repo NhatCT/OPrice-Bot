@@ -224,7 +224,7 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     }
   };
   
-  const baseInputClass = "flex-1 w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 rounded-full px-5 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300 shadow-sm pr-12";
+  const baseInputClass = "flex-1 w-full bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200 placeholder-slate-500 dark:placeholder-slate-400 rounded-full px-8 py-6 text-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-300 shadow-sm pr-20";
   const recordingInputClass = "border-2 border-blue-500 animate-listening";
   const defaultInputClass = "border border-slate-300 dark:border-slate-700";
 
@@ -255,35 +255,35 @@ export const MessageInput: React.FC<MessageInputProps> = ({
     <div className="p-4 bg-white/70 dark:bg-slate-800/50 backdrop-blur-md border-t border-slate-200 dark:border-slate-700 shrink-0">
         <form onSubmit={handleSubmit} className="flex items-center space-x-3">
             <div className="relative" ref={menuRef}>
-                <button type="button" onClick={() => setIsMenuOpen(p => !p)} className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-700/50">
-                    <DotsVerticalIcon className="w-5 h-5" />
+                <button type="button" onClick={() => setIsMenuOpen(p => !p)} className="p-3 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-700/50">
+                    <DotsVerticalIcon className="w-8 h-8" />
                 </button>
                 {isMenuOpen && (
-                    <div className="absolute bottom-full mb-2 w-56 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg p-2 z-10 animate-fade-in-up">
-                        <button onClick={() => { onNewChat(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">
-                            <PlusIcon className="w-4 h-4" />
+                    <div className="absolute bottom-full mb-2 w-64 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg p-2 z-10 animate-fade-in-up">
+                        <button onClick={() => { onNewChat(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-2xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">
+                            <PlusIcon className="w-5 h-5" />
                             <span>Trò chuyện mới</span>
                         </button>
-                         <button onClick={() => { onExportChat(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">
-                            <ArchiveBoxIcon className="w-4 h-4" />
+                         <button onClick={() => { onExportChat(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-2xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">
+                            <ArchiveBoxIcon className="w-5 h-5" />
                             <span>Xuất cuộc trò chuyện</span>
                         </button>
                         <div className="my-1 h-px bg-slate-200 dark:bg-slate-600"></div>
-                        <button onClick={() => { onClearChat(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-md transition-colors duration-200">
-                            <TrashIcon className="w-4 h-4" />
+                        <button onClick={() => { onClearChat(); setIsMenuOpen(false); }} className="w-full flex items-center gap-3 text-left px-3 py-2 text-2xl text-red-600 dark:text-red-400 hover:bg-red-500/10 rounded-md transition-colors duration-200">
+                            <TrashIcon className="w-5 h-5" />
                             <span>Xóa tin nhắn hiện tại</span>
                         </button>
                     </div>
                 )}
             </div>
              <div className="relative" ref={toolsMenuRef}>
-                 <button type="button" onClick={() => setIsToolsMenuOpen(p => !p)} className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-700/50" title="Công cụ Phân tích">
-                     <BriefcaseIcon className="w-5 h-5" />
+                 <button type="button" onClick={() => setIsToolsMenuOpen(p => !p)} className="p-3 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-700/50" title="Công cụ Phân tích">
+                     <BriefcaseIcon className="w-8 h-8" />
                  </button>
                  {isToolsMenuOpen && (
-                     <div className="absolute bottom-full mb-2 w-64 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg p-2 z-10 animate-fade-in-up">
+                     <div className="absolute bottom-full mb-2 w-72 bg-white dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg p-2 z-10 animate-fade-in-up">
                         {toolMenuItems.map(item => (
-                             <button key={item.task} onClick={() => handleToolSelect(item.task as Task)} className="w-full flex items-center gap-3 text-left px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">
+                             <button key={item.task} onClick={() => handleToolSelect(item.task as Task)} className="w-full flex items-center gap-3 text-left px-3 py-2 text-2xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-600/70 rounded-md transition-colors duration-200">
                                  {item.icon}
                                  <span>{item.label}</span>
                              </button>
@@ -293,8 +293,8 @@ export const MessageInput: React.FC<MessageInputProps> = ({
              </div>
 
              <input type="file" ref={fileInputRef} onChange={handleImageChange} accept="image/*" className="hidden" />
-              <button type="button" onClick={() => fileInputRef.current?.click()} className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-700/50" disabled={isLoading} title="Đính kèm ảnh">
-                <PaperclipIcon className="w-5 h-5" />
+              <button type="button" onClick={() => fileInputRef.current?.click()} className="p-3 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors rounded-full hover:bg-slate-100 dark:hover:bg-slate-700/50" disabled={isLoading} title="Đính kèm ảnh">
+                <PaperclipIcon className="w-8 h-8" />
               </button>
             <div className="relative flex-1">
                  {image && (
@@ -327,11 +327,11 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                         type="button"
                         onClick={handleToggleRecording}
                         disabled={isLoading}
-                        className={`absolute inset-y-0 right-0 flex items-center justify-center w-12 h-full text-slate-500 dark:text-slate-400 transition-colors duration-200 rounded-r-full ${isRecording ? 'text-red-500 animate-pulse-mic' : 'hover:text-blue-500 dark:hover:text-blue-400'}`}
+                        className={`absolute inset-y-0 right-0 flex items-center justify-center w-20 h-full text-slate-500 dark:text-slate-400 transition-colors duration-200 rounded-r-full ${isRecording ? 'text-red-500 animate-pulse-mic' : 'hover:text-blue-500 dark:hover:text-blue-400'}`}
                         aria-label={isRecording ? "Dừng ghi âm" : "Bắt đầu ghi âm"}
                         title={isRecording ? "Dừng ghi âm" : "Bắt đầu ghi âm"}
                     >
-                        <MicrophoneIcon className="w-5 h-5" />
+                        <MicrophoneIcon className="w-8 h-8" />
                     </button>
                 )}
             </div>
@@ -339,21 +339,21 @@ export const MessageInput: React.FC<MessageInputProps> = ({
                 <button
                     type="button"
                     onClick={onStopGeneration}
-                    className="bg-red-600 text-white rounded-full p-3 hover:bg-red-500 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 flex items-center gap-2"
+                    className="bg-red-600 text-white rounded-full p-5 hover:bg-red-500 transition-colors duration-300 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 flex items-center gap-2"
                     aria-label="Dừng"
                     title="Dừng"
                 >
-                    <StopIcon className="w-6 h-6" />
+                    <StopIcon className="w-8 h-8" />
                 </button>
             ) : (
                 <button
                     type="submit"
                     disabled={(!input.trim() && !image) || isLoading}
-                    className="text-white rounded-full p-3 hover:opacity-90 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 hover:scale-105 active:scale-95"
+                    className="text-white rounded-full p-5 hover:opacity-90 disabled:bg-slate-400 dark:disabled:bg-slate-600 disabled:cursor-not-allowed transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:ring-offset-slate-50 dark:focus:ring-offset-slate-800 hover:scale-105 active:scale-95"
                     aria-label="Gửi tin nhắn"
                     style={{ background: 'var(--brand-gradient)' }}
                 >
-                    <PaperAirplaneIcon className="w-6 h-6" />
+                    <PaperAirplaneIcon className="w-8 h-8" />
                 </button>
             )}
         </form>
