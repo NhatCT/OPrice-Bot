@@ -35,7 +35,7 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
     }, [messages, isLoading]);
 
     return (
-      <div ref={ref} className="flex-1 overflow-y-auto p-6 space-y-8">
+      <div ref={ref} className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-8">
         {messages.map((msg, index) => (
           <ChatMessageComponent 
               key={msg.id || `msg-${index}`}
