@@ -88,13 +88,13 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave 
 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-slate-900">
-      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center">
+      <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h2 className="text-3xl font-bold text-slate-800 dark:text-slate-100">Quản lý Sản phẩm</h2>
-          <p className="text-xl text-slate-500 dark:text-slate-400">Nhập giá vốn / giá bán từ file Excel/CSV hoặc Google Sheet.</p>
+          <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100">Quản lý Sản phẩm</h2>
+          <p className="text-lg sm:text-xl text-slate-500 dark:text-slate-400 mt-1">Nhập giá vốn / giá bán từ file Excel/CSV hoặc Google Sheet.</p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           {saveStatus !== "idle" && (
             <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
               {saveStatus === "saved" ? (
@@ -105,7 +105,7 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave 
             </div>
           )}
 
-          <label className="flex items-center gap-2 px-4 py-2 text-xl font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 cursor-pointer">
+          <label className="flex items-center gap-2 px-3 py-2 sm:px-4 sm:py-2 text-lg sm:text-xl font-semibold text-white bg-emerald-600 rounded-lg hover:bg-emerald-500 cursor-pointer">
             <input
               type="file"
               accept=".xlsx,.xls,.csv"
@@ -120,29 +120,29 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave 
             <span>{isImporting ? "Đang nhập..." : "Import File"}</span>
           </label>
 
-          <button onClick={clearAll} className="px-4 py-2 text-xl font-semibold text-white bg-red-600 rounded-lg hover:bg-red-500">
+          <button onClick={clearAll} className="px-3 py-2 sm:px-4 sm:py-2 text-lg sm:text-xl font-semibold text-white bg-red-600 rounded-lg hover:bg-red-500">
             Xóa toàn bộ
           </button>
 
-          <button onClick={addProduct} className="px-4 py-2 text-xl font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 flex items-center gap-2">
+          <button onClick={addProduct} className="px-3 py-2 sm:px-4 sm:py-2 text-lg sm:text-xl font-semibold text-white bg-blue-600 rounded-lg hover:bg-blue-500 flex items-center gap-2">
             <PlusIcon className="w-5 h-5" />
-            Thêm sản phẩm
+            Thêm
           </button>
         </div>
       </div>
 
-      <div className="flex gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 items-center border-b border-slate-200 dark:border-slate-700">
+      <div className="flex flex-col sm:flex-row gap-3 px-4 py-3 bg-slate-50 dark:bg-slate-800/50 items-center border-b border-slate-200 dark:border-slate-700">
         <input
           type="text"
           placeholder="Dán link Google Sheet (tùy chọn)..."
           value={sheetLink}
           onChange={(e) => setSheetLink(e.target.value)}
-          className="flex-1 text-xl border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+          className="flex-1 w-full sm:w-auto text-lg sm:text-xl border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
         />
         <select
           value={importMode}
           onChange={(e) => setImportMode(e.target.value as "replace" | "merge")}
-          className="text-xl border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
+          className="text-lg sm:text-xl border border-slate-300 dark:border-slate-600 rounded-lg px-3 py-2 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-200"
           title="Chế độ nhập"
         >
           <option value="replace">Thay thế (khuyên dùng)</option>
@@ -151,41 +151,43 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave 
         <button
           onClick={() => handleImport()}
           disabled={isImporting}
-          className="px-4 py-2 text-xl font-semibold text-white bg-green-600 rounded-lg hover:bg-green-500"
+          className="w-full sm:w-auto px-4 py-2 text-lg sm:text-xl font-semibold text-white bg-green-600 rounded-lg hover:bg-green-500"
         >
           {isImporting ? "Đang tải..." : "Tải từ Google Sheet"}
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        <table className="w-full text-lg">
-          <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800/80 backdrop-blur-sm">
-            <tr>
-              <th className={th}>SKU</th>
-              <th className={th}>Tên sản phẩm</th>
-              <th className={th}>Giá vốn (VND)</th>
-              <th className={th}>Giá bán (VND)</th>
-            </tr>
-          </thead>
-          <tbody>
-            {products.map((p) => (
-              <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
-                <td className={`${td} w-1/6`}>
-                  <input type="text" value={p.sku} onChange={(e) => onChange(p.id, "sku", e.target.value)} className={input} placeholder="SKU" />
-                </td>
-                <td className={`${td} w-2/5`}>
-                  <input type="text" value={p.name} onChange={(e) => onChange(p.id, "name", e.target.value)} className={input} placeholder="Tên sản phẩm" />
-                </td>
-                <td className={`${td} w-1/6`}>
-                  <input type="number" step="1" value={p.cost} onChange={(e) => onChange(p.id, "cost", e.target.value)} className={input} placeholder="0" />
-                </td>
-                <td className={`${td} w-1/6`}>
-                  <input type="number" step="1" value={p.price} onChange={(e) => onChange(p.id, "price", e.target.value)} className={input} placeholder="0" />
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      <div className="flex-1 overflow-auto">
+        <div className="overflow-x-auto">
+            <table className="w-full text-lg min-w-[600px]">
+              <thead className="sticky top-0 bg-slate-50 dark:bg-slate-800/80 backdrop-blur-sm">
+                <tr>
+                  <th className={th}>SKU</th>
+                  <th className={th}>Tên sản phẩm</th>
+                  <th className={th}>Giá vốn (VND)</th>
+                  <th className={th}>Giá bán (VND)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {products.map((p) => (
+                  <tr key={p.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
+                    <td className={`${td} w-1/6`}>
+                      <input type="text" value={p.sku} onChange={(e) => onChange(p.id, "sku", e.target.value)} className={input} placeholder="SKU" />
+                    </td>
+                    <td className={`${td} w-2/5`}>
+                      <input type="text" value={p.name} onChange={(e) => onChange(p.id, "name", e.target.value)} className={input} placeholder="Tên sản phẩm" />
+                    </td>
+                    <td className={`${td} w-1/6`}>
+                      <input type="number" step="1" value={p.cost} onChange={(e) => onChange(p.id, "cost", e.target.value)} className={input} placeholder="0" />
+                    </td>
+                    <td className={`${td} w-1/6`}>
+                      <input type="number" step="1" value={p.price} onChange={(e) => onChange(p.id, "price", e.target.value)} className={input} placeholder="0" />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+        </div>
 
         {!products.length && (
           <div className="text-center p-8 text-slate-500 dark:text-slate-400">
