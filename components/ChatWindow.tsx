@@ -1,7 +1,5 @@
-
-
 import React, { useEffect, useRef, forwardRef } from 'react';
-import type { ChatMessage } from '../types';
+import type { ChatMessage, Task, WatchedProduct } from '../types';
 import { ChatMessageComponent } from './ChatMessage';
 import { TypingIndicator } from './TypingIndicator';
 import { V64Logo } from './icons/V64Logo';
@@ -17,6 +15,8 @@ interface ChatWindowProps {
   comparisonSelection: number[];
   onToggleCompare: (index: number) => void;
   onEditAnalysis: (message: ChatMessage) => void;
+  onExportExcel: (message: ChatMessage) => void;
+  onQuickAction: (task: Task, initialData: Record<string, any>) => void;
   sourceFilter: string | null;
   effectiveTheme: 'light' | 'dark';
   onSourceFilterChange: (uri: string | null) => void;
@@ -24,10 +24,13 @@ interface ChatWindowProps {
   onInitiateEdit: (messageId: number) => void;
   onSaveEdit: (messageId: number, newContent: string) => void;
   onCancelEdit: () => void;
+  watchlist: WatchedProduct[];
+  onToggleWatch: (product: { id: string; name: string; url: string; platform: string; price: string; }) => void;
+  onGenerateContent: (sourceMessage: ChatMessage) => void;
 }
 
 export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
-  ({ messages, isLoading, onSuggestionClick, onFeedback, onOpenFeedbackDialog, onRegenerate, onRefine, comparisonSelection, onToggleCompare, onEditAnalysis, sourceFilter, effectiveTheme, onSourceFilterChange, editingMessageId, onInitiateEdit, onSaveEdit, onCancelEdit }, ref) => {
+  ({ messages, isLoading, onSuggestionClick, onFeedback, onOpenFeedbackDialog, onRegenerate, onRefine, comparisonSelection, onToggleCompare, onEditAnalysis, onExportExcel, onQuickAction, sourceFilter, effectiveTheme, onSourceFilterChange, editingMessageId, onInitiateEdit, onSaveEdit, onCancelEdit, watchlist, onToggleWatch, onGenerateContent }, ref) => {
     const messagesEndRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -49,6 +52,8 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
               onToggleCompare={onToggleCompare}
               isSelectedForCompare={comparisonSelection.includes(index)}
               onEditAnalysis={onEditAnalysis}
+              onExportExcel={onExportExcel}
+              onQuickAction={onQuickAction}
               sourceFilter={sourceFilter as string}
               effectiveTheme={effectiveTheme}
               isLastMessage={index === messages.length - 1}
@@ -58,6 +63,9 @@ export const ChatWindow = forwardRef<HTMLDivElement, ChatWindowProps>(
               onInitiateEdit={onInitiateEdit}
               onSaveEdit={onSaveEdit}
               onCancelEdit={onCancelEdit}
+              watchlist={watchlist}
+              onToggleWatch={onToggleWatch}
+              onGenerateContent={onGenerateContent}
           />
         ))}
         {isLoading && messages[messages.length - 1]?.role !== 'model' && (

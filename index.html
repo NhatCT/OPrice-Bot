@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="vi">
   <head>
@@ -5,8 +6,10 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>V64 Business Assistant</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
     <script>
-      // Apply theme from local storage or OS preference to prevent FOUC
       const theme = localStorage.getItem('theme');
       const osPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
       if (theme === 'dark' || (theme === 'system' && osPrefersDark) || (!theme && osPrefersDark)) {
@@ -17,96 +20,153 @@
     </script>
     <style>
       :root {
-        --brand-gradient: linear-gradient(135deg, #3b82f6, #8b5cf6);
-        --brand-gradient-hover: linear-gradient(135deg, #60a5fa, #a78bfa);
-        --background-light: 248 250 252; /* slate-50 */
-        --background-dark: 15 23 42;   /* slate-900 */
-        --foreground-light: 15 23 42;  /* slate-900 */
-        --foreground-dark: 226 232 240; /* slate-200 */
+        /* Brand Colors */
+        --brand-primary: #4f46e5;
+        --brand-secondary: #9333ea;
+        --brand-accent: #06b6d4;
+        --brand-gradient: linear-gradient(135deg, var(--brand-primary), var(--brand-secondary));
+        
+        /* Backgrounds */
+        --bg-app: #f3f4f6;
+        --dark-bg-app: #0f172a; 
       }
+
       body {
+        font-family: 'Inter', sans-serif;
         transition: background-color 0.3s ease, color 0.3s ease;
+        -webkit-font-smoothing: antialiased;
+        overflow: hidden;
       }
+
+      /* Dynamic Mesh Background */
+      body::before {
+        content: "";
+        position: fixed;
+        top: 0; left: 0; width: 100%; height: 100%;
+        z-index: -1;
+        opacity: 0.6;
+        background: 
+            radial-gradient(circle at 15% 50%, rgba(79, 70, 229, 0.15), transparent 25%), 
+            radial-gradient(circle at 85% 30%, rgba(147, 51, 234, 0.15), transparent 25%);
+        filter: blur(60px);
+        pointer-events: none;
+      }
+
       body.dark {
-        background-color: rgb(var(--background-dark));
-        background-image:
-            linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-            linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-        background-size: 2.5rem 2.5rem;
+        background-color: var(--dark-bg-app);
+        color: #f8fafc;
       }
+      
+      body.dark::before {
+         opacity: 0.3;
+         background: 
+            radial-gradient(circle at 15% 50%, rgba(79, 70, 229, 0.2), transparent 30%), 
+            radial-gradient(circle at 85% 30%, rgba(147, 51, 234, 0.2), transparent 30%);
+      }
+
       body:not(.dark) {
-         background-color: rgb(var(--background-light));
+         background-color: var(--bg-app);
+         color: #1e293b;
       }
-      @keyframes blink {
-        50% { opacity: 0; }
+
+      /* Glassmorphism Utilities */
+      .glass-panel {
+        background: rgba(255, 255, 255, 0.7);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.5);
+        box-shadow: 
+            0 4px 6px -1px rgba(0, 0, 0, 0.05), 
+            0 2px 4px -1px rgba(0, 0, 0, 0.03),
+            inset 0 0 0 1px rgba(255, 255, 255, 0.2);
       }
-      .blinking-cursor {
-        animation: blink 1s step-end infinite;
-        font-weight: 600;
-        color: rgb(59 130 246); /* blue-500 */
-        display: inline-block;
-        margin-left: 2px;
-        transform: translateY(-1px);
+      
+      .dark .glass-panel {
+        background: rgba(30, 41, 59, 0.6);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 
+            0 4px 6px -1px rgba(0, 0, 0, 0.2), 
+            0 2px 4px -1px rgba(0, 0, 0, 0.1),
+            inset 0 1px 0 0 rgba(255, 255, 255, 0.05);
       }
-      .dark .blinking-cursor {
-          color: rgb(96 165 250); /* blue-400 */
+
+      /* 3D Card Effect */
+      .card-3d {
+        transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        transform-style: preserve-3d;
       }
-       /* Global Animations */
-      @keyframes popover-enter {
-        from { opacity: 0; transform: translateY(5px) scale(0.98); }
+      .card-3d:hover {
+        transform: translateY(-5px) scale(1.02);
+        box-shadow: 
+            0 20px 25px -5px rgba(0, 0, 0, 0.1), 
+            0 10px 10px -5px rgba(0, 0, 0, 0.04);
+      }
+
+      /* Custom Scrollbar */
+      ::-webkit-scrollbar { width: 6px; height: 6px; }
+      ::-webkit-scrollbar-track { background: transparent; }
+      ::-webkit-scrollbar-thumb { background: rgba(156, 163, 175, 0.3); border-radius: 10px; }
+      ::-webkit-scrollbar-thumb:hover { background: rgba(156, 163, 175, 0.5); }
+
+      /* Animations */
+      @keyframes messageIn {
+        from { opacity: 0; transform: translateY(10px) scale(0.98); }
         to { opacity: 1; transform: translateY(0) scale(1); }
       }
-      .animate-popover-enter {
-          animation: popover-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      .animate-message-in { animation: messageIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards; }
+
+      @keyframes popover-enter {
+        from { opacity: 0; transform: translateY(8px) scale(0.96); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
       }
-      @keyframes fade-in-fast {
-        from { opacity: 0; }
-        to { opacity: 1; }
+      .animate-popover-enter { animation: popover-enter 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+
+      @keyframes fade-in-up {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
       }
-      .animate-fade-in-fast {
-          animation: fade-in-fast 0.2s ease-out forwards;
+      .animate-fade-in-up { animation: fade-in-up 0.4s ease-out forwards; }
+      
+      .blinking-cursor {
+        animation: pulse 1s infinite;
+        color: var(--brand-primary);
       }
-      @keyframes dialog-in {
-        from { opacity: 0; transform: scale(0.95) translateY(10px); }
-        to { opacity: 1; transform: scale(1) translateY(0); }
-      }
-      .animate-dialog-in {
-          animation: dialog-in 0.2s ease-out forwards;
-      }
-       @keyframes form-step-in {
-        from { opacity: 0; transform: translateX(20px); }
-        to { opacity: 1; transform: translateX(0); }
-      }
-      .animate-form-step-in {
-          animation: form-step-in 0.3s ease-out forwards;
-      }
+      @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     </style>
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // Configure Tailwind CDN to use class-based dark mode
       tailwind.config = {
         darkMode: 'class',
+        theme: {
+            extend: {
+                fontFamily: { sans: ['Inter', 'sans-serif'] },
+                colors: { slate: { 850: '#172033', 950: '#020617' } }
+            }
+        }
       };
     </script>
-<script type="importmap">
+  <script type="importmap">
 {
   "imports": {
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
     "react": "https://aistudiocdn.com/react@^19.2.0",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.0",
-    "recharts": "https://aistudiocdn.com/recharts@^3.3.0",
-    "vite": "https://aistudiocdn.com/vite@^7.2.2",
-    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.0",
-    "html-to-image": "https://aistudiocdn.com/html-to-image@^1.11.13",
-    "remark-gfm": "https://aistudiocdn.com/remark-gfm@^4.0.1",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
     "react-markdown": "https://aistudiocdn.com/react-markdown@^10.1.0",
-    "xlsx": "https://aistudiocdn.com/xlsx@^0.18.5"
+    "remark-gfm": "https://aistudiocdn.com/remark-gfm@^4.0.1",
+    "react-syntax-highlighter": "https://aistudiocdn.com/react-syntax-highlighter@^16.1.0",
+    "react-syntax-highlighter/": "https://aistudiocdn.com/react-syntax-highlighter@^16.1.0/",
+    "html-to-image": "https://aistudiocdn.com/html-to-image@^1.11.13",
+    "recharts": "https://aistudiocdn.com/recharts@^3.4.1",
+    "vite": "https://aistudiocdn.com/vite@^7.2.4",
+    "@vitejs/plugin-react": "https://aistudiocdn.com/@vitejs/plugin-react@^5.1.1",
+    "xlsx": "https://aistudiocdn.com/xlsx@^0.18.5",
+    "html2canvas": "https://aistudiocdn.com/html2canvas@^1.4.1"
   }
 }
 </script>
 </head>
-  <body class="bg-slate-50 dark:bg-slate-900 text-gray-800 dark:text-gray-200 overflow-hidden">
+  <body class="antialiased">
     <div id="root"></div>
     <script type="module" src="/index.tsx"></script>
   </body>

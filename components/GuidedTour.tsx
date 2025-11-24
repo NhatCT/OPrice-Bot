@@ -139,4 +139,3 @@ export const GuidedTour: React.FC<GuidedTourProps> = ({ isOpen, onClose, steps }
     </div>
   );
 };
-

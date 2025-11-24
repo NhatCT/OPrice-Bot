@@ -1,608 +1,216 @@
-import React, { useState, useRef, useEffect } from 'react';
-import type { ChatMessage, Theme } from '../types';
-import { ExternalLinkIcon } from './icons/ExternalLinkIcon';
-import { ThumbUpIcon } from './icons/ThumbUpIcon';
-import { ThumbDownIcon } from './icons/ThumbDownIcon';
-import { ClipboardIcon } from './icons/ClipboardIcon';
-import { CheckIcon } from './icons/CheckIcon';
+
+// ... (Imports same as previous)
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { V64Logo } from './icons/V64Logo';
-import { LightningBoltIcon } from './icons/LightningBoltIcon';
-import { ClockIcon } from './icons/ClockIcon';
-import { ScaleIcon } from './icons/ScaleIcon';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import type { ChatMessage, Feedback, WatchedProduct } from '../types';
+import { UserCircleIcon } from './icons/UserCircleIcon';
+import { SparklesIcon } from './icons/SparklesIcon';
 import { PencilSquareIcon } from './icons/PencilSquareIcon';
-import { GlobeAltIcon } from './icons/GlobeAltIcon';
-import { DocumentArrowDownIcon } from './icons/DocumentArrowDownIcon';
-import { toPng } from 'html-to-image';
-import { TableCellsIcon } from './icons/TableCellsIcon';
+import { ClipboardIcon } from './icons/ClipboardIcon';
+import { CheckIcon } from './icons/CheckIcon';
 import { ArrowPathIcon } from './icons/ArrowPathIcon';
+import { ThumbUpIcon } from './icons/ThumbUpIcon';
+import { ThumbDownIcon } from './icons/ThumbDownIcon';
+import { ScaleIcon } from './icons/ScaleIcon';
+import { TableCellsIcon } from './icons/TableCellsIcon';
+import { MarketResearchReport } from './MarketResearchReport';
+import { AnalysisChart } from './charts/AnalysisChart';
+import { ColorSwatchRenderer } from './ColorSwatchRenderer';
+import { BrandPositioningMap } from './BrandPositioningMap';
+import { V64Logo } from './icons/V64Logo';
+import { PinIcon } from './icons/PinIcon';
+import { ChevronUpIcon } from './icons/ChevronUpIcon';
+import { ChevronDownIcon } from './icons/ChevronDownIcon';
+import { WandIcon } from './icons/WandIcon';
+import { GlobeAltIcon } from './icons/GlobeAltIcon';
+import { ExternalLinkIcon } from './icons/ExternalLinkIcon';
 import { EllipsisHorizontalIcon } from './icons/EllipsisHorizontalIcon';
+import { DocumentArrowDownIcon } from './icons/DocumentArrowDownIcon';
 import { TypingIndicator } from './TypingIndicator';
 import { FunnelIcon } from './icons/FunnelIcon';
-import { InformationCircleIcon } from './icons/InformationCircleIcon';
-import { ColorSwatchRenderer } from './ColorSwatchRenderer';
-import { PencilIcon } from './icons/PencilIcon';
-import { DocumentDuplicateIcon } from './icons/DocumentDuplicateIcon';
-import { WandIcon } from './icons/WandIcon';
+import { toPng } from 'html-to-image';
 
-interface ChatMessageProps {
-  message: ChatMessage;
-  onSuggestionClick: (suggestion: string) => void;
-  onFeedback: (feedback: 'positive') => void;
-  onOpenFeedbackDialog: (message: ChatMessage, index: number) => void;
-  onRegenerate: (index: number) => void;
-  onRefine: () => void;
-  index: number;
-  onToggleCompare: (index: number) => void;
-  isSelectedForCompare: boolean;
-  onEditAnalysis: (message: ChatMessage) => void;
-  sourceFilter?: string;
-  effectiveTheme: 'light' | 'dark';
-  isLastMessage: boolean;
-  isLoading: boolean;
-  onSourceFilterChange: (uri: string | null) => void;
-  isEditing: boolean;
-  onInitiateEdit: (messageId: number) => void;
-  onSaveEdit: (messageId: number, newContent: string) => void;
-  onCancelEdit: () => void;
-}
-
-const renderWithColorSwatches = (children: React.ReactNode): React.ReactNode => {
-    return React.Children.map(children, child => {
-        if (typeof child === 'string' && child.match(/#([0-9a-fA-F]{6}|[0-9a-fA-F]{3})\b/)) {
-            return <ColorSwatchRenderer text={child} />;
-        }
-        if (React.isValidElement(child)) {
-            const props = child.props as { children?: React.ReactNode; [key: string]: any };
-            if (props.children) {
-                const newProps = {
-                    ...props,
-                    children: renderWithColorSwatches(props.children)
-                };
-                return React.cloneElement(child, newProps);
-            }
-        }
-        return child;
-    });
+// ... (Helper functions: parseSortValue, SortableTable remain same)
+const parseSortValue = (val: string) => {
+    if (!val) return 0;
+    let multiplier = 1;
+    if (val.toLowerCase().includes('k')) multiplier = 1000;
+    if (val.toLowerCase().includes('m')) multiplier = 1000000;
+    const numStr = val.replace(/[^0-9.,]/g, '').replace(/,/g, '');
+    return parseFloat(numStr) * multiplier || 0;
 };
 
-export const ChatMessageComponent: React.FC<ChatMessageProps> = ({ message, onSuggestionClick, onFeedback, onOpenFeedbackDialog, onRegenerate, onRefine, index, onToggleCompare, isSelectedForCompare, onEditAnalysis, sourceFilter, effectiveTheme, isLastMessage, isLoading, onSourceFilterChange, isEditing, onInitiateEdit, onSaveEdit, onCancelEdit }) => {
-  const [isCopied, setIsCopied] = useState(false);
-  const [isRawPromptCopied, setIsRawPromptCopied] = useState(false);
-  const [feedbackSent, setFeedbackSent] = useState(false);
-  const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
-  const [editText, setEditText] = useState(message.content);
-  const [showOriginal, setShowOriginal] = useState(false);
-  const messageContentRef = useRef<HTMLDivElement>(null);
-  const actionsButtonRef = useRef<HTMLDivElement>(null);
-  const editTextAreaRef = useRef<HTMLTextAreaElement>(null);
-  
-  useEffect(() => {
-    setEditText(message.content);
-  }, [message.content]);
-  
-  useEffect(() => {
-      if (isEditing && editTextAreaRef.current) {
-          const textarea = editTextAreaRef.current;
-          textarea.focus();
-          textarea.style.height = 'auto';
-          textarea.style.height = `${textarea.scrollHeight}px`;
-      }
-  }, [isEditing]);
-
-  const handleEditTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setEditText(e.target.value);
-      const textarea = e.target;
-      textarea.style.height = 'auto';
-      textarea.style.height = `${textarea.scrollHeight}px`;
-  };
-
-  const handleSaveEdit = () => {
-      if (message.id != null && editText.trim() !== '') {
-          onSaveEdit(message.id, editText);
-      }
-  };
-  
-  const contentToDisplay = showOriginal && message.originalContent ? message.originalContent : message.content;
-  const languageToggleTitle = showOriginal ? "Hiển thị bản dịch" : "Hiển thị bản gốc";
-
-  const isModel = message.role === 'model';
-  const hasSuggestions = isModel && message.suggestions && message.suggestions.length > 0 && !isLoading && isLastMessage;
-  const hasSources = isModel && message.sources && message.sources.length > 0;
-  const hasPerformance = isModel && message.performance && message.performance.totalTime > 0;
-  const feedbackGiven = !!message.feedback;
-  const canCompare = isModel && message.sources && message.sources.length > 0;
-  const canEdit = isModel && !!message.analysisParams && !!message.task;
-  const canExport = isModel && (!!message.analysisParams || !!message.marketResearchData) && !!message.task;
-  const hasSummary = message.summary && message.summary.trim() !== '';
-  const showTypingIndicator = isModel && isLastMessage && isLoading && !message.content && !message.component;
-  const showCursor = isModel && isLastMessage && isLoading && !message.component && !!message.content;
-  const isAnalysisTask = isModel && !!message.task && message.task !== 'market-research' && message.task !== 'brand-positioning';
-  
-  const chartsWithData = message.charts?.filter(chart => {
-    if (!chart.data || !Array.isArray(chart.data) || chart.data.length === 0) {
-        return false;
-    }
-    const firstPoint = chart.data[0];
-    if (typeof firstPoint !== 'object' || firstPoint === null) return false;
-    
-    const dataKey = Object.keys(firstPoint).find(key => key !== 'name');
-    if (!dataKey) return false;
-    
-    return chart.data.some((point: any) => point && typeof point[dataKey] === 'number' && Number.isFinite(point[dataKey]));
-  });
-  const noChartsGenerated = isAnalysisTask && (!chartsWithData || chartsWithData.length === 0) && !message.component && !showTypingIndicator;
-
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (actionsButtonRef.current && !actionsButtonRef.current.contains(event.target as Node)) {
-        setIsActionsMenuOpen(false);
-      }
+const SortableTable: React.FC<{ data: any[]; columns: any[]; watchlist?: WatchedProduct[]; onToggleWatch?: (item: any) => void; }> = ({ data, columns, watchlist, onToggleWatch }) => {
+    // ... (Same logic)
+    const [sortConfig, setSortConfig] = useState<{ key: string; direction: 'asc' | 'desc' } | null>(null);
+    const sortedData = useMemo(() => {
+        if (!sortConfig) return data;
+        return [...data].sort((a, b) => {
+            const valA = parseSortValue(a[sortConfig.key]);
+            const valB = parseSortValue(b[sortConfig.key]);
+            return sortConfig.direction === 'asc' ? (valA < valB ? -1 : 1) : (valA > valB ? -1 : 1);
+        });
+    }, [data, sortConfig]);
+    const requestSort = (key: string) => {
+        let direction: 'asc' | 'desc' = 'asc';
+        if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') direction = 'desc';
+        setSortConfig({ key, direction });
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
-  const handleCopy = () => {
-    const textToCopy = showOriginal && message.originalContent ? message.originalContent : message.content;
-    if (!textToCopy) return;
-    navigator.clipboard.writeText(textToCopy).then(() => {
-        setIsCopied(true);
-        setTimeout(() => setIsCopied(false), 2000);
-    }).catch(err => {
-        console.error('Failed to copy text: ', err);
-    });
-  };
-  
-  const handleCopyRawPrompt = () => {
-    if (message.role !== 'user' || !message.rawPrompt) return;
-    navigator.clipboard.writeText(message.rawPrompt).then(() => {
-        setIsRawPromptCopied(true);
-        setTimeout(() => setIsRawPromptCopied(false), 2000);
-    });
-  };
-
-  const handleThumbClick = (feedback: 'positive' | 'negative') => {
-    if (feedback === 'positive') {
-      onFeedback('positive');
-      setFeedbackSent(true);
-      setTimeout(() => setFeedbackSent(false), 3000);
-    } else {
-      onOpenFeedbackDialog(message, index);
-    }
-  };
-
-  const generateReportHTML = async (): Promise<string> => {
-    const contentEl = messageContentRef.current;
-    if (!contentEl) return '';
-    
-    const clone = contentEl.cloneNode(true) as HTMLDivElement;
-    document.body.appendChild(clone);
-    clone.style.width = '800px';
-    clone.style.backgroundColor = '#ffffff';
-    clone.querySelectorAll('.dark').forEach(el => el.classList.remove('dark'));
-
-    const chartElements = clone.querySelectorAll('.analysis-chart-wrapper');
-    const chartImagePromises = Array.from(chartElements).map(async chartEl => {
-        try {
-            const dataUrl = await toPng(chartEl as HTMLElement, { pixelRatio: 2, backgroundColor: '#ffffff' });
-            const img = document.createElement('img');
-            img.src = dataUrl;
-            img.style.maxWidth = '100%';
-            img.style.height = 'auto';
-            img.style.marginTop = '20px';
-            chartEl.replaceWith(img);
-        } catch (e) {
-            console.error("Chart to image conversion failed", e);
-        }
-    });
-
-    await Promise.all(chartImagePromises);
-
-    const analysisHtml = clone.innerHTML;
-    document.body.removeChild(clone);
-
-    return `
-      <!DOCTYPE html>
-      <html lang="vi">
-      <head>
-          <meta charset="UTF-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Báo cáo Phân tích - V64</title>
-          <style>
-              body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; line-height: 1.6; color: #334155; max-width: 800px; margin: 40px auto; padding: 0 20px; }
-              h1, h2, h3, h4 { color: #1e293b; }
-              h1 { font-size: 2em; border-bottom: 2px solid #e2e8f0; padding-bottom: 10px; }
-              h2 { font-size: 1.5em; margin-top: 30px; }
-              .summary { background-color: #f8fafc; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px; }
-              .report-section { margin-bottom: 2rem; }
-              .report-section-header { display: flex; align-items: center; gap: 0.75rem; border-bottom: 1px solid #e5e7eb; padding-bottom: 0.5rem; margin-bottom: 1rem; }
-              .report-section-header h3 { font-size: 1.25rem; font-weight: 600; margin: 0; }
-              .key-items-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 1rem; }
-              .item-card { border: 1px solid #e5e7eb; border-radius: 0.75rem; overflow: hidden; }
-              .item-card img { max-width: 100%; height: auto; }
-              .item-card-content { padding: 1rem; }
-              .item-card-content h4 { font-size: 1rem; font-weight: 600; margin: 0 0 0.5rem; }
-              .item-card-content p { font-size: 0.875rem; margin: 0; }
-          </style>
-      </head>
-      <body>
-          <h1>Báo cáo Phân tích</h1>
-          <div class="summary">
-              <p><strong>Loại phân tích:</strong> ${message.task || 'Không rõ'}</p>
-              <p><strong>Ngày tạo:</strong> ${new Date().toLocaleString('vi-VN')}</p>
-          </div>
-          <h2>Nội dung Phân tích</h2>
-          <div>${analysisHtml}</div>
-      </body>
-      </html>
-    `;
-  };
-
-  const handleExportReport = async () => {
-    setIsActionsMenuOpen(false);
-    const htmlContent = await generateReportHTML();
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    const taskName = message.task || 'analysis';
-    const safeTaskName = taskName.replace(/[^a-z0-9]/gi, '_');
-    link.download = `V64_Report_${safeTaskName}_${Date.now()}.html`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const handleExportData = () => {
-    setIsActionsMenuOpen(false);
-    if (!message.charts || message.charts.length === 0) {
-        alert('Không có dữ liệu biểu đồ để xuất.');
-        return;
-    }
-
-    let csvContent = 'Chart Title,Name,Value\n';
-    message.charts.forEach((chart: any) => {
-        const title = `"${chart.title.replace(/"/g, '""')}"`;
-        if (chart.data && Array.isArray(chart.data)) {
-            chart.data.forEach((point: any) => {
-                const name = `"${point.name.replace(/"/g, '""')}"`;
-                csvContent += `${title},${name},${point.value}\n`;
-            });
-        }
-    });
-
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    const taskName = message.task || 'analysis';
-    const safeTaskName = taskName.replace(/[^a-z0-9]/gi, '_');
-    link.download = `V64_Data_${safeTaskName}_${Date.now()}.csv`;
-    link.href = url;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-  };
-
-  const markdownComponents: any = {
-      p: ({node, ...props}: any) => <p className="mb-3 last:mb-0 leading-relaxed" {...props}>{renderWithColorSwatches(props.children)}</p>,
-      h1: ({node, ...props}: any) => <h1 className="text-2xl font-bold mb-4 mt-2" {...props}>{renderWithColorSwatches(props.children)}</h1>,
-      h2: ({node, ...props}: any) => <h2 className="text-xl font-semibold mb-3 mt-1" {...props}>{renderWithColorSwatches(props.children)}</h2>,
-      h3: ({node, ...props}: any) => <h3 className="text-lg font-semibold mb-2" {...props}>{renderWithColorSwatches(props.children)}</h3>,
-      ul: ({node, ...props}: any) => <ul className="list-disc list-outside space-y-2 mb-3 pl-6" {...props} />,
-      ol: ({node, ...props}: any) => <ol className="list-decimal list-outside space-y-2 mb-3 pl-6" {...props} />,
-      li: ({node, ...props}: any) => <li className="pl-1" {...props}>{renderWithColorSwatches(props.children)}</li>,
-      table: ({node, ...props}: any) => <div className="overflow-x-auto my-4"><table className="table-auto w-full border-collapse border border-slate-300 dark:border-slate-600" {...props} /></div>,
-      thead: ({node, ...props}: any) => <thead className="bg-slate-100 dark:bg-slate-700" {...props} />,
-      tbody: ({node, ...props}: any) => <tbody {...props} />,
-      tr: ({node, ...props}: any) => <tr className="border-b border-slate-200 dark:border-slate-600 last:border-b-0" {...props} />,
-      th: ({node, ...props}: any) => <th className="border border-slate-200 dark:border-slate-600 px-4 py-2 text-left font-semibold text-slate-800 dark:text-slate-200" {...props}>{renderWithColorSwatches(props.children)}</th>,
-      td: ({node, ...props}: any) => <td className="border border-slate-200 dark:border-slate-600 px-4 py-2 text-slate-700 dark:text-slate-300" {...props}>{renderWithColorSwatches(props.children)}</td>,
-      code: ({node, inline, ...props}: any) => {
-        if (inline) {
-            return <code className="bg-slate-200 dark:bg-slate-600/50 rounded-sm px-1.5 py-0.5 text-sm font-mono text-blue-800 dark:text-blue-300" {...props}>{renderWithColorSwatches(props.children)}</code>;
-        }
-        return <code className="font-mono text-sm" {...props} />;
-      },
-      pre: ({node, ...props}: any) => <pre className="bg-slate-100 dark:bg-slate-900/70 rounded-md p-3 my-3 overflow-x-auto" {...props} />,
-      a: ({node, ...props}: any) => <a className="text-blue-600 dark:text-blue-400 hover:underline" target="_blank" rel="noopener noreferrer" {...props} />,
-  };
-  
-  if (message.role === 'user') {
     return (
-        <div className="flex flex-col items-end animate-message-in group relative">
-            <div className={`flex items-end gap-2 flex-row-reverse ${isEditing ? 'w-full max-w-xl lg:max-w-3xl' : ''}`}>
-                <div 
-                    className={`max-w-xl lg:max-w-3xl rounded-2xl shadow-md relative ${isEditing ? 'w-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 p-3' : 'px-5 py-4 rounded-br-md text-white'}`}
-                    style={!isEditing ? { background: 'var(--brand-gradient)' } : {}}
-                >
-                    {isEditing ? (
-                        <>
-                            <textarea
-                                ref={editTextAreaRef}
-                                value={editText}
-                                onChange={handleEditTextChange}
-                                className="w-full bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none resize-none text-xl leading-relaxed"
-                                rows={1}
-                            />
-                            <div className="flex justify-end items-center gap-2 mt-2">
-                                <button onClick={onCancelEdit} className="px-3 py-1 text-lg sm:text-xl font-semibold rounded-md bg-slate-200 dark:bg-slate-600 hover:bg-slate-300 dark:hover:bg-slate-500 transition-colors">Hủy</button>
-                                <button onClick={handleSaveEdit} className="px-3 py-1 text-lg sm:text-xl font-semibold rounded-md bg-blue-600 text-white hover:bg-blue-500 transition-colors">Lưu & Gửi</button>
-                            </div>
-                        </>
-                    ) : (
-                        <>
-                            {message.image && (
-                                <img src={message.image} alt="User upload" className="mb-3 rounded-lg max-h-60" />
-                            )}
-                            <div className="prose prose-lg sm:prose-xl prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none text-white leading-relaxed">
-                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={{ ...markdownComponents, a: ({ node, ...props }: any) => <a className="text-blue-200 hover:underline" target="_blank" rel="noopener noreferrer" {...props}>{renderWithColorSwatches(props.children)}</a> }}>
-                                    {contentToDisplay}
-                                </ReactMarkdown>
-                            </div>
-                        </>
-                    )}
-                </div>
+        <div className="overflow-hidden my-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm bg-white/50 dark:bg-slate-900/50 backdrop-blur-sm">
+            <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                    <thead className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase bg-slate-50/50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-700">
+                        <tr>{columns.map(col => (<th key={col.key} className="px-5 py-4 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-700/50 transition-colors" onClick={() => requestSort(col.key)}><div className="flex items-center gap-1.5">{col.label}{sortConfig?.key === col.key && (sortConfig.direction === 'asc' ? <ChevronUpIcon className="w-3 h-3"/> : <ChevronDownIcon className="w-3 h-3"/>)}</div></th>))}</tr>
+                    </thead>
+                    <tbody>
+                        {sortedData.map((row, i) => (
+                            <tr key={i} className="border-b border-slate-100 dark:border-slate-800/50 last:border-0 hover:bg-slate-50/50 dark:hover:bg-slate-800/30 transition-colors">
+                                {columns.map(col => (
+                                    <td key={`${i}-${col.key}`} className="px-5 py-4 text-slate-700 dark:text-slate-200">
+                                        {col.isLink ? <a href={row[col.key]} target="_blank" rel="noopener noreferrer" className="text-blue-600 dark:text-blue-400 hover:underline font-medium flex items-center gap-1">Link <ExternalLinkIcon className="w-3 h-3"/></a> : col.isWatchable && onToggleWatch ? (
+                                            <div className="flex items-center justify-between gap-3"><span className="font-medium">{row[col.key]}</span><button onClick={() => onToggleWatch(row)} className={`p-1.5 rounded-full hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors ${watchlist?.some(w => w.name === row.name) ? 'text-blue-500 bg-blue-50 dark:bg-blue-900/20' : 'text-slate-400'}`}><PinIcon className="w-3.5 h-3.5" isFilled={watchlist?.some(w => w.name === row.name)} /></button></div>
+                                        ) : row[col.key]}
+                                    </td>
+                                ))}
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
             </div>
-            {!isEditing && (message.id != null || message.rawPrompt || message.isTranslated) && (
-                <div className="absolute -bottom-2 right-0 w-full flex items-start justify-end pr-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                     <div className="flex items-center gap-1 bg-white/50 dark:bg-slate-700/50 backdrop-blur-md border border-slate-200 dark:border-slate-600 rounded-full shadow-sm px-3 py-1 sm:px-5 sm:py-2">
-                          {message.isTranslated && (
-                            <button onClick={() => setShowOriginal(p => !p)} className="p-1 sm:p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label={languageToggleTitle} title={languageToggleTitle}>
-                                <GlobeAltIcon className="w-6 h-6 sm:w-8 sm:h-8" />
-                            </button>
-                          )}
-                          {message.rawPrompt && (
-                             <button onClick={handleCopyRawPrompt} className={`p-1 sm:p-2 rounded-full transition-all duration-200 ${isRawPromptCopied ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'}`} aria-label={isRawPromptCopied ? "Đã sao chép" : "Sao chép câu lệnh"} title={isRawPromptCopied ? "Đã sao chép!" : "Sao chép câu lệnh"}>
-                                {isRawPromptCopied ? <CheckIcon className="w-6 h-6 sm:w-8 sm:h-8" /> : <DocumentDuplicateIcon className="w-6 h-6 sm:w-8 sm:h-8" />}
-                            </button>
-                          )}
-                         {message.id != null && (
-                            <button onClick={() => onInitiateEdit(message.id!)} className="p-1 sm:p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Chỉnh sửa" title="Chỉnh sửa">
-                                <PencilIcon className="w-6 h-6 sm:w-8 sm:h-8" />
-                            </button>
-                         )}
-                    </div>
-                </div>
-            )}
         </div>
     );
-  }
+};
 
-  // --- RENDER MODEL MESSAGE ---
-  return (
-    <div className="flex flex-row items-start gap-3 animate-message-in">
-        <V64Logo className="w-8 h-8 flex-shrink-0 mt-1" />
+interface ChatMessageComponentProps {
+    index: number; message: ChatMessage; onSuggestionClick: (s: string) => void; onFeedback: (f: 'positive') => void; onOpenFeedbackDialog: (m: ChatMessage, i: number) => void; onRegenerate: (i: number) => void; onRefine: () => void; onToggleCompare: (i: number) => void; isSelectedForCompare: boolean; onEditAnalysis: (m: ChatMessage) => void; onExportExcel: (m: ChatMessage) => void; onQuickAction: (t: any, d: any) => void; sourceFilter: string | null; effectiveTheme: 'light' | 'dark'; isLastMessage: boolean; isLoading: boolean; onSourceFilterChange: (u: string | null) => void; isEditing: boolean; onInitiateEdit: (id: number) => void; onSaveEdit: (id: number, c: string) => void; onCancelEdit: () => void; watchlist: WatchedProduct[]; onToggleWatch: (p: any) => void; onGenerateContent: (m: ChatMessage) => void;
+}
 
-        <div className="flex flex-col w-full items-start max-w-xl lg:max-w-4xl group relative">
-            <div className="w-full bg-white dark:bg-slate-800 border border-slate-200/90 dark:border-slate-700/60 rounded-2xl shadow-sm relative">
-                 <div className="p-5" ref={messageContentRef}>
-                    {showTypingIndicator ? (
-                        <TypingIndicator />
+export const ChatMessageComponent: React.FC<ChatMessageComponentProps> = ({
+    index, message, onSuggestionClick, onFeedback, onOpenFeedbackDialog, onRegenerate, onRefine, onToggleCompare, isSelectedForCompare, onEditAnalysis, onExportExcel, sourceFilter, effectiveTheme, isLastMessage, isLoading, onSourceFilterChange, isEditing, onInitiateEdit, onSaveEdit, onCancelEdit, watchlist, onToggleWatch, onGenerateContent
+}) => {
+    const [copied, setCopied] = useState(false);
+    const [editContent, setEditContent] = useState(message.content);
+    const [isActionsMenuOpen, setIsActionsMenuOpen] = useState(false);
+    const actionsButtonRef = useRef<HTMLDivElement>(null);
+    const contentRef = useRef<HTMLDivElement>(null);
+    const isUser = message.role === 'user';
+    const canExport = true;
+
+    useEffect(() => {
+        const handleClickOutside = (event: MouseEvent) => {
+          if (actionsButtonRef.current && !actionsButtonRef.current.contains(event.target as Node)) setIsActionsMenuOpen(false);
+        };
+        document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, []);
+
+    const handleCopy = () => { navigator.clipboard.writeText(message.content); setCopied(true); setTimeout(() => setCopied(false), 2000); };
+    const handleToggleWatchItem = (item: any) => {
+        const watchedItem = { id: item.link || item.url || `${item.name}-${Date.now()}`, name: item.name || item.productName, url: item.link || item.url, platform: item.platform || 'Shopee', price: item.price, initialPrice: item.price, lastPrice: item.price, dateAdded: new Date().toISOString(), lastUpdated: new Date().toISOString() };
+        onToggleWatch(watchedItem);
+    };
+    const handleExportReport = async () => {
+        if (contentRef.current) {
+            try {
+                const dataUrl = await toPng(contentRef.current, { backgroundColor: effectiveTheme === 'dark' ? '#0f172a' : '#ffffff' });
+                const link = document.createElement('a'); link.download = `report-${Date.now()}.png`; link.href = dataUrl; link.click();
+            } catch (e) { console.error("Failed export", e); }
+        }
+    };
+
+    return (
+        <div className={`flex gap-4 ${isUser ? 'flex-row-reverse' : 'flex-row'} animate-message-in group px-2`}>
+            <div className="flex-shrink-0 mt-1">
+                {isUser ? (
+                    <div className="w-10 h-10 bg-gradient-to-br from-slate-100 to-slate-200 dark:from-slate-700 dark:to-slate-600 rounded-full flex items-center justify-center text-slate-600 dark:text-slate-300 shadow-sm border border-white dark:border-slate-600"><UserCircleIcon className="w-6 h-6" /></div>
+                ) : (
+                    <div className="w-10 h-10 bg-white/80 dark:bg-slate-900/80 backdrop-blur-sm rounded-xl flex items-center justify-center shadow-sm border border-white/50 dark:border-slate-700 p-1"><V64Logo className="w-full h-full" /></div>
+                )}
+            </div>
+            <div className={`flex-1 max-w-[90%] sm:max-w-[85%] ${isUser ? 'items-end' : 'items-start'} flex flex-col`}>
+                <div ref={contentRef} className={`relative px-6 py-5 text-base sm:text-lg leading-relaxed shadow-sm border backdrop-blur-xl ${isUser ? 'bg-gradient-to-br from-blue-600 to-violet-600 text-white rounded-[2rem] rounded-tr-sm border-transparent shadow-blue-500/20' : 'glass-panel rounded-[2rem] rounded-tl-sm text-slate-800 dark:text-slate-200'}`}>
+                    {isEditing && isUser ? (
+                        <div className="flex flex-col gap-3 w-full min-w-[300px]">
+                            <textarea value={editContent} onChange={(e) => setEditContent(e.target.value)} className="w-full p-3 text-slate-800 dark:text-slate-200 bg-white/20 rounded-xl focus:outline-none focus:ring-2 focus:ring-white/50 resize-none" rows={4} />
+                            <div className="flex justify-end gap-2"><button onClick={onCancelEdit} className="px-4 py-2 text-sm font-medium rounded-xl bg-white/10 hover:bg-white/20 text-white transition-colors">Hủy</button><button onClick={() => onSaveEdit(message.id!, editContent)} className="px-4 py-2 text-sm font-bold rounded-xl bg-white text-blue-600 hover:bg-blue-50 transition-colors shadow-sm">Lưu</button></div>
+                        </div>
                     ) : (
                         <>
-                            {hasSummary && (
-                                <div className="mb-4 p-4 bg-blue-50 dark:bg-slate-700/50 border-l-4 border-blue-400 rounded-r-lg animate-fade-in-fast">
-                                    <h4 className="flex items-center gap-2 text-sm font-bold text-blue-800 dark:text-blue-300 mb-2">
-                                        <InformationCircleIcon className="w-5 h-5" />
-                                        Tóm tắt
-                                    </h4>
-                                    <div className="prose prose-lg sm:prose-xl dark:prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none">
-                                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                                            {message.summary!}
-                                        </ReactMarkdown>
+                            {isUser && !isEditing && (<button onClick={() => { setEditContent(message.content); onInitiateEdit(message.id!); }} className="absolute -left-12 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/80 dark:bg-slate-800/80 backdrop-blur text-slate-500 hover:text-blue-600 opacity-0 group-hover:opacity-100 transition-all hover:scale-110 shadow-lg" title="Chỉnh sửa"><PencilSquareIcon className="w-4 h-4" /></button>)}
+                            {isUser && message.image && (<div className="mb-4 rounded-2xl overflow-hidden border-2 border-white/20 shadow-lg max-w-sm"><img src={message.image} alt="User upload" className="w-full h-auto object-cover" /></div>)}
+                            <div className={`prose prose-slate dark:prose-invert max-w-none break-words ${isUser ? 'prose-p:text-white prose-headings:text-white prose-strong:text-white prose-a:text-blue-100' : 'dark:prose-p:text-slate-300 dark:prose-headings:text-white dark:prose-strong:text-white'}`}>
+                                {message.task === 'brand-positioning' && <BrandPositioningMap />}
+                                {message.competitorAnalysisData && (
+                                    <div className="not-prose">
+                                        {message.competitorAnalysisData.executiveSummary && <div className="mb-6 p-5 bg-blue-50/50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800 rounded-2xl"><h4 className="text-xs font-bold text-blue-600 dark:text-blue-400 uppercase tracking-wider mb-2 flex items-center gap-1"><SparklesIcon className="w-3 h-3"/> Tóm tắt Lãnh đạo</h4><p className="text-slate-700 dark:text-slate-200 italic leading-relaxed">{message.competitorAnalysisData.executiveSummary}</p></div>}
+                                        <h4 className="flex items-center gap-2 text-lg font-bold text-slate-800 dark:text-slate-100 mb-4"><TableCellsIcon className="w-5 h-5 text-indigo-500"/> Bảng So sánh Đối thủ</h4>
+                                        <SortableTable data={message.competitorAnalysisData.comparisonTable} columns={[{ key: 'productName', label: 'Sản phẩm', isWatchable: true }, { key: 'price', label: 'Giá' }, { key: 'sold', label: 'Đã bán' }, { key: 'rating', label: 'Rate' }, { key: 'link', label: 'Link', isLink: true }]} watchlist={watchlist} onToggleWatch={handleToggleWatchItem} />
                                     </div>
-                                </div>
-                            )}
-                            {message.component}
-                            {chartsWithData && chartsWithData.length > 0 && (
-                                <div className="my-4 space-y-4">
-                                    {chartsWithData.map((chart: any, i: number) =>
-                                        chart.component ? (
-                                            <chart.component key={i} chart={chart} theme={effectiveTheme} />
-                                        ) : null
-                                    )}
-                                </div>
-                            )}
-                            {(contentToDisplay || showCursor) && (
-                                <div className="prose prose-lg sm:prose-xl dark:prose-invert max-w-none prose-p:before:content-none prose-p:after:content-none">
-                                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
-                                        {contentToDisplay || ''}
-                                    </ReactMarkdown>
-                                    {showCursor && <span className="blinking-cursor">▋</span>}
-                                </div>
-                            )}
-                            {noChartsGenerated && (
-                                <div className={`mt-4 p-3 border border-dashed rounded-lg flex items-center gap-3 text-lg ${
-                                    message.chartError === 'quota' 
-                                    ? 'bg-red-100 dark:bg-red-900/30 border-red-300 dark:border-red-700 text-red-700 dark:text-red-300' 
-                                    : 'bg-slate-100 dark:bg-slate-700/50 border-slate-300 dark:border-slate-600 text-slate-600 dark:text-slate-400'
-                                }`}>
-                                    <InformationCircleIcon className="w-6 h-6 flex-shrink-0" />
-                                    {message.chartError === 'quota' ? (
-                                        <span>Không thể tạo biểu đồ do đã hết hạn ngạch API.</span>
-                                    ) : (
-                                        <span>Không có biểu đồ nào được tạo cho phân tích này.</span>
-                                    )}
-                                </div>
+                                )}
+                                {message.keywordAnalysisData && (
+                                    <div className="not-prose">
+                                        <p className="mb-6 text-lg text-slate-700 dark:text-slate-200 border-l-4 border-purple-500 pl-4 py-1 bg-purple-50/30 dark:bg-purple-900/10 rounded-r-lg">{message.keywordAnalysisData.overallSummary}</p>
+                                        <h4 className="flex items-center gap-2 text-lg font-bold text-slate-800 dark:text-slate-100 mb-4"><SparklesIcon className="w-5 h-5 text-amber-500"/> Top Sản phẩm Bán chạy</h4>
+                                        <SortableTable data={message.keywordAnalysisData.topProducts} columns={[{ key: 'name', label: 'Sản phẩm', isWatchable: true }, { key: 'price', label: 'Giá' }, { key: 'monthlySales', label: 'Bán/tháng' }, { key: 'estimatedRevenue', label: 'Doanh thu (Est)' }, { key: 'link', label: 'Link', isLink: true }]} watchlist={watchlist} onToggleWatch={handleToggleWatchItem} />
+                                    </div>
+                                )}
+                                {message.marketResearchData ? (<div className="not-prose mt-4"><MarketResearchReport data={message.marketResearchData} theme={effectiveTheme} /></div>) : (
+                                    !message.competitorAnalysisData && !message.keywordAnalysisData && !message.shopeeComparisonData && !message.collectionAnalysisData && (
+                                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={{
+                                            code({ node, inline, className, children, ...props }: any) {
+                                                const match = /language-(\w+)/.exec(className || '');
+                                                return !inline && match ? (<div className="rounded-xl overflow-hidden my-6 shadow-xl border border-slate-200 dark:border-slate-700"><div className="bg-slate-100 dark:bg-slate-800 px-4 py-2 text-xs font-mono text-slate-500 border-b border-slate-200 dark:border-slate-700 flex justify-between"><span>{match[1]}</span></div><SyntaxHighlighter style={vscDarkPlus} language={match[1]} PreTag="div" customStyle={{ margin: 0, borderRadius: 0 }} {...props}>{String(children).replace(/\n$/, '')}</SyntaxHighlighter></div>) : (<code className={`${className} bg-slate-100 dark:bg-slate-700/50 text-pink-600 dark:text-pink-400 rounded px-1.5 py-0.5 font-mono text-sm border border-slate-200 dark:border-slate-600`} {...props}>{children}</code>);
+                                            },
+                                            p: ({ children }) => <p className="mb-4 last:mb-0 leading-relaxed text-slate-700 dark:text-slate-300"><ColorSwatchRenderer text={children?.toString()} /></p>,
+                                            h1: ({ children }) => <h1 className="text-2xl font-extrabold mb-6 mt-4 text-slate-900 dark:text-white border-b border-slate-200 dark:border-slate-700 pb-2">{children}</h1>,
+                                            h2: ({ children }) => <h2 className="text-xl font-bold mb-4 mt-6 text-slate-900 dark:text-white flex items-center gap-2"><span className="w-2 h-6 bg-blue-500 rounded-full inline-block"></span>{children}</h2>,
+                                            h3: ({ children }) => <h3 className="text-lg font-bold mb-3 text-slate-800 dark:text-slate-100">{children}</h3>,
+                                            li: ({ children }) => <li className="text-slate-700 dark:text-slate-300 pl-1 mb-1">{children}</li>,
+                                            strong: ({ children }) => <strong className="font-bold text-slate-900 dark:text-white">{children}</strong>,
+                                            table: ({children}) => <div className="overflow-x-auto my-6 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm"><table className="w-full text-sm text-left">{children}</table></div>,
+                                            thead: ({children}) => <thead className="bg-slate-50 dark:bg-slate-800/80 text-xs uppercase text-slate-500 font-semibold">{children}</thead>,
+                                            th: ({children}) => <th className="px-4 py-3 border-b border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200">{children}</th>,
+                                            td: ({children}) => <td className="px-4 py-3 border-b border-slate-100 dark:border-slate-800 last:border-0 text-slate-700 dark:text-slate-300">{children}</td>,
+                                            a: ({node, ...props}: any) => <a className="text-blue-600 dark:text-blue-400 hover:underline decoration-2 underline-offset-2 font-medium" target="_blank" rel="noopener noreferrer" {...props} />,
+                                        }}>{message.content}</ReactMarkdown>)
+                                )}
+                            </div>
+                            {message.charts && message.charts.length > 0 && (<div className="grid grid-cols-1 gap-6 mt-8">{message.charts.map((chart, idx) => (<div key={idx} className="bg-white/50 dark:bg-slate-900/50 p-6 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-sm"><AnalysisChart chart={chart} theme={effectiveTheme} /></div>))}</div>)}
+                            {message.sources && message.sources.length > 0 && (
+                                <div className="mt-8 pt-6 border-t border-slate-200/60 dark:border-slate-700/60"><h4 className="text-xs font-bold text-slate-400 dark:text-slate-500 mb-4 uppercase tracking-wider flex items-center gap-1.5"><GlobeAltIcon className="w-3.5 h-3.5" /> Nguồn tham khảo</h4><div className="flex flex-wrap gap-3">{message.sources.map((source, i) => (<a key={i} href={source.uri} target="_blank" rel="noopener noreferrer" className="group inline-flex items-center gap-2 px-4 py-2 text-xs font-medium bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 dark:hover:text-blue-400 transition-all border border-slate-200 dark:border-slate-700 shadow-sm hover:shadow-md hover:-translate-y-0.5"><div className="p-1 bg-slate-100 dark:bg-slate-700 rounded-full group-hover:bg-blue-100 dark:group-hover:bg-blue-900/50"><ExternalLinkIcon className="w-3 h-3" /></div><span className="truncate max-w-[180px]">{source.title}</span></a>))}</div></div>
                             )}
                         </>
                     )}
                 </div>
-                
-                {(hasPerformance || hasSources) && (
-                    <div className="w-full border-t border-slate-200/90 dark:border-slate-700/60 p-5 bg-slate-50 dark:bg-slate-800/40 rounded-b-2xl space-y-4">
-                        {hasPerformance && (
-                            <div>
-                                 <h4 className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">
-                                    Hiệu năng
-                                </h4>
-                                <div className="flex items-center gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
-                                    <span className="flex items-center gap-1.5" title="Thời gian nhận chunk đầu tiên">
-                                        <LightningBoltIcon className="w-4 h-4" />
-                                        <span>{message.performance!.timeToFirstChunk}ms</span>
-                                    </span>
-                                    <span className="flex items-center gap-1.5" title="Tổng thời gian phản hồi">
-                                        <ClockIcon className="w-4 h-4" />
-                                        <span>{message.performance!.totalTime}ms</span>
-                                    </span>
+                {!isUser && !isLoading && (
+                    <div className="mt-3 ml-4 flex flex-wrap items-center gap-2 opacity-0 group-hover:opacity-100 transition-all duration-300 translate-y-2 group-hover:translate-y-0">
+                        <div className="flex items-center gap-1 p-1 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm">
+                            <button onClick={handleCopy} className="p-2 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 transition-all" title="Sao chép">{copied ? <CheckIcon className="w-4 h-4 text-green-500" /> : <ClipboardIcon className="w-4 h-4" />}</button>
+                            <div className="w-px h-4 bg-slate-200 dark:bg-slate-700"></div>
+                            <button onClick={() => onFeedback('positive')} className={`p-2 rounded-lg transition-all ${message.feedback?.rating === 5 ? 'text-green-500 bg-green-50' : 'text-slate-400 hover:text-green-600 hover:bg-slate-100 dark:hover:bg-slate-700'}`} title="Hữu ích"><ThumbUpIcon className="w-4 h-4" /></button>
+                            <button onClick={() => onOpenFeedbackDialog(message, index)} className={`p-2 rounded-lg transition-all ${message.feedback && message.feedback.rating < 3 ? 'text-red-500 bg-red-50' : 'text-slate-400 hover:text-red-600 hover:bg-slate-100 dark:hover:bg-slate-700'}`} title="Báo cáo"><ThumbDownIcon className="w-4 h-4" /></button>
+                        </div>
+                        <button onClick={() => onRegenerate(index)} className="p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm text-slate-400 hover:text-blue-600 hover:border-blue-300 transition-all" title="Tạo lại"><ArrowPathIcon className="w-4 h-4" /></button>
+                        <div className="relative" ref={actionsButtonRef}>
+                            <button onClick={() => setIsActionsMenuOpen(p => !p)} className="p-2 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 shadow-sm text-slate-400 hover:text-purple-600 hover:border-purple-300 transition-all" title="Thêm"><EllipsisHorizontalIcon className="w-4 h-4" /></button>
+                            {isActionsMenuOpen && (
+                                <div className="absolute top-full left-0 mt-2 w-64 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl shadow-2xl p-1.5 z-20 animate-popover-enter">
+                                    <button onClick={() => { onEditAnalysis(message); setIsActionsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"><PencilSquareIcon className="w-4 h-4 text-slate-400" /><span>Chỉnh sửa tham số</span></button>
+                                    <button onClick={() => { onToggleCompare(index); setIsActionsMenuOpen(false); }} className={`w-full flex items-center gap-3 px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors ${isSelectedForCompare ? 'text-purple-600 bg-purple-50 dark:bg-purple-900/20' : 'text-slate-700 dark:text-slate-200'}`}><ScaleIcon className="w-4 h-4 text-slate-400" /><span>So sánh câu trả lời</span></button>
+                                    {(message.task === 'competitor-analysis' || message.task === 'keyword-analysis') && (<button onClick={() => { onGenerateContent(message); setIsActionsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"><WandIcon className="w-4 h-4 text-purple-500" /><span>Tạo Content Marketing</span></button>)}
+                                    {canExport && (<><div className="my-1 h-px bg-slate-100 dark:bg-slate-700"></div><button onClick={() => { handleExportReport(); setIsActionsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"><DocumentArrowDownIcon className="w-4 h-4 text-blue-500" /><span>Xuất ảnh báo cáo</span></button><button onClick={() => { onExportExcel(message); setIsActionsMenuOpen(false); }} className="w-full flex items-center gap-3 px-3 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"><TableCellsIcon className="w-4 h-4 text-green-500" /><span>Xuất Excel / CSV</span></button></>)}
                                 </div>
-                            </div>
-                        )}
-                        {hasSources && (
-                           <div>
-                                <h4 className="flex items-center gap-2 text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 uppercase tracking-wider">
-                                    <GlobeAltIcon className="w-4 h-4"/>
-                                    Nguồn tham khảo
-                                </h4>
-                                <div className="flex flex-col space-y-1">
-                                    {message.sources!.map((source, i) => {
-                                        const isHighlighted = source.uri === sourceFilter;
-                                        return (
-                                        <div 
-                                            key={i} 
-                                            className={`flex items-center justify-between group/source-item transition-colors duration-200 rounded-md ${isHighlighted ? 'bg-blue-100 dark:bg-blue-900/50' : 'hover:bg-slate-100 dark:hover:bg-slate-800/50'}`}
-                                        >
-                                            <a 
-                                                href={source.uri} 
-                                                target="_blank" 
-                                                rel="noopener noreferrer" 
-                                                className="flex-grow flex items-center space-x-2 text-blue-600 dark:text-blue-400 text-sm p-1.5 min-w-0"
-                                                title={source.uri}
-                                            >
-                                                <span className="flex-shrink-0 w-4 h-4 text-slate-500 dark:text-slate-400">
-                                                    <ExternalLinkIcon />
-                                                </span>
-                                                <span className="truncate hover:underline">{source.title || source.uri}</span>
-                                            </a>
-                                            <button 
-                                                onClick={() => onSourceFilterChange(source.uri)}
-                                                className="flex-shrink-0 p-1.5 mr-1 text-slate-400 dark:text-slate-500 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-full opacity-0 group-hover/source-item:opacity-100 focus:opacity-100 transition-opacity"
-                                                title="Lọc theo nguồn này"
-                                                aria-label="Lọc theo nguồn này"
-                                            >
-                                                <FunnelIcon className="w-4 h-4" />
-                                            </button>
-                                        </div>
-                                        )
-                                    })}
-                                </div>
-                            </div>
-                        )}
+                            )}
+                        </div>
                     </div>
                 )}
+                {!isUser && isLastMessage && message.suggestions && message.suggestions.length > 0 && (<div className="mt-6 flex flex-wrap gap-3 animate-fade-in-up" style={{ animationDelay: '0.3s' }}>{message.suggestions.map((suggestion, i) => (<button key={i} onClick={() => onSuggestionClick(suggestion)} className="px-5 py-2.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 rounded-2xl text-sm font-medium hover:border-blue-400 dark:hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all shadow-sm hover:shadow-md hover:-translate-y-0.5">{suggestion}</button>))}</div>)}
             </div>
-
-             {/* Actions Toolbar */}
-            <div className="absolute -bottom-2 left-0 w-full flex items-start justify-start pl-2 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <div className="flex items-center gap-1 bg-white/50 dark:bg-slate-700/50 backdrop-blur-md border border-slate-200 dark:border-slate-600 rounded-full shadow-sm px-3 py-1 sm:px-5 sm:py-2">
-                    {message.isTranslated && (
-                        <button onClick={() => setShowOriginal(p => !p)} className="p-1 sm:p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label={languageToggleTitle} title={languageToggleTitle}>
-                            <GlobeAltIcon className="w-6 h-6 sm:w-8 sm:h-8" />
-                        </button>
-                    )}
-                    <button onClick={() => handleThumbClick('positive')} disabled={feedbackGiven} className={`p-1 sm:p-2 rounded-full transition-colors duration-200 ${message.feedback ? 'text-blue-600 dark:text-blue-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Phản hồi tốt" title="Phản hồi tốt">
-                        <ThumbUpIcon className="w-6 h-6 sm:w-8 sm:h-8" />
-                    </button>
-                    <button onClick={() => handleThumbClick('negative')} disabled={feedbackGiven} className={`p-1 sm:p-2 rounded-full transition-colors duration-200 ${message.feedback ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600 disabled:opacity-40 disabled:hover:bg-transparent'}`} aria-label="Phản hồi chưa tốt" title="Phản hồi chưa tốt">
-                        <ThumbDownIcon className="w-6 h-6 sm:w-8 sm:h-8" />
-                    </button>
-                    <div className="h-4 w-px bg-slate-300 dark:bg-slate-600 mx-1"></div>
-                    <button onClick={handleCopy} className={`p-1 sm:p-2 rounded-full transition-all duration-200 ${isCopied ? 'text-green-600 dark:text-green-400' : 'text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600'}`} aria-label={isCopied ? "Đã sao chép" : "Sao chép"} title={isCopied ? "Đã sao chép!" : "Sao chép"} >
-                        {isCopied ? <CheckIcon className="w-6 h-6 sm:w-8 sm:h-8" /> : <ClipboardIcon className="w-6 h-6 sm:w-8 sm:h-8" />}
-                    </button>
-                    <button onClick={() => onRegenerate(index)} className="p-1 sm:p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Tạo lại" title="Tạo lại">
-                        <ArrowPathIcon className="w-6 h-6 sm:w-8 sm:h-8" />
-                    </button>
-                     <button onClick={onRefine} className="p-1 sm:p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Chỉnh sửa câu trả lời" title="Chỉnh sửa câu trả lời">
-                        <WandIcon className="w-6 h-6 sm:w-8 sm:h-8" />
-                    </button>
-                     <div className="relative" ref={actionsButtonRef}>
-                        <button onClick={() => setIsActionsMenuOpen(p => !p)} className="p-1 sm:p-2 rounded-full transition-colors duration-200 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-600" aria-label="Hành động khác" title="Hành động khác">
-                            <EllipsisHorizontalIcon className="w-6 h-6 sm:w-8 sm:h-8" />
-                        </button>
-                        {isActionsMenuOpen && (
-                             <div className="absolute bottom-full right-0 mb-2 w-72 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600 rounded-xl shadow-lg p-2 z-10 animate-popover-enter">
-                                {canEdit && (
-                                  <button onClick={() => {onEditAnalysis(message); setIsActionsMenuOpen(false);}} className="w-full flex items-start gap-3 text-left px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-600/70 rounded-md transition-colors">
-                                      <PencilSquareIcon className="w-6 h-6 sm:w-8 sm:h-8 mt-0.5 text-slate-500 dark:text-slate-400" />
-                                      <div>
-                                          <p className="text-lg sm:text-xl font-semibold">Chỉnh sửa & Tính lại</p>
-                                          <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400">Thay đổi các thông số đầu vào.</p>
-                                      </div>
-                                  </button>
-                                )}
-                                {canCompare && (
-                                     <button onClick={() => { onToggleCompare(index); setIsActionsMenuOpen(false);}} className={`w-full flex items-start gap-3 text-left px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-600/70 rounded-md transition-colors ${isSelectedForCompare ? 'bg-purple-100 dark:bg-purple-900/50 text-purple-600 dark:text-purple-400' : ''}`}>
-                                      <ScaleIcon className="w-6 h-6 sm:w-8 sm:h-8 mt-0.5 text-slate-500 dark:text-slate-400" />
-                                      <div>
-                                          <p className="text-lg sm:text-xl font-semibold">So sánh Nguồn</p>
-                                          <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400">So sánh với một câu trả lời khác.</p>
-                                      </div>
-                                  </button>
-                                )}
-                                {canExport && (
-                                    <>
-                                        <div className="my-1 h-px bg-slate-200 dark:bg-slate-600"></div>
-                                        <button onClick={handleExportReport} className="w-full flex items-start gap-3 text-left px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-600/70 rounded-md transition-colors">
-                                            <DocumentArrowDownIcon className="w-6 h-6 sm:w-8 sm:h-8 mt-0.5 text-blue-500" />
-                                            <div>
-                                                <p className="text-lg sm:text-xl font-semibold">Tải Báo cáo (.html)</p>
-                                                <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400">Tương thích với Word, trình duyệt.</p>
-                                            </div>
-                                        </button>
-                                        <button onClick={handleExportData} className="w-full flex items-start gap-3 text-left px-3 py-2 hover:bg-slate-200 dark:hover:bg-slate-600/70 rounded-md transition-colors">
-                                            <TableCellsIcon className="w-6 h-6 sm:w-8 sm:h-8 mt-0.5 text-green-500" />
-                                            <div>
-                                                <p className="text-lg sm:text-xl font-semibold">Tải Dữ liệu (.csv)</p>
-                                                <p className="text-base sm:text-lg text-slate-500 dark:text-slate-400">Tương thích với Excel, Sheets.</p>
-                                            </div>
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                </div>
-            </div>
-            
-            {feedbackSent && (
-                <div className="w-full mt-2 p-3 text-center text-sm text-green-700 dark:text-green-300 bg-green-100 dark:bg-green-900/40 rounded-lg border border-green-200 dark:border-green-700 animate-fade-in-fast">
-                    Cảm ơn bạn đã phản hồi!
-                </div>
-            )}
-
-            {hasSuggestions && (
-                <div className="flex flex-wrap gap-3 mt-4 w-full">
-                  {message.suggestions!.map((suggestion, i) => (
-                    <button key={i} onClick={() => onSuggestionClick(suggestion)} className="bg-white dark:bg-slate-700/50 hover:bg-slate-100 dark:hover:bg-slate-600/50 text-blue-700 dark:text-blue-300 text-lg sm:text-xl font-medium py-2 px-5 sm:py-3 sm:px-7 rounded-full transition-colors duration-200 border border-slate-200 dark:border-slate-600/80 hover:border-slate-300 dark:hover:border-slate-500" aria-label={`Gửi gợi ý: ${suggestion}`}>
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-            )}
         </div>
-    </div>
-  );
+    );
 };
-
-const style = document.createElement('style');
-style.innerHTML = `
-    @keyframes messageIn {
-        from {
-            opacity: 0;
-            transform: translateY(10px) scale(0.98);
-        }
-        to {
-            opacity: 1;
-            transform: translateY(0) scale(1);
-        }
-    }
-    .animate-message-in {
-        animation: messageIn 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-    }
-`;
-document.head.appendChild(style);

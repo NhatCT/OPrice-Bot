@@ -1,79 +1,138 @@
-import type { ReactNode, FC } from 'react';
+
+import type { ReactNode } from 'react';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type Font = 'sans' | 'serif' | 'mono';
-export type Task = 'profit-analysis' | 'promo-price' | 'group-price' | 'market-research' | 'brand-positioning';
 
-export interface UserProfile {
-  name: string;
+export type Task = 
+  | 'profit-analysis' 
+  | 'promo-price' 
+  | 'group-price' 
+  | 'market-research' 
+  | 'brand-positioning' 
+  | 'competitor-analysis' 
+  | 'keyword-analysis' 
+  | 'collection-analysis' 
+  | 'content-generation';
+
+export type AnalysisCategory = 'business-analysis' | 'market-research' | 'brand-positioning';
+
+export interface ChartData {
+    name: string;
+    [key: string]: string | number;
+}
+
+export interface Chart {
+    type: 'bar' | 'pie';
+    title: string;
+    data: ChartData[];
+    unit?: string;
+}
+
+export interface AnalysisResult {
+    metrics: Record<string, string | number>;
+    charts: Chart[];
+    summaryText: string;
+}
+
+export interface ShopeeProduct {
+    name: string;
+    price: string;
+    link: string;
+}
+
+export interface ShopeeComparisonData {
+    analysis: string;
+    products: ShopeeProduct[];
+}
+
+export interface WatchedProduct {
+    id: string;
+    name: string;
+    url: string;
+    platform: string;
+    initialPrice: string;
+    lastPrice: string;
+    dateAdded: string;
+    lastUpdated: string;
 }
 
 export interface Feedback {
-  rating: number;
-  issues: string[];
-  correction?: string;
+    rating: number;
+    issues?: string[];
+    correction?: string;
 }
 
-export interface MarketResearchData {
-  trend_sections?: {
+export interface CompetitorAnalysisData {
+    executiveSummary?: string;
+    comparisonTable: any[];
+}
+
+export interface KeywordAnalysisData {
+    overallSummary: string;
+    topProducts: any[];
+}
+
+export interface CollectionAnalysisData {
+    [key: string]: any;
+}
+
+export interface TrendSection {
     title: string;
     description: string;
     key_items: {
-      inspiration_source: string;
-      image_search_query: string;
-      image_urls?: string[]; 
+        inspiration_source: string;
+        image_urls?: string[];
     }[];
-  }[];
-  wash_effect_summary?: {
+}
+
+export interface WashEffectSummary {
     title: string;
     table: {
-      wash_type: string;
-      application_effect: string;
+        wash_type: string;
+        application_effect: string;
     }[];
-  };
-  charts?: any[];
 }
 
+export interface MarketResearchData {
+    trend_sections?: TrendSection[];
+    wash_effect_summary?: WashEffectSummary;
+    charts?: Chart[];
+}
 
-interface BaseChatMessage {
-  id?: number;
-  content: string;
-  image?: string; // base64 data URL
-  summary?: string;
-  suggestions?: string[];
-  sources?: {
-    uri: string;
+export interface ChatMessage {
+    id?: number;
+    role: 'user' | 'model';
+    content: string;
+    image?: string;
+    timestamp?: number;
+    task?: Task;
+    analysisParams?: Record<string, any>;
+    
+    // Response specific data
+    sources?: { uri: string; title: string }[];
+    suggestions?: string[];
+    feedback?: Feedback;
+    
+    // Analysis data attachments
+    charts?: Chart[];
+    shopeeComparisonData?: ShopeeComparisonData;
+    marketResearchData?: MarketResearchData;
+    competitorAnalysisData?: CompetitorAnalysisData;
+    keywordAnalysisData?: KeywordAnalysisData;
+    collectionAnalysisData?: CollectionAnalysisData;
+    
+    // Component cache
+    component?: ReactNode;
+    
+    // For user inputs
+    rawPrompt?: string;
+}
+
+export interface ConversationMeta {
+    id: string;
     title: string;
-  }[];
-  feedback?: Feedback; // Replaced old feedback types
-  performance?: {
-    timeToFirstChunk: number;
-    totalTime: number;
-  };
-  analysisParams?: Record<string, any>;
-  charts?: any[]; // Store raw chart data for export
-  chartError?: 'quota';
-  marketResearchData?: MarketResearchData;
-  task?: Task;
-  isTranslated?: boolean;
-  originalContent?: string;
-}
-
-export type ChatMessage =
-  | (BaseChatMessage & {
-      role: 'user';
-      rawPrompt?: string; // The full prompt sent to the API, for analysis tasks
-    })
-  | (BaseChatMessage & {
-      role: 'model';
-      component?: ReactNode;
-    });
-
-
-export interface Conversation {
-  id: string;
-  title: string;
-  messages: ChatMessage[];
+    groupId: string | null;
 }
 
 export interface ConversationGroup {
@@ -81,59 +140,55 @@ export interface ConversationGroup {
     name: string;
 }
 
-// Add ConversationMeta for optimized loading
-export interface ConversationMeta {
-  id:string;
-  title: string;
-  groupId?: string | null;
+export interface UserProfile {
+    name: string;
 }
 
-export interface CostSheetItem {
-  name: string;
-  category: string;
-  sku: string;
-  costOfGoods: number;
-  priceOnline: number;
-}
-
-
-// --- Local Analysis Types ---
-export interface Chart {
-  type: 'bar';
-  title: string;
-  data: { name: string; value: number }[];
-  unit?: string;
-  component?: FC<any>; 
-}
-
-export interface AnalysisResult {
-  analysis: string;
-  charts: Chart[];
-}
-
-// --- Business Profile Types ---
 export interface Product {
-  id: string;
-  sku: string;
-  name: string;
-  cost: string;
-  price: string;
-}
-
-export interface DefaultCost {
-  fixedCostMonthly?: string;
-  fixedCostAnnually?: string;
+    id: string;
+    sku: string;
+    name: string;
+    cost: string;
+    price: string;
 }
 
 export interface BusinessProfile {
-  defaultCosts: DefaultCost;
-  products: Product[];
+    defaultCosts: {
+        fixedCostMonthly?: string;
+        [key: string]: any;
+    };
+    products: Product[];
+    brandDNA?: {
+        personality: string[];
+        targetCustomer: string;
+        productVision: string;
+    };
+    watchlist?: WatchedProduct[];
+    frequentProducts?: any[]; // deprecated
 }
 
-// --- Fine-Tuning Types ---
+export interface ActiveTool {
+    category: AnalysisCategory;
+    initialTask?: Task;
+    initialData?: Record<string, any>;
+}
+
+export interface CostSheetItem {
+    sku: string;
+    name: string;
+    cost: number;
+    price: number;
+}
+
 export interface FineTuningExample {
   id: string;
   originalPrompt: string;
   improvedResponse: string;
   category?: 'better_advice' | 'factual_correction' | 'tone_style' | 'formatting' | 'other';
+}
+
+export interface FinancialQuestion {
+  id: number;
+  question: string;
+  topic: string;
 }

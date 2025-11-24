@@ -1,5 +1,5 @@
 import React from 'react';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
+import { BarChart, Bar, PieChart, Pie, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 
 const COLORS = ['#3b82f6', '#10b981', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899'];
 
@@ -10,12 +10,13 @@ interface ChartData {
 
 interface AnalysisChartProps {
     chart: {
-        type: 'bar';
+        type: 'bar' | 'pie';
         title: string;
         data: ChartData[];
         unit?: string;
     };
     theme: 'light' | 'dark';
+    highlightedItem?: string | null;
 }
 
 const formatValue = (value: number, unit?: string) => {
@@ -26,7 +27,7 @@ const formatValue = (value: number, unit?: string) => {
     return value.toLocaleString('vi-VN');
 };
 
-const CustomTooltip = ({ active, payload, label, unit }: any) => {
+const CustomBarTooltip = ({ active, payload, label, unit }: any) => {
     if (active && payload && payload.length) {
       const formattedValue = Number(payload[0].value).toLocaleString('vi-VN');
       const unitDisplay = unit ? (unit === '%' ? unit : ` ${unit}`) : '';
@@ -40,10 +41,23 @@ const CustomTooltip = ({ active, payload, label, unit }: any) => {
     return null;
 };
 
-export const AnalysisChart: React.FC<AnalysisChartProps> = ({ chart, theme }) => {
+const CustomPieTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      const data = payload[0].payload;
+      return (
+        <div className="p-2 bg-slate-100/80 dark:bg-slate-800/80 backdrop-blur-sm border border-slate-300 dark:border-slate-600 rounded-lg shadow-lg">
+          <p className="font-bold text-slate-800 dark:text-slate-100" style={{ color: payload[0].fill }}>
+            {`${data.name}: ${Number(data.value).toLocaleString('vi-VN')} VND (${data.percent.toFixed(1)}%)`}
+          </p>
+        </div>
+      );
+    }
+    return null;
+};
+
+export const AnalysisChart: React.FC<AnalysisChartProps> = ({ chart, theme, highlightedItem }) => {
     const tickColor = theme === 'dark' ? '#94a3b8' : '#64748b';
 
-    // Add a defensive check to ensure chart.data is an array before rendering.
     if (!Array.isArray(chart.data)) {
         console.error("Invalid chart data: expected an array but got:", chart.data);
         return (
@@ -54,7 +68,39 @@ export const AnalysisChart: React.FC<AnalysisChartProps> = ({ chart, theme }) =>
         );
     }
 
-    // Treat any chart with valid data as a bar chart for robustness.
+    if (chart.type === 'pie') {
+        const total = chart.data.reduce((sum, entry) => sum + (entry.value as number), 0);
+        const dataWithPercent = chart.data.map(entry => ({ ...entry, percent: (entry.value as number / total) * 100 }));
+        return (
+            <div className="my-4 analysis-chart-wrapper">
+                <h4 className="text-center font-semibold text-slate-700 dark:text-slate-200 mb-3">{chart.title}</h4>
+                <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                            <Pie
+                                data={dataWithPercent}
+                                cx="50%"
+                                cy="50%"
+                                labelLine={false}
+                                outerRadius={80}
+                                fill="#8884d8"
+                                dataKey="value"
+                                nameKey="name"
+                                isAnimationActive={true}
+                            >
+                                {dataWithPercent.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                                ))}
+                            </Pie>
+                            <Tooltip content={<CustomPieTooltip />} />
+                            <Legend formatter={(value, entry) => <span className="text-slate-600 dark:text-slate-300">{value}</span>}/>
+                        </PieChart>
+                    </ResponsiveContainer>
+                </div>
+            </div>
+        );
+    }
+
     const dataKey = Object.keys(chart.data[0] || {}).find(key => key !== 'name') || 'value';
     
     return (
@@ -66,10 +112,15 @@ export const AnalysisChart: React.FC<AnalysisChartProps> = ({ chart, theme }) =>
                         <CartesianGrid strokeDasharray="3 3" stroke={theme === 'dark' ? '#334155' : '#e2e8f0'} />
                         <XAxis dataKey="name" stroke={tickColor} fontSize={12} tickLine={false} axisLine={false} />
                         <YAxis stroke={tickColor} fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => formatValue(value, chart.unit)} />
-                        <Tooltip content={<CustomTooltip unit={chart.unit} />} cursor={{ fill: theme === 'dark' ? 'rgba(148, 163, 184, 0.1)' : 'rgba(100, 116, 139, 0.1)' }} />
+                        <Tooltip content={<CustomBarTooltip unit={chart.unit} />} cursor={{ fill: theme === 'dark' ? 'rgba(148, 163, 184, 0.1)' : 'rgba(100, 116, 139, 0.1)' }} />
                         <Bar dataKey={dataKey} name="Giá trị" barSize={40} radius={[4, 4, 0, 0]} isAnimationActive={true}>
                              {chart.data.map((entry, idx) => (
-                                <Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />
+                                <Cell 
+                                  key={`cell-${idx}`} 
+                                  fill={COLORS[idx % COLORS.length]}
+                                  style={{ transition: 'opacity 0.2s ease' }}
+                                  opacity={highlightedItem && entry.name !== highlightedItem ? 0.3 : 1} 
+                                />
                             ))}
                         </Bar>
                     </BarChart>

@@ -3,6 +3,7 @@ import type { BusinessProfile, Product, CostSheetItem } from "../types";
 import { costSheetToProducts, getCostSheetData, mergeBySheetOrder } from "../services/dataService";
 import { PlusIcon } from './icons/PlusIcon';
 import { CheckIcon } from './icons/CheckIcon';
+import { ArrowLongLeftIcon } from './icons/ArrowLongLeftIcon';
 
 const useDebouncedEffect = (effect: () => void, deps: React.DependencyList, delay: number) => {
   useEffect(() => {
@@ -15,9 +16,10 @@ const useDebouncedEffect = (effect: () => void, deps: React.DependencyList, dela
 interface ProductCatalogProps {
   profile: BusinessProfile | null;
   onSave: (profile: BusinessProfile) => void;
+  onBack?: () => void;
 }
 
-export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave }) => {
+export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave, onBack }) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
   const [isImporting, setIsImporting] = useState(false);
@@ -89,9 +91,16 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave 
   return (
     <div className="flex-1 flex flex-col overflow-hidden bg-white dark:bg-slate-900">
       <div className="p-4 border-b border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100">Quản lý Sản phẩm</h2>
-          <p className="text-lg sm:text-xl text-slate-500 dark:text-slate-400 mt-1">Nhập giá vốn / giá bán từ file Excel/CSV hoặc Google Sheet.</p>
+        <div className="flex items-center gap-4">
+          {onBack && (
+            <button onClick={onBack} className="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors">
+                <ArrowLongLeftIcon className="w-6 h-6" />
+            </button>
+          )}
+          <div>
+            <h2 className="text-2xl sm:text-3xl font-bold text-slate-800 dark:text-slate-100">Quản lý Sản phẩm</h2>
+            <p className="text-lg sm:text-xl text-slate-500 dark:text-slate-400 mt-1">Nhập giá vốn / giá bán từ file Excel/CSV hoặc Google Sheet.</p>
+          </div>
         </div>
 
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">

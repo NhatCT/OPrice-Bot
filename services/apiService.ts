@@ -1,3 +1,4 @@
+
 import type { UserProfile, ConversationMeta, ChatMessage, ConversationGroup, BusinessProfile, FineTuningExample } from '../types';
 
 // Client-side implementation using localStorage
@@ -7,6 +8,15 @@ const CONVERSATION_GROUPS_KEY = 'v64_conversation_groups';
 const BUSINESS_PROFILE_KEY = 'v64_business_profile';
 const FINE_TUNING_EXAMPLES_KEY = 'v64_fine_tuning_examples';
 const getConvoMessagesKey = (id: string) => `v64_convo_messages_${id}`;
+
+// DEFAULT EXPERT KNOWLEDGE BASE
+const DEFAULT_FINE_TUNING_EXAMPLES: FineTuningExample[] = [
+    {
+        id: 'default-indigo-trend-expert',
+        originalPrompt: 'Màu indigo tone/ dye/ tint nào được dự báo nổi bật trong 12 tháng tới?',
+        improvedResponse: `🔵 BÁO CÁO DỰ BÁO XU HƯỚNG MÀU INDIGO TOÀN CẦU (FW 2025 – SS 2026)\n\nDựa trên dữ liệu từ WGSN, Première Vision (Denim PV), và các Tuần lễ Thời trang lớn, xu hướng màu Indigo trong 12 tháng tới là sự trở lại mạnh mẽ của tông màu tối, sâu và tinh tế (Dark Indigo), phản ánh nhu cầu về sự sang trọng thầm lặng (Quiet Luxury).\n\nI. ⭐ TONE CHỦ ĐẠO (Độ Sâu & Tinh Tế)\nXu hướng lớn nhất là **Deep / Midnight Indigo**.\n- **Mô tả:** Sắc chàm đậm nhất, nằm giữa xanh và đen. Dưới ánh sáng yếu, màu gần như đen; dưới ánh sáng mạnh, sắc chàm sâu mới hiện lên.\n- **Lý do Trend:** Mang lại cảm giác premium tức thì, tránh xa sự đại trà của denim wash nhạt.\n- **Ứng dụng:** Lý tưởng cho các form dáng sạch (clean): Straight, Wide, Flare.\n\nII. ⭐ TINT (Ánh Màu Phụ & Nhận Diện Màu Sắc)\nCác ánh màu phức hợp (Casts) tạo nên chiều sâu đặc trưng:\n1. **Black-cast Indigo:** (Xu hướng #1) Indigo nhuộm với sợi ngang đen (black weft) hoặc phủ nhẹ lớp overdye đen. Tạo cảm giác "lạnh" và sang trọng, phù hợp High-Street.\n2. **Grey-cast / Smoke:** Ánh xám khói, lạnh, mang hơi hướng công nghiệp (industrial).\n3. **Earth-tint Indigo:** Indigo pha ánh rêu hoặc đất nhẹ (coffee tones), phù hợp với xu hướng màu nâu đang lên.\n\nIII. ⭐ DYE & FINISH (Công Nghệ & Hoàn Thiện)\nĐây là yếu tố then chốt để sản phẩm đạt chuẩn R&D:\n1. **Công Nghệ Nhuộm (Dye):**\n   - **Stay-Dark / Stay-Black Dye:** Ưu tiên hàng đầu. Đảm bảo màu chàm tối giữ được độ sâu sau nhiều lần giặt.\n   - **Bio-Indigo / Eco-Indigo:** Nhuộm sinh học, thân thiện môi trường.\n   - **Sulfur-bottom:** Kỹ thuật nhuộm lót sulfur để tăng độ sâu màu.\n2. **Hoàn Thiện Bề Mặt (Finish):**\n   - **Resin / Polish Finish:** Phủ lớp resin mỏng, giúp bề mặt vải phẳng, bóng nhẹ và sạch (clean look).\n   - **Mercerized:** Xử lý kiềm bóng để tăng độ bền và cảm giác mượt mà.\n\nIV. 💡 ĐỀ XUẤT CHO V-SIXTYFOUR\n- **Chiến lược sản phẩm:** Tập trung vào Midnight Indigo & Black-cast Indigo cho BST Thu Đông.\n- **Marketing:** Nhấn mạnh công nghệ "Stay-Dark" (Bền màu) - giải quyết nỗi đau phai màu của khách hàng Việt.\n- **Thiết kế:** Hạn chế wash mài rách (distressed), ưu tiên Rinse Wash hoặc Resin Finish để giữ vẻ ngoài cao cấp.`
+    }
+];
 
 // Helper to get all conversations from localStorage
 const getAllConversations = (): Record<string, { meta: ConversationMeta; messages: ChatMessage[] }> => {
@@ -266,6 +276,8 @@ export const loadBusinessProfile = async (): Promise<BusinessProfile> => {
     const defaultProfile: BusinessProfile = {
         defaultCosts: {},
         products: [],
+        brandDNA: { personality: [], targetCustomer: '', productVision: '' },
+        watchlist: [],
     };
     try {
         const data = localStorage.getItem(BUSINESS_PROFILE_KEY);
@@ -285,6 +297,14 @@ export const loadBusinessProfile = async (): Promise<BusinessProfile> => {
 
         if (profile.frequentProducts) {
             delete profile.frequentProducts;
+        }
+
+        // Ensure new fields exist for backward compatibility
+        if (!profile.brandDNA) {
+            profile.brandDNA = { personality: [], targetCustomer: '', productVision: '' };
+        }
+        if (!profile.watchlist) {
+            profile.watchlist = [];
         }
 
         return { ...defaultProfile, ...profile };
@@ -309,18 +329,27 @@ export const saveBusinessProfile = async (profile: BusinessProfile): Promise<{ s
 export const loadFineTuningExamples = async (): Promise<FineTuningExample[]> => {
     try {
         const data = localStorage.getItem(FINE_TUNING_EXAMPLES_KEY);
-        return data ? JSON.parse(data) : [];
+        const userExamples = data ? JSON.parse(data) : [];
+        return [...DEFAULT_FINE_TUNING_EXAMPLES, ...userExamples];
     } catch (e) {
         console.error("Failed to load fine-tuning examples", e);
-        return [];
+        return DEFAULT_FINE_TUNING_EXAMPLES;
     }
 };
 
 export const saveFineTuningExample = async (example: FineTuningExample): Promise<{ success: boolean }> => {
     try {
         const examples = await loadFineTuningExamples();
-        examples.push(example);
-        localStorage.setItem(FINE_TUNING_EXAMPLES_KEY, JSON.stringify(examples));
+        // Check for duplicates based on ID to prevent re-adding default ones
+        if (!examples.some(ex => ex.id === example.id)) {
+            examples.push(example);
+            // Only save user examples (filter out defaults) if we wanted to keep storage clean,
+            // but for simplicity, we'll just save everything back minus defaults if we implement a separation logic.
+            // Here we just save all to local storage for now, but ideally, we'd separate them.
+            // Since DEFAULT_FINE_TUNING_EXAMPLES are merged on load, we should filter them out before saving.
+            const userExamples = examples.filter(ex => !DEFAULT_FINE_TUNING_EXAMPLES.some(def => def.id === ex.id));
+            localStorage.setItem(FINE_TUNING_EXAMPLES_KEY, JSON.stringify(userExamples));
+        }
         return { success: true };
     } catch (e) {
         console.error("Failed to save fine-tuning example", e);
@@ -329,15 +358,35 @@ export const saveFineTuningExample = async (example: FineTuningExample): Promise
 };
 
 export const findSimilarFineTuningExamples = async (prompt: string, examples: FineTuningExample[]): Promise<FineTuningExample[]> => {
-    const promptKeywords = new Set(prompt.toLowerCase().match(/\b(\w+)\b/g) || []);
-    if (promptKeywords.size < 3) return [];
+    if (!examples || examples.length === 0) return [];
+    
+    // Improved tokenizer for Vietnamese/English
+    const tokenize = (text: string) => {
+        return new Set(
+            text.toLowerCase()
+            .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // Remove accents for better matching
+            .replace(/[^\w\s]/g, ' ') // Replace punctuation with space
+            .split(/\s+/)
+            .filter(w => w.length > 2) // Ignore short words
+        );
+    };
 
-    const relevantExamples = examples.filter(ex => {
-        const exampleKeywords = new Set(ex.originalPrompt.toLowerCase().match(/\b(\w+)\b/g) || []);
-        const commonKeywords = [...promptKeywords].filter(kw => exampleKeywords.has(kw));
-        const threshold = Math.min(promptKeywords.size, exampleKeywords.size) * 0.5;
-        return commonKeywords.length > threshold;
+    const promptTokens = tokenize(prompt);
+    if (promptTokens.size < 2) return [];
+
+    const scoredExamples = examples.map(ex => {
+        const exTokens = tokenize(ex.originalPrompt);
+        const intersection = [...promptTokens].filter(x => exTokens.has(x));
+        // Jaccard Index-like score for set similarity
+        const union = new Set([...promptTokens, ...exTokens]).size;
+        const score = union > 0 ? intersection.length / union : 0;
+        return { ex, score };
     });
 
-    return relevantExamples.slice(-2);
+    // Filter by relevance score and take top 2
+    return scoredExamples
+        .filter(item => item.score > 0.2) // Threshold: at least 20% overlap
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 2)
+        .map(item => item.ex);
 };

@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { PaletteIcon } from './icons/PaletteIcon';
 import type { UserProfile, Theme, Font } from '../types';
@@ -9,6 +10,7 @@ import { WorkflowIcon } from './icons/WorkflowIcon';
 import { CheckBadgeIcon } from './icons/CheckBadgeIcon';
 import { CogIcon } from './icons/CogIcon';
 import { BeakerIcon } from './icons/BeakerIcon';
+import { ArchiveBoxIcon } from './icons/ArchiveBoxIcon';
 
 interface SettingsPopoverProps {
   theme: Theme;
@@ -23,6 +25,7 @@ interface SettingsPopoverProps {
   onOpenWorkflow: () => void;
   onOpenTestingGuide: () => void;
   onOpenBusinessProfile: () => void;
+  onNavigateToProducts: () => void;
 }
 
 type ActiveTab = 'profile' | 'appearance' | 'tools';
@@ -30,7 +33,7 @@ type ActiveTab = 'profile' | 'appearance' | 'tools';
 export const SettingsPopover: React.FC<SettingsPopoverProps> = ({ 
     theme, setTheme, font, setFont, userProfile, onUpdateProfile, onForgetUser, 
     soundEnabled, setSoundEnabled,
-    onOpenWorkflow, onOpenTestingGuide, onOpenBusinessProfile
+    onOpenWorkflow, onOpenTestingGuide, onOpenBusinessProfile, onNavigateToProducts
 }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [nameInput, setNameInput] = useState('');
@@ -190,6 +193,10 @@ export const SettingsPopover: React.FC<SettingsPopoverProps> = ({
                             <button onClick={() => { onOpenTestingGuide(); setIsOpen(false);}} className="w-full flex items-center gap-3 text-left px-3 py-2 text-xl text-slate-700 dark:text-slate-200 hover:bg-slate-300/50 dark:hover:bg-slate-700/60 rounded-md transition-colors duration-200">
                                 <CheckBadgeIcon className="w-5 h-5 text-slate-500 dark:text-slate-400" />
                                 <span>Hướng dẫn kiểm thử</span>
+                            </button>
+                            <button onClick={() => { onNavigateToProducts(); setIsOpen(false);}} className="w-full flex items-center gap-3 text-left px-3 py-2 text-xl text-slate-700 dark:text-slate-200 hover:bg-slate-300/50 dark:hover:bg-slate-700/60 rounded-md transition-colors duration-200">
+                                <ArchiveBoxIcon className="w-5 h-5 text-slate-500 dark:text-slate-400" />
+                                <span>Quản lý Sản phẩm</span>
                             </button>
                         </div>
                     </div>

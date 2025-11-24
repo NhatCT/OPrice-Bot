@@ -5,6 +5,8 @@ import { BriefcaseIcon } from './icons/BriefcaseIcon';
 import { TrashIcon } from './icons/TrashIcon';
 import { PlusIcon } from './icons/PlusIcon';
 import { CheckIcon } from './icons/CheckIcon';
+import { DnaIcon } from './icons/DnaIcon';
+import { TagInput } from './TagInput';
 
 interface BusinessProfileDialogProps {
   isOpen: boolean;
@@ -32,19 +34,32 @@ export const BusinessProfileDialog: React.FC<BusinessProfileDialogProps> = ({ is
     }, [isOpen, profile]);
     
     useDebouncedEffect(() => {
-        if (JSON.stringify(localProfile) !== JSON.stringify(profile)) {
+        if (isOpen && JSON.stringify(localProfile) !== JSON.stringify(profile)) {
             setSaveStatus('saving');
             onSave(localProfile);
             setTimeout(() => setSaveStatus('saved'), 300);
             setTimeout(() => setSaveStatus('idle'), 2000);
         }
-    }, [localProfile], 1000);
+    }, [localProfile, isOpen], 1000);
 
     const handleCostChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
         setLocalProfile(p => ({
             ...p,
             defaultCosts: { ...p.defaultCosts, [name]: value }
+        }));
+    };
+    
+    const handleDnaChange = (field: 'targetCustomer' | 'productVision', value: string) => {
+        setLocalProfile(p => ({
+            ...p,
+            brandDNA: { ...(p.brandDNA || { personality: [], targetCustomer: '', productVision: '' }), [field]: value }
+        }));
+    };
+    const handleDnaPersonalityChange = (personality: string[]) => {
+        setLocalProfile(p => ({
+            ...p,
+            brandDNA: { ...(p.brandDNA || { personality: [], targetCustomer: '', productVision: '' }), personality }
         }));
     };
 
@@ -54,11 +69,11 @@ export const BusinessProfileDialog: React.FC<BusinessProfileDialogProps> = ({ is
 
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex justify-center items-center" onClick={onClose}>
-            <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-lg m-4 transform transition-all animate-dialog-in" onClick={e => e.stopPropagation()}>
+            <div className="bg-slate-50 dark:bg-slate-800 rounded-2xl shadow-xl border border-slate-200 dark:border-slate-700 w-full max-w-2xl m-4 transform transition-all animate-dialog-in" onClick={e => e.stopPropagation()}>
                 <header className="p-5 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
                     <div className="flex items-center gap-3">
                         <BriefcaseIcon className="w-6 h-6 text-blue-500" />
-                        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Hồ sơ Kinh doanh</h2>
+                        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">Hồ sơ Kinh doanh & AI</h2>
                     </div>
                     <button onClick={onClose} className="p-1 rounded-full text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors" aria-label="Đóng">
                         <XIcon className="w-6 h-6" />
@@ -81,6 +96,27 @@ export const BusinessProfileDialog: React.FC<BusinessProfileDialogProps> = ({ is
                                     placeholder="VD: 20000000"
                                     className={commonInputClass}
                                 />
+                            </div>
+                        </div>
+                    </div>
+                    <div>
+                        <h3 className="flex items-center gap-2 text-base font-semibold text-slate-700 dark:text-slate-200 mb-2">
+                            <DnaIcon className="w-4 h-4" />
+                            DNA Thương hiệu
+                        </h3>
+                        <p className="text-sm text-slate-500 dark:text-slate-400 mb-3">"Dạy" cho AI về bản sắc thương hiệu của bạn để nhận được các đề xuất phù hợp hơn.</p>
+                        <div className="space-y-3 p-4 bg-white dark:bg-slate-900/40 rounded-lg border border-slate-200 dark:border-slate-700">
+                             <div>
+                                <label className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Tính cách thương hiệu (keywords)</label>
+                                <TagInput value={localProfile.brandDNA?.personality || []} onChange={handleDnaPersonalityChange} placeholder="VD: Hiện đại, Tối giản..."/>
+                            </div>
+                            <div>
+                                <label htmlFor="dnaCustomer" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Khách hàng mục tiêu</label>
+                                <textarea id="dnaCustomer" value={localProfile.brandDNA?.targetCustomer || ''} onChange={(e) => handleDnaChange('targetCustomer', e.target.value)} rows={2} className={commonInputClass} placeholder="VD: Gen Z, nhân viên văn phòng..."/>
+                            </div>
+                            <div>
+                                <label htmlFor="dnaVision" className="block text-sm font-medium text-slate-600 dark:text-slate-400 mb-1.5">Tầm nhìn sản phẩm</label>
+                                <textarea id="dnaVision" value={localProfile.brandDNA?.productVision || ''} onChange={(e) => handleDnaChange('productVision', e.target.value)} rows={2} className={commonInputClass} placeholder="VD: Tạo ra các sản phẩm denim bền vững..."/>
                             </div>
                         </div>
                     </div>
