@@ -1,6 +1,8 @@
+
 import React, { useEffect, useState } from "react";
 import type { BusinessProfile, Product, CostSheetItem } from "../types";
 import { costSheetToProducts, getCostSheetData, mergeBySheetOrder } from "../services/dataService";
+import { saveProductEmbeddings } from "../services/productEmbeddingService";
 import { PlusIcon } from './icons/PlusIcon';
 import { CheckIcon } from './icons/CheckIcon';
 import { ArrowLongLeftIcon } from './icons/ArrowLongLeftIcon';
@@ -60,6 +62,11 @@ export const ProductCatalog: React.FC<ProductCatalogProps> = ({ profile, onSave,
       }
 
       onSave({ ...(profile || { defaultCosts: {}, products: [] }), products: finalProducts });
+      
+      // Save embeddings for RAG
+      saveProductEmbeddings(finalProducts)
+        .then(() => console.log("🔥 ĐÃ HỌC SẢN PHẨM – SẴN SÀNG RAG"))
+        .catch(err => console.error("Failed to save embeddings", err));
 
     } catch (e) {
       console.error(e);

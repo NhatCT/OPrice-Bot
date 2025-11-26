@@ -1,6 +1,8 @@
 
 import { GoogleGenAI, Content } from '@google/genai';
 import type { ChatMessage, Task, ShopeeComparisonData } from '../types';
+import { retrieveFinancialKnowledge, isFinanceQuery } from './retrievalService';
+import { searchProducts } from './productEmbeddingService';
 
 const API_KEY = process.env.API_KEY;
 
@@ -11,47 +13,42 @@ if (!API_KEY) {
 const ai = new GoogleGenAI({ apiKey: API_KEY! });
 
 
-const HARDCODED_SYSTEM_INSTRUCTION = `You are the **Senior Strategy & Product Consultant** for 'V64' (V-SIXTYFOUR), a premium Vietnamese denim brand targeting Gen Z and modern consumers.
+const HARDCODED_SYSTEM_INSTRUCTION = `Bạn là **Chuyên gia Tư vấn Chiến lược & Sản phẩm Cấp cao** cho 'V64' (V-SIXTYFOUR), thương hiệu denim cao cấp Việt Nam hướng tới Gen Z.
 
-**YOUR CORE PERSONA:**
-- **Expert Authority:** You do not "guess". You analyze based on data, retail logic, and deep fashion industry knowledge. You provide **confident, direct recommendations**.
-- **Denim Specialist:** You possess deep technical knowledge of denim manufacturing. You know the difference between 10oz vs 14oz, Open-end vs Ring-spun, Right-hand twill vs Broken twill.
-- **Business-First:** Your goal is always to maximize Profit, Revenue, and Brand Equity. You care about COGS, ROI, Conversion Rate (CR), and Average Order Value (AOV).
-- **Direct & Professional:** Do not use fluff, filler words, or generic polite phrases like "I hope this helps". Go straight to the analysis.
+**NHÂN DIỆN CỐT LÕI:**
+- **Chuyên gia Thẩm quyền:** Phân tích dựa trên dữ liệu, logic bán lẻ và kiến thức sâu rộng về ngành thời trang. Đưa ra khuyến nghị **tự tin, trực diện**.
+- **Chuyên gia Denim:** Hiểu sâu về kỹ thuật (10oz vs 14oz, Ring-spun, Right-hand twill, Selvage...).
+- **Ưu tiên Kinh doanh:** Mục tiêu tối đa hóa Lợi nhuận, Doanh thu, Giá trị Thương hiệu (ROI, CR, AOV).
+- **Trực diện & Chuyên nghiệp:** Không dùng từ ngữ sáo rỗng. Đi thẳng vào phân tích.
 
-**MANDATORY RULES FOR EVERY RESPONSE:**
-1.  **CONCISE BUT COMPREHENSIVE:**
-    - Start directly with the answer/insight.
-    - Use bullet points for readability, but allow 2-3 sentences per point to explain the **"Why"** and the **"How"**.
-    - It is acceptable to briefly explain complex concepts if it adds strategic value.
-2.  **USE TECHNICAL TERMS:** When discussing products, you MUST use industry terms (e.g., *GSM, Ounce/Oz, Composition, Weave, Warp/Weft, Elastane/Spandex, Resin Finish, Stone Wash, Enzyme Wash, Whisker, Chevrons, Stacking*).
-3.  **CONTEXT IS KING:** Always frame your advice within the context of the **Vietnam market** and **V64's positioning** (Mid-to-High range, Local Brand).
-4.  **ACTIONABLE ENDING:** Every analytical response MUST end with a section titled "**RECOMMENDED ACTIONS**" containing 3 specific, step-by-step tasks the user should do next.
-5.  **USE PRE-CALCULATED DATA:** If the user provides pre-calculated financial data (Revenue, Profit, etc.), accept it as the **Single Source of Truth**. Do not attempt to recalculate it unless explicitly asked to audit. Focus on analyzing *why* the numbers are what they are.
+**QUY TẮC BẮT BUỘC CHO MỌI CÂU TRẢ LỜI:**
+1.  **NGÔN NGỮ:** BẮT BUỘC TRẢ LỜI HOÀN TOÀN BẰNG **TIẾNG VIỆT**.
+2.  **NGẮN GỌN NHƯNG ĐỦ Ý:**
+    - Bắt đầu ngay với câu trả lời/insight.
+    - Dùng gạch đầu dòng. Giải thích "Tại sao" và "Làm thế nào" trong tối đa 2-3 câu.
+3.  **DÙNG THUẬT NGỮ CHUYÊN NGÀNH:** Khi nói về sản phẩm, phải dùng từ chuyên môn (VD: *GSM, Ounce/Oz, Weave, Warp/Weft, Resin Finish, Stone Wash, Enzyme Wash, Whisker, Chevrons*).
+4.  **NGỮ CẢNH LÀ VUA:** Luôn đặt trong bối cảnh **Thị trường Việt Nam** và **Định vị V64** (Local Brand cao cấp).
+5.  **HÀNH ĐỘNG CỤ THỂ:** Cuối mỗi phân tích PHẢI có mục "**KHUYẾN NGHỊ HÀNH ĐỘNG**" với 3 bước cụ thể.
+6.  **DỮ LIỆU ĐÃ TÍNH:** Nếu người dùng cung cấp số liệu tài chính đã tính toán, hãy coi đó là **Nguồn Duy Nhất Đúng**. Tập trung phân tích ý nghĩa con số, không tính lại.
 
-**DATA ACCESS:**
-You have access to the following V64 2025 benchmark costs:
-- Áo Khoác Nam: Giá bán 792,000, CP Vận hành 291,699
-- Áo Khoác Nữ: Giá bán 762,750, CP Vận hành 261,111
-- Áo Sơ Mi Nam: Giá bán 727,313, CP Vận hành 268,293
-- Quần Dài Nam: Giá bán 577,969, CP Vận hành 214,225
-- Quần Dài Nữ: Giá bán 561,938, CP Vận hành 208,422
-(Use these benchmarks to judge if a user's input price is too high or too low).
-
-**LANGUAGE:** You MUST ALWAYS RESPOND in **ENGLISH** (The app will translate to Vietnamese).`;
+**DỮ LIỆU THAM KHẢO (Benchmark 2025):**
+- Áo Khoác Nam: Giá 792k, CP Vận hành 291k
+- Áo Khoác Nữ: Giá 762k, CP Vận hành 261k
+- Áo Sơ Mi Nam: Giá 727k, CP Vận hành 268k
+- Quần Dài Nam: Giá 577k, CP Vận hành 214k
+- Quần Dài Nữ: Giá 561k, CP Vận hành 208k`;
 
 
-const CREATIVE_SYSTEM_INSTRUCTION = `You are a **World-Class Fashion Director & Trend Forecaster** (akin to a Senior Editor at WGSN or Vogue Business).
+const CREATIVE_SYSTEM_INSTRUCTION = `Bạn là **Giám đốc Sáng tạo & Dự báo Xu hướng Hàng đầu** (tương đương Senior Editor tại WGSN hoặc Vogue Business).
 
-**YOUR OBJECTIVE:** Provide high-level, visionary, yet commercially viable creative direction for V64.
+**MỤC TIÊU:** Cung cấp định hướng sáng tạo tầm nhìn cao nhưng khả thi về mặt thương mại cho V64 tại thị trường Việt Nam.
 
-**CRITICAL INSTRUCTIONS:**
-1.  **Deep Technical Detail:** Never describe a fabric just as "denim". Describe it as: "13oz, 100% Cotton, Red-line Selvedge, Slubby texture, Deep Indigo cast."
-2.  **Trend Validation:** Back up every claim with a source or cultural phenomenon (e.g., "Seen in Diesel FW24 runway," "Viral on TikTok Vietnam via #Streetwear," "Influenced by the retro-sport trend").
-3.  **Visual Language:** Use evocative language to describe aesthetics (e.g., "Distressed," "Raw," "Cyberpunk," "Utility," "Acid Wash," "Overdyed").
-4.  **Strategic Fit:** Ensure all creative ideas are scalable for mass production in Vietnam and fit the V64 price point.
-
-**LANGUAGE:** You MUST ALWAYS RESPOND in **ENGLISH** (The app will translate to Vietnamese).`;
+**CHỈ DẪN QUAN TRỌNG:**
+1.  **Ngôn ngữ:** BẮT BUỘC TRẢ LỜI BẰNG **TIẾNG VIỆT**.
+2.  **Chi tiết Kỹ thuật Sâu:** Không bao giờ mô tả vải chỉ là "denim". Hãy mô tả: "13oz, 100% Cotton, Red-line Selvedge, kết cấu Slubby, màu Chàm sâu (Deep Indigo cast)."
+3.  **Bằng chứng Xu hướng:** Mọi nhận định phải có dẫn chứng (VD: "Thấy tại sàn diễn Diesel FW24", "Viral trên TikTok Việt Nam qua #Streetwear").
+4.  **Ngôn ngữ Hình ảnh:** Dùng từ ngữ gợi hình (VD: "Mài rách (Distressed)", "Thô (Raw)", "Cyberpunk", "Utility", "Acid Wash", "Nhuộm phủ (Overdyed)").
+5.  **Phù hợp Chiến lược:** Đảm bảo ý tưởng khả thi để sản xuất đại trà tại Việt Nam và khớp với phân khúc giá V64.`;
 
 interface StreamChunk {
     textChunk?: string;
@@ -147,32 +144,74 @@ export async function* getChatResponseStream(
     const startTime = Date.now();
     let firstChunkTime: number | null = null;
     
-    const contents: Content[] = history.map((msg, index) => {
+    let finalContents: Content[] = history.map((msg, index) => {
         const parts: any[] = [{ text: msg.role === 'user' ? msg.rawPrompt || msg.content : msg.content }];
-
-        // For the last user message, check if there's an image to attach.
         if (msg.role === 'user' && msg.image && index === history.length - 1) {
             const match = msg.image.match(/^data:(image\/(?:jpeg|png|webp));base64,(.*)$/);
             if (match) {
-                parts.push({
-                    inlineData: {
-                        mimeType: match[1],
-                        data: match[2],
-                    }
-                });
+                parts.push({ inlineData: { mimeType: match[1], data: match[2] } });
             }
         }
-        
-        return {
-            role: msg.role === 'model' ? 'model' : 'user',
-            parts,
-        };
+        return { role: msg.role === 'model' ? 'model' : 'user', parts };
     });
     
-    const systemInstruction = options.useCreativePersona ? CREATIVE_SYSTEM_INSTRUCTION : HARDCODED_SYSTEM_INSTRUCTION;
+    let systemInstruction = options.useCreativePersona ? CREATIVE_SYSTEM_INSTRUCTION : HARDCODED_SYSTEM_INSTRUCTION;
 
-    // FIXED: Removed 'profit-analysis', 'promo-price', 'group-price' from this list.
-    // These tasks should render as Markdown in the UI, not raw JSON.
+    const lastUserMsg = history[history.length - 1];
+
+    // --- RAG INTEGRATION: INJECT FINANCIAL KNOWLEDGE ---
+    if (lastUserMsg && lastUserMsg.role === 'user' && isFinanceQuery(lastUserMsg.content)) {
+        const retrievedKnowledge = retrieveFinancialKnowledge(lastUserMsg.content);
+        if (retrievedKnowledge.length > 0) {
+            const knowledgeText = retrievedKnowledge.map(k => `• ${k.question} (Topic: ${k.topic})`).join('\n');
+            
+            // Inject into the user's message for better context awareness
+            const lastContentPart = finalContents[finalContents.length - 1].parts[0];
+            if (typeof lastContentPart.text === 'string') {
+                lastContentPart.text = `
+[BỐI CẢNH KIẾN THỨC TÀI CHÍNH NỘI BỘ V64]:
+${knowledgeText}
+
+CÂU HỎI CỦA NGƯỜI DÙNG:
+${lastContentPart.text}
+`;
+            }
+            // Optionally inform UI about the source (can be extended in future)
+            // console.log("RAG Activated with:", retrievedKnowledge);
+        }
+    }
+    // ---------------------------------------------------
+
+    // --- RAG INTEGRATION: PRODUCT KNOWLEDGE ---
+    if (lastUserMsg && lastUserMsg.role === "user") {
+        try {
+            const related = await searchProducts(lastUserMsg.content, 5);
+            if (related && related.length > 0) {
+                const injected = related.map(p =>
+                    `• ${p.name} — Cost: ${p.cost} — Price: ${p.price}`
+                ).join("\n");
+
+                const lastContent = finalContents[finalContents.length - 1];
+                if (lastContent && lastContent.parts && lastContent.parts.length > 0) {
+                    const lastPart = lastContent.parts[0];
+                    if (typeof lastPart.text === 'string') {
+                        // We append to whatever text is currently there (original or already modified by Finance RAG)
+                        // Prepend the product data for context
+                        lastPart.text = `
+[DỮ LIỆU SẢN PHẨM NỘI BỘ V64]
+${injected}
+
+${lastPart.text}
+`;
+                    }
+                }
+            }
+        } catch (error) {
+            console.warn("Product RAG failed:", error);
+        }
+    }
+    // ---------------------------------------------------
+
     const isJsonTask = !!options.task && [
         'market-research', 
         'competitor-analysis', 
@@ -181,27 +220,16 @@ export async function* getChatResponseStream(
     ].includes(options.task);
 
     try {
-        const stream = streamFromGemini(contents, systemInstruction, signal, isJsonTask);
+        const stream = streamFromGemini(finalContents, systemInstruction, signal, isJsonTask);
         
         let sources: StreamChunk['sources'] | undefined;
         for await (const chunk of stream) {
-            if (signal.aborted) {
-                console.log("Stream aborted by user.");
-                return;
-            }
-            if (!firstChunkTime) {
-                firstChunkTime = Date.now() - startTime;
-            }
-            // Handle sources chunk separately
-            if (chunk.sources) {
-                sources = chunk.sources;
-            }
-            if (chunk.textChunk) {
-                yield { textChunk: chunk.textChunk };
-            }
+            if (signal.aborted) return;
+            if (!firstChunkTime) firstChunkTime = Date.now() - startTime;
+            if (chunk.sources) sources = chunk.sources;
+            if (chunk.textChunk) yield { textChunk: chunk.textChunk };
         }
         
-        // If we got here, the stream was successful.
         const totalTime = Date.now() - startTime;
         yield {
             isFinal: true,
@@ -210,18 +238,10 @@ export async function* getChatResponseStream(
         };
 
     } catch (e: any) {
-        if (e.name === 'AbortError') {
-            return; // User aborted, exit gracefully
-        }
-        
-        if (isQuotaError(e)) {
-            console.warn("Gemini API Quota Exceeded.");
-        } else {
-            console.error("Gemini API failed:", e);
-        }
-
-        const errorMessage = handleGeminiError(e);
-        yield { error: errorMessage, isFinal: true };
+        if (e.name === 'AbortError') return;
+        if (isQuotaError(e)) console.warn("Gemini API Quota Exceeded.");
+        else console.error("Gemini API failed:", e);
+        yield { error: handleGeminiError(e), isFinal: true };
     }
 }
 

@@ -1,5 +1,7 @@
 
-[
+import type { FinancialQuestion } from '../types';
+
+export const financialQuestions: FinancialQuestion[] = [
   { "id": 1, "question": "Mô hình tài chính tối ưu cho công ty bán lẻ thời trang jean quy mô 100 tỷ/năm là gì?", "topic": "Chiến lược tài chính" },
   { "id": 2, "question": "Công ty jean nên phân bổ tỷ lệ chi phí như thế nào?", "topic": "Chiến lược tài chính" },
   { "id": 3, "question": "Dòng tiền ngành thời trang jean có đặc thù gì và cần quản trị ra sao?", "topic": "Chiến lược tài chính" },
@@ -93,4 +95,4 @@
   { "id": 79, "question": "Chỉ số nào cảnh báo rủi ro dòng tiền trong 30 ngày tới?", "topic": "Tự đánh giá" },
   { "id": 80, "question": "Chỉ số nào để đánh giá hiệu quả kinh doanh theo từng cửa hàng?", "topic": "Tự đánh giá" },
   { "id": 81, "question": "Chỉ số nào đánh giá hiệu quả từng team marketing trong tài chính?", "topic": "Tự đánh giá" }
-]
+];
