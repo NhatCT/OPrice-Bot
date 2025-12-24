@@ -1,0 +1,29 @@
+# Node / TypeScript
+node_modules/
+dist/
+build/
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Vite / VSCode
+.vscode/
+.idea/
+.DS_Store
+
+# Prisma
+prisma/.env
+prisma/migrations/
+
+# TypeScript
+*.tsbuildinfo
+
+# Others
+*.log
